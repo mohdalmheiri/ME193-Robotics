@@ -1,0 +1,8 @@
+legoeducation==1.1.1      # lelib.py — LEGO Education hub BLE protocol
+opencv-python>=5.0.0.93   # AprilTagParking.py, PhoneCameraParking.py — camera capture + aruco/AprilTag detection
+# Pinned: mediapipe 1.0.x crashes on macOS with a native Metal init abort
+# ("Check failed: service_ Service is unavailable" in DrishtiMetalHelper)
+# when running the pose landmarker. 0.10.35 is the last version confirmed
+# to work.
+mediapipe==0.10.35
+certifi>=2026.7.22
