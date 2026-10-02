@@ -43,8 +43,5 @@ is part of it, so Roboflow can't do everything.
 
 | Folder | What's in it |
 | --- | --- |
+| [ArduinoApps](ArduinoApps/) | Arduino App Lab apps for the UNO Q: LED blink, IP/temperature scroller, MQTT LED matrix and MQTT minifig monitor |
 | [YOLO](YOLO/) | Script that fine-tunes a YOLOv8 nano model to detect the green and blue minifigs, plus the Roboflow dataset it trains on |
-
-## Notes
-
-No code here yet. This folder is a placeholder for the assignment.
