@@ -26,3 +26,6 @@
 # Throwaway venv created by virtualTesting/setup_test_env.py, ignored even
 # inside "Public stuff"
 Public stuff/virtualTesting/test/
+
+# Python virtual environment
+.venv/
