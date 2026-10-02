@@ -23,10 +23,10 @@ is part of it, so Roboflow can't do everything.
 
 ## Plan / TODO
 
-- [ ] Collect and label images of the green and blue minifigs
-- [ ] Train a YOLO model to detect both minifigs
-- [ ] Run the model on the live camera feed and find each minifig's position
-- [ ] Publish the position over MQTT
+- [x] Collect and label images of the green and blue minifigs
+- [x] Train a YOLO model to detect both minifigs
+- [x] Run the model on the live camera feed and find each minifig's position
+- [x] Publish the position over MQTT
 - [ ] UNO Q: subscribe and draw a blue dot at the scaled position on the LED display
 - [ ] UNO Q: drive the DC motors forward/backward until the minifig is centered, then stop
 - [ ] Get two cars running from one computer (green minifig on the left, blue on the right)
@@ -44,4 +44,4 @@ is part of it, so Roboflow can't do everything.
 | Folder | What's in it |
 | --- | --- |
 | [ArduinoApps](ArduinoApps/) | Arduino App Lab apps for the UNO Q: LED blink, IP/temperature scroller, MQTT LED matrix and MQTT minifig monitor |
-| [YOLO](YOLO/) | Script that fine-tunes a YOLOv8 nano model to detect the green and blue minifigs, plus the Roboflow dataset it trains on |
+| [YOLO](YOLO/) | The Roboflow dataset, `train.py` (fine-tunes YOLOv8 nano), the trained model `best.pt`, and `detect_publish.py` (runs the model on the laptop camera and publishes each minifig's position over MQTT) |

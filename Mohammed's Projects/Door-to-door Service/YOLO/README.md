@@ -32,7 +32,7 @@ ignores.
 ## Detect and publish over MQTT
 
 `detect_publish.py` runs `best.pt` on the laptop camera and publishes where
-each minifig is to the `test.mosquitto.org` broker (port 1883):
+each minifig is to the `broker.hivemq.com` broker (port 1883):
 
 | Minifig | Topic                  |
 | ------- | ---------------------- |

@@ -33,7 +33,7 @@ CAMERA = 0              # 0 = built-in camera; try 1 if it opens your iPhone ins
 CONFIDENCE = 0.5        # ignore detections less sure than this
 SEND_RATE = 10          # MQTT messages per second, max
 
-BROKER = "test.mosquitto.org"
+BROKER = "broker.hivemq.com"
 PORT = 1883
 TOPICS = {
     "green_minifig": "ME193/Mohammed/green",
