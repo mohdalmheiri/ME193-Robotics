@@ -1,12 +1,15 @@
-# YOLO
+# YOLO-green-car
+
+Luca's Part 2 code, copied from
+[Lucalo44/ME193-Code](https://github.com/Lucalo44/ME193-Code/tree/main/Door2Door).
 
 Trains a YOLOv8 nano model to detect a single class, `Minifig`. It starts
 from `yolov8n.pt` (pretrained on COCO) and fine-tunes it on our own photos.
 
 ## Dataset
 
-Put the Roboflow YOLOv8 export in `YOLO/dataset/`, so that
-`YOLO/dataset/data.yaml` exists next to the `train/`, `valid/` and
+Put the Roboflow YOLOv8 export in `YOLO-green-car/dataset/`, so that
+`YOLO-green-car/dataset/data.yaml` exists next to the `train/`, `valid/` and
 `test/` folders.
 
 ## Install
@@ -25,7 +28,7 @@ python train.py
 
 It trains on the Apple Silicon GPU (`mps`) and falls back to the CPU if
 that isn't available. When it finishes, the trained model is copied to
-`YOLO/best.pt`. The full training output stays in `runs/`, which git
+`YOLO-green-car/best.pt`. The full training output stays in `runs/`, which git
 ignores.
 
 ## Detect, compute a motor speed, and publish over MQTT
@@ -71,7 +74,7 @@ box width and distance factor, a red line at the center of the frame (the
 stopping point), and the tuning trackbars described above. Press `q` in
 that window to quit.
 
-You must run it from inside this `YOLO` folder:
+Run it from this `YOLO-green-car` folder:
 
 ```
 python detect_publish.py

@@ -1,5 +1,9 @@
 # The Whistling World Cup
 
+This code comes from
+[nsudofsky/ME193-Robotics](https://github.com/nsudofsky/ME193-Robotics/tree/main/The%20Whistling%20World%20Cup),
+plus a `--no-lego` practice mode added here.
+
 A LEGO car driven by a recorder (the instrument) and claps. `whistling.py`
 grabs a live microphone stream with `pyaudio`, listens for one of 6
 calibrated recorder notes, and maps each one to a command via a simple

@@ -39,11 +39,13 @@ is part of it, so Roboflow can't do everything.
 - How good is the model? Can you confuse it? If so, how (a different
   color minifigure, etc.)?
 
+The answers are on the group Notion site.
+
 ## Folders
 
 | Folder | What's in it |
 | --- | --- |
-| [ArduinoApps](ArduinoApps/) | Arduino App Lab apps for the UNO Q: LED blink, IP/temperature scroller, MQTT LED matrix and MQTT minifig monitor |
+| [ArduinoApps](ArduinoApps/) | Arduino App Lab apps for the UNO Q: LED blink, IP/temperature scroller, MQTT LED matrix, and the MQTT minifig monitor (shows the minifig's position on the LED matrix, used for Part 1) |
 | [ArduinoApps/mqtt-minifig-drive](ArduinoApps/mqtt-minifig-drive/) | Luca's UNO Q app for Part 2: shows the minifig's position on the LED matrix and sends the left/right speeds it receives over MQTT straight to the two DC motors, stopping them if messages stop arriving |
 | [YOLO](YOLO/) | My two-class model (green and blue minifigs), used for Part 1: the Roboflow dataset, `train.py` (fine-tunes YOLOv8 nano), the trained model `best.pt`, and `detect_publish.py` (runs the model on the laptop camera and publishes each minifig's position over MQTT) |
 | [YOLO-green-car](YOLO-green-car/) | Luca's single-class model (`Minifig`) plus the PD controller that drives the car, used for Part 2: the dataset, `train.py`, `best.pt`, and `detect_publish.py` (finds the minifig on the car and publishes the speed that parks it at the center of the frame) |

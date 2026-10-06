@@ -3,7 +3,7 @@
 // motors. This sketch is a thin executor with no control logic of its own:
 // it draws whatever frame Python last sent, and drives whatever signed
 // left/right speeds Python last sent. The PD control math itself runs even
-// further upstream, on the laptop in Door2Door/YOLO/detect_publish.py --
+// further upstream, on the laptop in YOLO-green-car/detect_publish.py --
 // python/main.py here just forwards those speeds (and hard-stops them if
 // messages stop arriving).
 //

@@ -1,5 +1,5 @@
 """Runs on the UNO Q's Linux/MPU side as the Python half of this Arduino App
-Lab project. Subscribes to MQTT (published by Door2Door/YOLO/detect_publish.py)
+Lab project. Subscribes to MQTT (published by YOLO-green-car/detect_publish.py)
 and acts on it: shows the minifig's position on the LED matrix as a dot, and
 forwards already-computed motor speeds to the sketch. sketch/sketch.ino is a
 thin executor -- it has no control logic of its own.
@@ -34,7 +34,7 @@ import paho.mqtt.client as mqtt
 from arduino.app_utils import App, Bridge, Frame
 
 # --- MQTT feed -------------------------------------------------------------
-# Must match the broker/topic detect_publish.py (in Door2Door/YOLO/) actually
+# Must match the broker/topic detect_publish.py (in YOLO-green-car/) actually
 # publishes to.
 MQTT_BROKER = "broker.hivemq.com"
 MQTT_PORT = 1883
