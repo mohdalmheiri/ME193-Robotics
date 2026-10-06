@@ -8,9 +8,9 @@ import paho.mqtt.client as mqtt
 from arduino.app_utils import App, Bridge, Frame
 
 # --- MQTT feed -------------------------------------------------------------
-MQTT_BROKER = "test.mosquitto.org"
+MQTT_BROKER = "broker.hivemq.com"
 MQTT_PORT = 1883
-MQTT_TOPIC = "ME193/minifig"
+MQTT_TOPIC = "ME193/Mohammed/green"
 
 # --- Heartbeat ---------------------------------------------------------------
 # Published so anyone watching the broker (e.g. an instructor dashboard) can
