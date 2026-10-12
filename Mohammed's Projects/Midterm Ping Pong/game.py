@@ -32,13 +32,14 @@ import numpy as np
 import paho.mqtt.client as mqtt
 from mediapipe.tasks.python import BaseOptions, vision
 
+import ar_view
 from swing_features import MIN_SAMPLES, WINDOW_S, window_features
 
 # ---------------------------------------------------------------------------
 # Tunable numbers
 # ---------------------------------------------------------------------------
 # Swing detection: trained classifier (swing_model.joblib, from train_swing_classifier.py)
-SWING_PROB = 0.6          # model probability above this = a swing
+SWING_PROB = 0.5          # model probability above this = a swing
 CLASSIFY_EVERY = 3        # run the model every this many new IMU readings (~every 60 ms)
 MODEL_POLL = 0.005        # check for a new IMU reading this often in model mode (readings come every 20 ms)
 MODEL_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "swing_model.joblib")
@@ -57,17 +58,28 @@ MISS_BUZZ_MS = 300        # one long buzz on a MISS
 # Ball
 # Per-level difficulty
 FLIGHT_TIME = {"EASY": 1.8, "MEDIUM": 1.2, "HARD": 0.75}   # seconds per ball at the start
-HIT_RADIUS = {"EASY": 0.17, "MEDIUM": 0.14, "HARD": 0.10}  # paddle must be within this normalized
+HIT_RADIUS = {"EASY": 0.20, "MEDIUM": 0.16, "HARD": 0.11}  # paddle must be within this normalized
                                                            # distance of the landing spot
 SPEEDUP = {"EASY": 0.97, "MEDIUM": 0.95, "HARD": 0.92}     # after each hit, flight time x this
                                                            # (3% / 5% / 8% faster)
 EARLY_WINDOW = {"EASY": 0.8, "MEDIUM": 0.6, "HARD": 0.45}  # a swing may be this early before the ball
                                                            # arrives (earlier = TOO EARLY)
 MIN_FLIGHT = 0.45         # never faster than this
-LAND_X = (0.25, 0.75)     # landing spot range, normalized (stays away from the edges)
+LAND_X = (0.25, 0.75)     # FIXED target range, normalized - used when no body is detected
 LAND_Y = (0.3, 0.7)
-BALL_MIN_R = 0.015        # ball radius at launch, fraction of frame height
-BALL_MAX_R = 0.08         # ball radius on arrival
+# BODY targets: placed relative to your shoulders (center = shoulder midpoint, unit = shoulder width)
+TARGET_X_SW = (-0.8, 1.0)   # shoulder widths sideways; + = toward your PADDLE_HAND side
+TARGET_Y_SW = (-0.2, 0.8)   # shoulder widths; - = above the shoulders, + = below
+TARGET_CLAMP_X = (0.2, 0.8) # keep targets away from the screen edges (normalized)
+TARGET_CLAMP_Y = (0.2, 0.72)
+TARGET_MIN_MOVE = 0.15      # each target is at least this far (normalized) from the previous one
+PADDLE_HEAD_R = 0.07        # virtual paddle head radius, fraction of screen width (same on every level)
+PADDLE_ALPHA = {"TAG": 0.7, "POSE": 0.4}   # paddle opacity by position source
+PERSON_MASK_BLUR = 7        # soft edge (pixels) when drawing you in front of the table
+BODY_MAX_AGE = 0.5          # shoulders seen within this many seconds count as "body detected"
+# Ball look (table, flight path and sizes are in ar_view.py)
+HIT_FX_TIME = 0.7           # seconds the ball flies back up the table after a hit
+MISS_FX_TIME = 0.6          # seconds the ball keeps going past you and fades after a miss
 
 # Hit rules
 WINDOW_AFTER = 0.25       # a swing may be this late after the ball arrives (early limit: EARLY_WINDOW)
@@ -97,6 +109,7 @@ MODEL_URL = (
     "https://storage.googleapis.com/mediapipe-models/pose_landmarker/"
     "pose_landmarker_lite/float16/latest/pose_landmarker_lite.task"
 )
+POSE_LEFT_SHOULDER, POSE_RIGHT_SHOULDER = 11, 12
 POSE_LEFT_WRIST, POSE_RIGHT_WRIST = 15, 16
 
 # MQTT (same broker as HW4)
@@ -110,7 +123,6 @@ BLUE = (255, 0, 0)
 RED = (0, 0, 255)
 WHITE = (255, 255, 255)
 YELLOW = (0, 255, 255)
-ORANGE = (0, 140, 255)
 FONT = cv2.FONT_HERSHEY_SIMPLEX
 
 
@@ -294,6 +306,9 @@ class PoseTracker:
 
     self.latest = (frame_time, paddle_wrist, other_wrist), wrists as mirrored
     normalized (x, y) or None when not visible.
+    self.body = (frame_time, left_shoulder, right_shoulder) from the last frame
+    where both shoulders were visible (same coordinates).
+    self.mask = (frame_time, person mask) for drawing you in front of the table.
 
     Left/right: MediaPipe's left/right landmarks are the PERSON's left/right,
     and we feed it the raw (un-mirrored) camera frame like Pose Race did, so
@@ -307,12 +322,15 @@ class PoseTracker:
             base_options=BaseOptions(model_asset_path=str(MODEL_PATH)),
             running_mode=vision.RunningMode.VIDEO,
             num_poses=1,
+            output_segmentation_masks=True,   # person mask, to draw you in front of the AR table
         ))
         if PADDLE_HAND == "right":
             self._wrist_idx, self._other_idx = POSE_RIGHT_WRIST, POSE_LEFT_WRIST
         else:
             self._wrist_idx, self._other_idx = POSE_LEFT_WRIST, POSE_RIGHT_WRIST
         self.latest = None
+        self.body = None
+        self.mask = None   # (frame_time, float32 person mask 0..1, mirrored + softened)
         self._pending = None
         self._cond = threading.Condition()
         self._stop = False
@@ -348,6 +366,12 @@ class PoseTracker:
                 if result.pose_landmarks:
                     lm = result.pose_landmarks[0]
                     wrist, other = self._wrist(lm[self._wrist_idx]), self._wrist(lm[self._other_idx])
+                    ls, rs = self._wrist(lm[POSE_LEFT_SHOULDER]), self._wrist(lm[POSE_RIGHT_SHOULDER])
+                    if ls and rs:
+                        self.body = (t, ls, rs)
+                if result.segmentation_masks:
+                    m = cv2.flip(result.segmentation_masks[0].numpy_view(), 1)   # also copies it
+                    self.mask = (t, cv2.GaussianBlur(m, (0, 0), PERSON_MASK_BLUR))
                 self.latest = (t, wrist, other)
         except Exception:
             print("Pose thread crashed:")
@@ -355,6 +379,7 @@ class PoseTracker:
 
     @staticmethod
     def _wrist(p):
+        """Mirrored normalized (x, y) of a landmark (wrist or shoulder), or None if not visible."""
         if p.visibility < WRIST_MIN_VISIBILITY or not (0 <= p.x <= 1 and 0 <= p.y <= 1):
             return None
         return (1 - p.x, p.y)   # mirror x to match the flipped video
@@ -499,6 +524,8 @@ def main():
     flight = 0.0
     state_start = time.time()
     hold_level, hold_since, hold_last_seen = None, 0.0, 0.0
+    table = None             # ar_view.TableView, built on the first frame
+    fx = None                # after-ball animation: {"kind": "hit"/"miss", ...}
     ball = None              # dict while a ball is in the air, None during the hit pause
     next_ball_at = 0.0
     flash = None             # (text, color, until)
@@ -515,10 +542,54 @@ def main():
         else:
             print(f"ball ended: {result} (no motor)")
 
+    last_target = None
+
+    def candidate_target(now):
+        """One random target (x, y, source): relative to your shoulders if visible, else the fixed area."""
+        body = pose.body
+        if body and now - body[0] <= BODY_MAX_AGE:
+            (lx, ly), (rx, ry) = body[1], body[2]
+            cx, cy = (lx + rx) / 2 * w, (ly + ry) / 2 * h          # pixels, so x and y share one scale
+            sw = math.dist((lx * w, ly * h), (rx * w, ry * h))
+            if sw > 0.03 * w:
+                # mirrored video: your right hand is on the right of the screen, so + x = your right
+                side = 1 if PADDLE_HAND == "right" else -1
+                x = (cx + side * random.uniform(*TARGET_X_SW) * sw) / w
+                y = (cy + random.uniform(*TARGET_Y_SW) * sw) / h
+                return (min(max(x, TARGET_CLAMP_X[0]), TARGET_CLAMP_X[1]),
+                        min(max(y, TARGET_CLAMP_Y[0]), TARGET_CLAMP_Y[1]), "BODY")
+        return random.uniform(*LAND_X), random.uniform(*LAND_Y), "FIXED"
+
+    def pick_target(now):
+        """A target at least TARGET_MIN_MOVE away from the previous one (best of 30 tries)."""
+        nonlocal last_target
+        best, best_d = None, -1.0
+        for _ in range(30):
+            cand = candidate_target(now)
+            d = math.dist(cand[:2], last_target) if last_target else 1.0
+            if d > best_d:
+                best, best_d = cand, d
+            if d >= TARGET_MIN_MOVE:
+                break
+        last_target = best[:2]
+        return best
+
+    def in_ring(pos, ball):
+        """Is paddle position pos (x, y, source) inside the ball's target ring (the hit zone)?"""
+        return pos is not None and math.dist(pos[:2], (ball["x"], ball["y"])) <= HIT_RADIUS[level]
+
+    ball_no = 0
+
     def new_ball(now):
+        nonlocal ball_no
         paddle.reset_peaks()
-        return {"x": random.uniform(*LAND_X), "y": random.uniform(*LAND_Y),
-                "start": now, "arrive": now + flight, "swung_wrong": False, "last_swing": None}
+        x, y, src = pick_target(now)
+        ball_no += 1
+        print(f"ball {ball_no}: target ({x:.2f}, {y:.2f}) [{src}]")
+        _, zt = table.target_to_table(x, y)
+        bounce_s, bounce_d = ar_view.bounce_plan(flight, EARLY_WINDOW[level])   # bounce = hit window opens
+        return {"x": x, "y": y, "start": now, "arrive": now + flight, "swung_wrong": False, "last_swing": None,
+                "zt": zt, "bounce_s": bounce_s, "bounce_d": bounce_d}   # 3D flight path (ar_view)
 
     try:
         while True:
@@ -533,6 +604,16 @@ def main():
             corners, ids, _ = detector.detectMarkers(frame)
             pose.submit(frame, now)   # raw frame; flip() below returns a new image, so this one isn't drawn on
             frame = cv2.flip(frame, 1)
+            if table is None or (table.w, table.h) != (w, h):
+                table = ar_view.TableView(w, h)
+            cam = frame.copy()
+            table.draw_table(frame)
+            # draw you back on top of the table (person mask from the pose thread, ~1 frame old)
+            mask = pose.mask
+            if mask and now - mask[0] <= POSE_MAX_AGE and mask[1].shape == (h, w):
+                x0, y0, x1, y1 = table.roi
+                m = mask[1][y0:y1, x0:x1]
+                frame[y0:y1, x0:x1] = cv2.blendLinear(cam[y0:y1, x0:x1], frame[y0:y1, x0:x1], m, 1 - m)
             levels_seen = []
             tag_pos = None
             if ids is not None:
@@ -557,10 +638,7 @@ def main():
                 paddle_seen.append((now, *tag_pos, "TAG"))
             for t in [t for t in tag_seen if now - t > 1.0]:
                 del tag_seen[t]
-            wrist = None
             latest = pose.latest
-            if latest and now - latest[0] <= POSE_MAX_AGE:
-                wrist = latest[1]
             if latest and latest[0] != last_pose_t:   # a new pose result
                 pose_t, new_wrist, other_wrist = latest
                 last_pose_t = pose_t
@@ -580,10 +658,6 @@ def main():
                 if not tag_pos and new_wrist and newer and now - pose_t <= POSE_MAX_AGE:
                     dx, dy = offset or (0.0, 0.0)
                     paddle_seen.append((pose_t, new_wrist[0] + dx, new_wrist[1] + dy, "POSE"))
-            if wrist:
-                wx, wy = int(wrist[0] * w), int(wrist[1] * h)
-                cv2.circle(frame, (wx, wy), int(10 * S), YELLOW, 2)
-                cv2.drawMarker(frame, (wx, wy), YELLOW, cv2.MARKER_CROSS, int(14 * S), 2)
 
             # --- keys ---
             key = cv2.waitKey(1) & 0xFF
@@ -610,12 +684,68 @@ def main():
                             flash = ("HIT!", GREEN, now + HIT_PAUSE)
                             report_ball("HIT")
                             flight = max(MIN_FLIGHT, flight * SPEEDUP[level])
+                            fx = {"kind": "hit", "t0": now, "from": ar_view.ball_state(ball, now, table)}
                             ball = None
                             next_ball_at = now + HIT_PAUSE
                         else:
                             ball["swung_wrong"] = True
                 else:
                     print(f"swing ignored ({trigger}; no ball in the air, state {state})")
+
+            # --- AR layer (before the state text so text stays on top) ---
+            # order: shadows/bounce mark on the table, paddle, target ring, ball
+            pos = paddle_at(now)
+            if fx and now - fx["t0"] >= (HIT_FX_TIME if fx["kind"] == "hit" else MISS_FX_TIME):
+                fx = None
+            fx_ball = fx_alpha = None
+            if fx and fx["kind"] == "hit":   # flies back up the table to the far end, shrinking with distance
+                q = (now - fx["t0"]) / HIT_FX_TIME
+                u1, d1, z1 = fx["from"]
+                fx_ball = (ar_view.lerp(u1, 0.5, q), ar_view.lerp(d1, 0.0, q),
+                           ar_view.lerp(z1, 0.15, q) + 0.25 * 4 * q * (1 - q))
+                fx_alpha = 1.0
+            elif fx and fx["kind"] == "miss":   # keeps going past you and fades out
+                fx_ball = ar_view.ball_state(fx["ball"], now, table)
+                fx_alpha = 1 - (now - fx["t0"]) / MISS_FX_TIME
+            playing_ball = ball if state == "PLAYING" and ball is not None else None
+            ball_now = ar_view.ball_state(playing_ball, now, table) if playing_ball else None
+
+            if ball_now:
+                ar_view.draw_shadow(frame, table, *ball_now)
+                bounce_t = ball["start"] + ball["bounce_s"] * (ball["arrive"] - ball["start"])
+                if now >= bounce_t:
+                    ar_view.draw_bounce_mark(frame, table, ball, now - bounce_t)
+            if fx_ball:
+                ar_view.draw_shadow(frame, table, *fx_ball, alpha=fx_alpha)
+            if playing_ball:
+                bx, by = int(ball["x"] * w), int(ball["y"] * h)
+                rx, ry = int(HIT_RADIUS[level] * w), int(HIT_RADIUS[level] * h)
+                window_open = ball["arrive"] - EARLY_WINDOW[level] <= now <= ball["arrive"] + WINDOW_AFTER
+                if pos and math.dist(pos[:2], (ball["x"], ball["y"])) <= HIT_RADIUS[level]:
+                    # in position (paddle center dot inside the ring): fill the ring
+                    fill = (180, 255, 180) if window_open else (255, 255, 255)
+                    ar_view.blend(frame, 0.3, (bx - rx - 1, by - ry - 1, bx + rx + 2, by + ry + 2),
+                                  lambda img, ox, oy: cv2.ellipse(img, (bx - ox, by - oy), (rx, ry),
+                                                                  0, 0, 360, fill, -1))
+            if pos:
+                # virtual paddle: fixed size; its center dot is the point the hit check uses,
+                # so center dot inside the green ring = in position
+                ar_view.draw_paddle(frame, pos[0] * w, pos[1] * h, PADDLE_HEAD_R * w,
+                                    PADDLE_ALPHA[pos[2]], PADDLE_HAND)
+            if playing_ball:
+                # target ring = the hit zone (this level's HIT_RADIUS in normalized x and y):
+                # faint while waiting, bright green + "NOW!" while the hit window is open
+                # (the window opens at the bounce)
+                if window_open:
+                    cv2.ellipse(frame, (bx, by), (rx, ry), 0, 0, 360, GREEN, 6)
+                    text(frame, "NOW!", (bx + rx + int(10 * S), by), 0.9 * S, GREEN, 2)
+                else:
+                    ar_view.blend(frame, 0.35, (bx - rx - 3, by - ry - 3, bx + rx + 4, by + ry + 4),
+                                  lambda img, ox, oy: cv2.ellipse(img, (bx - ox, by - oy), (rx, ry),
+                                                                  0, 0, 360, WHITE, 3))
+                ar_view.draw_ball(frame, table, *ball_now)
+            if fx_ball:
+                ar_view.draw_ball(frame, table, *fx_ball, alpha=fx_alpha)
 
             # --- level card hold (WAITING / GAME OVER) ---
             def check_level_card():
@@ -654,30 +784,18 @@ def main():
                 if ball is None and now >= next_ball_at:
                     ball = new_ball(now)
                 if ball is not None:
-                    bx, by = int(ball["x"] * w), int(ball["y"] * h)
-                    # target ring = the hit zone (this level's HIT_RADIUS in normalized x and y):
-                    # faint while waiting, bright green + "NOW!" while the hit window is open
-                    rx, ry = int(HIT_RADIUS[level] * w), int(HIT_RADIUS[level] * h)
-                    if ball["arrive"] - EARLY_WINDOW[level] <= now <= ball["arrive"] + WINDOW_AFTER:
-                        cv2.ellipse(frame, (bx, by), (rx, ry), 0, 0, 360, GREEN, 6)
-                        text(frame, "NOW!", (bx + rx + int(10 * S), by), 0.9 * S, GREEN, 2)
-                    else:
-                        overlay = frame.copy()
-                        cv2.ellipse(overlay, (bx, by), (rx, ry), 0, 0, 360, WHITE, 3)
-                        cv2.addWeighted(overlay, 0.35, frame, 0.65, 0, frame)
-                    # ball grows as it "flies" toward you
-                    p = min(1.0, (now - ball["start"]) / (ball["arrive"] - ball["start"]))
-                    r = int((BALL_MIN_R + (BALL_MAX_R - BALL_MIN_R) * p * p) * h)
-                    cv2.circle(frame, (bx, by), r, ORANGE, -1)
-                    cv2.circle(frame, (bx, by), r, WHITE, 2)
-
                     if now > ball["arrive"] + WINDOW_AFTER + IMU_POLL:
                         if ball["last_swing"] is not None and ball["last_swing"] < ball["arrive"] - EARLY_WINDOW[level]:
                             miss_reason = "TOO EARLY"
+                        elif ball["swung_wrong"]:
+                            miss_reason = "WRONG SPOT"
+                        elif ball["last_swing"] is None and in_ring(swing_paddle_at(ball["arrive"]), ball):
+                            miss_reason = "NO SWING!"   # in position at arrival, just didn't swing
                         else:
-                            miss_reason = "WRONG SPOT" if ball["swung_wrong"] else "TOO LATE"
+                            miss_reason = "TOO LATE"
                         report_ball(f"MISS {miss_reason}")
                         paddle.haptic("miss")
+                        fx = {"kind": "miss", "t0": now, "ball": ball}
                         ball = None
                         state, state_start = "GAME OVER", now
                         hold_level = None
@@ -702,10 +820,8 @@ def main():
             text(frame, f"Streak: {streak}", (15, int(85 * S)), 1.1 * S, WHITE, 2)
             text(frame, f"Record: {score.record:.0f}", (15, int(130 * S)), 1.1 * S, WHITE, 2)
 
-            pos = paddle_at(now)
             if pos:
                 color = GREEN if pos[2] == "TAG" else YELLOW
-                cv2.circle(frame, (int(pos[0] * w), int(pos[1] * h)), int(12 * S), color, -1)
                 text(frame, f"Paddle: {pos[2]}", (15, h - int(20 * S)), 1.1 * S, color, 3)
             else:
                 text(frame, "PADDLE LOST", (15, h - int(20 * S)), 1.1 * S, RED, 3)
