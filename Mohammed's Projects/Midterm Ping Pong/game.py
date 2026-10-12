@@ -81,7 +81,12 @@ TARGET_CLAMP_Y = (0.2, 0.72)
 TARGET_MIN_MOVE = 0.15      # each target is at least this far (normalized) from the previous one
 PADDLE_HEAD_R = 0.07        # virtual paddle head radius, fraction of screen width (same on every level)
 PADDLE_ALPHA = {"TAG": 0.7, "POSE": 0.4}   # paddle opacity by position source
-PERSON_MASK_BLUR = 7        # soft edge (pixels) when drawing you in front of the table
+PERSON_MASK_BLUR = 7        # soft edge (pixels at 720p) when drawing you in front of the table
+
+# Performance
+POSE_INPUT_W = 640          # pose + person mask run on a copy this wide (MediaPipe works at 256 px anyway)
+DETECT_MAX_W = 1280         # tags are detected on a copy at most this wide (no change at 720p)
+PERF_REPORT_S = 10          # print the average FPS (and where the time goes) this often
 BODY_MAX_AGE = 0.5          # shoulders seen within this many seconds count as "body detected"
 # Ball look (table, flight path and sizes are in ar_view.py)
 HIT_FX_TIME = 0.7           # seconds the ball flies back up the table after a hit
@@ -109,6 +114,7 @@ GAME_OVER_LOCKOUT = 1.0   # seconds on GAME OVER before a level card is accepted
 
 # Camera / tags (same as paddle_tracker.py)
 CAMERA_INDEX = 0
+CAMERA_RES = (1280, 720)    # requested from the webcam; frames of any other size are resized to this
 TAG_FAMILY = cv2.aruco.DICT_APRILTAG_36h11
 PADDLE_ID = 0
 LEVELS = {1: "EASY", 2: "MEDIUM", 3: "HARD"}
@@ -339,7 +345,9 @@ class PoseTracker:
     normalized (x, y) or None when not visible.
     self.body = (frame_time, left_shoulder, right_shoulder) from the last frame
     where both shoulders were visible (same coordinates).
-    self.mask = (frame_time, person mask) for drawing you in front of the table.
+    self.mask = (frame_time, small mask, scale, box) for drawing you in front of the table:
+    a soft 0..1 person mask at POSE_INPUT_W wide (mirrored), scale = small / full width,
+    box = (x0, y0, x1, y1) around the person in full-frame pixels.
 
     Left/right: MediaPipe's left/right landmarks are the PERSON's left/right,
     and we feed it the raw (un-mirrored) camera frame like Pose Race did, so
@@ -361,7 +369,8 @@ class PoseTracker:
             self._wrist_idx, self._other_idx = POSE_LEFT_WRIST, POSE_RIGHT_WRIST
         self.latest = None
         self.body = None
-        self.mask = None   # (frame_time, float32 person mask 0..1, mirrored + softened)
+        self.mask = None
+        self.results = 0   # how many frames pose has processed (for the FPS report)
         self._pending = None
         self._cond = threading.Condition()
         self._stop = False
@@ -390,6 +399,10 @@ class PoseTracker:
                 if ms <= self._last_ms:   # VIDEO mode needs increasing timestamps
                     continue
                 self._last_ms = ms
+                full_h, full_w = frame.shape[:2]
+                k = min(1.0, POSE_INPUT_W / full_w)
+                if k < 1:
+                    frame = cv2.resize(frame, (POSE_INPUT_W, round(full_h * k)), interpolation=cv2.INTER_AREA)
                 rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 result = self._landmarker.detect_for_video(
                     mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb), ms)
@@ -402,8 +415,12 @@ class PoseTracker:
                         self.body = (t, ls, rs)
                 if result.segmentation_masks:
                     m = cv2.flip(result.segmentation_masks[0].numpy_view(), 1)   # also copies it
-                    self.mask = (t, cv2.GaussianBlur(m, (0, 0), PERSON_MASK_BLUR))
+                    m = cv2.GaussianBlur(m, (0, 0), max(1.0, PERSON_MASK_BLUR * full_h / 720 * k))
+                    bx, by, bw, bh = cv2.boundingRect((m > 0.02).astype(np.uint8))
+                    box = (int(bx / k) - 2, int(by / k) - 2, int((bx + bw) / k) + 3, int((by + bh) / k) + 3)
+                    self.mask = (t, m, k, box) if bw and bh else None
                 self.latest = (t, wrist, other)
+                self.results += 1
         except Exception:
             print("Pose thread crashed:")
             traceback.print_exc()
@@ -427,51 +444,71 @@ class PoseTracker:
 # MQTT score
 # ---------------------------------------------------------------------------
 class Scoreboard:
+    """Records per level, saved in record.json and published over MQTT (retained).
+
+    TOPIC gets the best record across all levels (what the assignment reads);
+    TOPIC/easy, /medium and /hard get each level's record.
+    """
+
     def __init__(self):
-        self.record = self.load()
+        self.records = self.load()
         self.client = None
         try:
             self.client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
             self.client.connect(BROKER, PORT, keepalive=30)
             self.client.loop_start()
-            print(f"Connected to {BROKER}. Publishing record to {TOPIC}")
+            print(f"Connected to {BROKER}. Publishing records to {TOPIC} (+ /easy /medium /hard)")
         except Exception as exc:
             print(f"MQTT connection failed ({exc}) - playing without publishing.")
             self.client = None
-        self.publish()
+        self.publish(TOPIC, self.best)
+        for level in LEVELS.values():
+            self.publish(f"{TOPIC}/{level.lower()}", self.records[level])
 
-    def publish(self):
-        msg = str(self.record)
+    @property
+    def best(self):
+        return max(self.records.values())
+
+    def publish(self, topic, value):
+        msg = str(float(value))
         if self.client is not None:
-            self.client.publish(TOPIC, msg, retain=True)   # retained: new subscribers get it at once
-            print(f"MQTT -> {TOPIC}: {msg}")
+            self.client.publish(topic, msg, retain=True)   # retained: new subscribers get it at once
+            print(f"MQTT -> {topic}: {msg}")
 
-    def update(self, streak):
-        if streak > self.record:
-            self.record = float(streak)
+    def update(self, level, streak):
+        if streak > self.records[level]:
+            old_best = self.best
+            self.records[level] = float(streak)
             self.save()
-            self.publish()
+            self.publish(f"{TOPIC}/{level.lower()}", self.records[level])
+            if self.best > old_best:
+                self.publish(TOPIC, self.best)
 
     @staticmethod
     def load():
-        """Best streak from earlier runs (record.json), or 0.0 if there isn't one."""
+        """Per-level records from record.json. An old single {"record": x} file becomes EASY = x."""
+        records = {level: 0.0 for level in LEVELS.values()}
         try:
             with open(RECORD_FILE) as f:
-                record = float(json.load(f)["record"])
-            print(f"Loaded record {record} from {RECORD_FILE}")
-            return record
+                saved = json.load(f)
+            if "record" in saved:   # old format, from before per-level records
+                records["EASY"] = float(saved["record"])
+                print(f"Moved the old record {records['EASY']} to EASY")
+            for level in records:
+                records[level] = float(saved.get(level, records[level]))
+            print(f"Loaded records from {RECORD_FILE}: {records}")
         except FileNotFoundError:
-            return 0.0
+            pass
         except Exception as exc:
-            print(f"Could not read {RECORD_FILE} ({exc}) - starting from 0.0")
-            return 0.0
+            print(f"Could not read {RECORD_FILE} ({exc}) - starting from 0")
+        return records
 
     def save(self):
         try:
             with open(RECORD_FILE, "w") as f:
-                json.dump({"record": self.record}, f)
+                json.dump(self.records, f)
         except Exception as exc:
-            print(f"Could not save record to {RECORD_FILE}: {exc}")
+            print(f"Could not save records to {RECORD_FILE}: {exc}")
 
     def close(self):
         if self.client is not None:
@@ -527,6 +564,10 @@ def main():
         pose.close()
         sound.close()
         raise RuntimeError("Could not open webcam.")
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, CAMERA_RES[0])
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, CAMERA_RES[1])
+    print(f"Camera: requested {CAMERA_RES[0]}x{CAMERA_RES[1]}, "
+          f"camera reports {int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))}x{int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))}")
     detector = cv2.aruco.ArucoDetector(cv2.aruco.getPredefinedDictionary(TAG_FAMILY))
 
     # paddle memory: recent positions (time, x, y, source), normalized; source "TAG" or "POSE"
@@ -571,6 +612,7 @@ def main():
     miss_reason = ""
     last_swing_shown = 0.0
     fps, last_time = 0.0, time.time()
+    perf = {"start": time.time(), "frames": 0, "read": 0.0, "tags": 0.0, "total": 0.0, "pose": 0}
 
     def report_ball(result):
         """How close did the swing get? Peak IMU readings during this ball's flight."""
@@ -632,27 +674,52 @@ def main():
 
     try:
         while True:
+            t_loop = time.time()
             ok, frame = cap.read()
             if not ok:
                 break
             now = time.time()
+            if table is None:
+                fh, fw = frame.shape[:2]
+                print(f"Camera: first frame is {fw}x{fh}"
+                      + ("" if (fw, fh) == CAMERA_RES else f" - resizing every frame to {CAMERA_RES[0]}x{CAMERA_RES[1]}"))
+            if frame.shape[1::-1] != CAMERA_RES:   # camera ignored the request: shrink before any processing
+                frame = cv2.resize(frame, CAMERA_RES, interpolation=cv2.INTER_AREA)
             h, w = frame.shape[:2]
             S = h / 720   # scale text/shapes to the camera resolution
 
             # --- camera: detect before mirroring (mirrored tags don't decode) ---
-            corners, ids, _ = detector.detectMarkers(frame)
+            if w > DETECT_MAX_W:   # big frames: detect on a smaller copy, scale the corners back
+                kd = DETECT_MAX_W / w
+                corners, ids, _ = detector.detectMarkers(
+                    cv2.resize(frame, (DETECT_MAX_W, round(h * kd)), interpolation=cv2.INTER_AREA))
+                corners = [c / kd for c in corners]
+            else:
+                corners, ids, _ = detector.detectMarkers(frame)
+            t_tags = time.time()
             pose.submit(frame, now)   # raw frame; flip() below returns a new image, so this one isn't drawn on
             frame = cv2.flip(frame, 1)
             if table is None or (table.w, table.h) != (w, h):
                 table = ar_view.TableView(w, h)
-            cam = frame.copy()
-            table.draw_table(frame)
-            # draw you back on top of the table (person mask from the pose thread, ~1 frame old)
+            # draw you back on top of the table (person mask from the pose thread, ~1 frame old),
+            # only where your bounding box overlaps the table
             mask = pose.mask
-            if mask and now - mask[0] <= POSE_MAX_AGE and mask[1].shape == (h, w):
-                x0, y0, x1, y1 = table.roi
-                m = mask[1][y0:y1, x0:x1]
-                frame[y0:y1, x0:x1] = cv2.blendLinear(cam[y0:y1, x0:x1], frame[y0:y1, x0:x1], m, 1 - m)
+            region = None
+            if mask and now - mask[0] <= POSE_MAX_AGE:
+                bx0, by0, bx1, by1 = mask[3]
+                tx0, ty0, tx1, ty1 = table.roi
+                x0, y0, x1, y1 = max(bx0, tx0, 0), max(by0, ty0, 0), min(bx1, tx1, w), min(by1, ty1, h)
+                if x1 > x0 and y1 > y0:
+                    region = (x0, y0, x1, y1)
+                    cam = frame[y0:y1, x0:x1].copy()
+            table.draw_table(frame)
+            if region:
+                x0, y0, x1, y1 = region
+                k = mask[2]
+                small = mask[1][int(y0 * k):max(int(y0 * k) + 1, math.ceil(y1 * k)),
+                                int(x0 * k):max(int(x0 * k) + 1, math.ceil(x1 * k))]
+                m = cv2.resize(small, (x1 - x0, y1 - y0), interpolation=cv2.INTER_LINEAR)
+                frame[y0:y1, x0:x1] = cv2.blendLinear(cam, frame[y0:y1, x0:x1], m, 1 - m)
             levels_seen = []
             tag_pos = None
             if ids is not None:
@@ -720,7 +787,7 @@ def main():
                     if ball["arrive"] - EARLY_WINDOW[level] <= ts <= ball["arrive"] + WINDOW_AFTER:
                         if dist is not None and dist <= HIT_RADIUS[level]:
                             streak += 1
-                            score.update(streak)
+                            score.update(level, streak)
                             paddle.haptic("hit")
                             sound.play("hit")
                             bx, by = ball["x"] * w, ball["y"] * h
@@ -807,7 +874,7 @@ def main():
             def start_countdown(chosen):
                 nonlocal level, state, state_start, streak, record_at_start, new_record, last_count
                 level, state, state_start, streak = chosen, "COUNTDOWN", now, 0
-                record_at_start, new_record, last_count = score.record, False, None
+                record_at_start, new_record, last_count = score.records[chosen], False, None
 
             # --- level card hold (WAITING / GAME OVER) ---
             def check_level_card():
@@ -833,6 +900,8 @@ def main():
                      1.1 * S, WHITE, 3, center=True)
                 text(frame, "Paddle in the ring, swing after the bounce", (w // 2, int(0.53 * h)),
                      1.0 * S, YELLOW, 2, center=True)
+                text(frame, "Records:  " + "  |  ".join(f"{lv} {score.records[lv]:.0f}" for lv in LEVELS.values()),
+                     (w // 2, int(0.72 * h)), 1.0 * S, WHITE, 2, center=True)
                 chosen = check_level_card()
                 if chosen:
                     start_countdown(chosen)
@@ -877,7 +946,7 @@ def main():
 
             elif state == "GAME OVER":
                 text(frame, f"MISS - {miss_reason}", (w // 2, int(0.22 * h)), 2.5 * S, RED, 6, center=True)
-                text(frame, f"Streak: {streak}    Record: {score.record:.0f}",
+                text(frame, f"Streak: {streak}    {level} record: {score.records[level]:.0f}",
                      (w // 2, int(0.36 * h)), 1.5 * S, WHITE, 3, center=True)
                 if new_record:
                     text(frame, "NEW RECORD!", (w // 2, int(0.46 * h)), 1.8 * S, GOLD, 5, center=True)
@@ -904,7 +973,8 @@ def main():
             # --- HUD (always) ---
             text(frame, f"Level: {level or '-'}", (15, int(40 * S)), 1.1 * S, WHITE, 2)
             text(frame, f"Streak: {streak}", (15, int(85 * S)), 1.1 * S, WHITE, 2)
-            text(frame, f"Record: {score.record:.0f}", (15, int(130 * S)), 1.1 * S, WHITE, 2)
+            record_msg = f"Record: {score.records[level]:.0f}" if level else "Record: -"
+            text(frame, record_msg, (15, int(130 * S)), 1.1 * S, WHITE, 2)
 
             if pos:
                 color = GREEN if pos[2] == "TAG" else YELLOW
@@ -930,6 +1000,20 @@ def main():
 
             frame = fxv.post(frame, now, S)   # miss: red edges + screen shake
             cv2.imshow("Ping Pong (press q to quit)", frame)
+
+            # --- FPS report in the terminal ---
+            t_end = time.time()
+            perf["frames"] += 1
+            perf["read"] += now - t_loop
+            perf["tags"] += t_tags - now
+            perf["total"] += t_end - t_loop
+            if t_end - perf["start"] >= PERF_REPORT_S:
+                n, span = perf["frames"], t_end - perf["start"]
+                print(f"[perf] {n / span:.1f} FPS avg over {span:.0f} s | per frame: "
+                      f"camera wait {1000 * perf['read'] / n:.1f} ms, tags {1000 * perf['tags'] / n:.1f} ms, "
+                      f"everything else {1000 * (perf['total'] - perf['read'] - perf['tags']) / n:.1f} ms | "
+                      f"pose {(pose.results - perf['pose']) / span:.0f} frames/s")
+                perf.update(start=t_end, frames=0, read=0.0, tags=0.0, total=0.0, pose=pose.results)
     finally:
         paddle.close()
         score.close()

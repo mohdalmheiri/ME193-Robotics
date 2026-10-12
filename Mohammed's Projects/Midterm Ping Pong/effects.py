@@ -7,6 +7,7 @@ import cv2
 import numpy as np
 
 GRAVITY = 900            # px/s^2 (at 720p) pulling particles down
+MAX_PARTICLES = 150      # oldest particles are dropped beyond this (keeps big bursts cheap)
 CONFETTI = [(0, 215, 255), (0, 255, 0), (255, 255, 0), (255, 0, 255), (0, 140, 255), (255, 255, 255)]
 
 
@@ -27,6 +28,7 @@ class Effects:
             self.particles.append([x, y, math.cos(a) * v, math.sin(a) * v - up * S, now,
                                    life * random.uniform(0.6, 1.0), random.choice(colors),
                                    max(2, int(random.uniform(3, 7) * S))])
+        self.particles = self.particles[-MAX_PARTICLES:]
 
     def floater(self, now, text, x, y, color, life=0.9):
         self.floaters.append([text, x, y, now, life, color])
