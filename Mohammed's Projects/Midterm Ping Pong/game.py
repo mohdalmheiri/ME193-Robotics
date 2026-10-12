@@ -33,6 +33,8 @@ import paho.mqtt.client as mqtt
 from mediapipe.tasks.python import BaseOptions, vision
 
 import ar_view
+import effects
+import sounds
 from swing_features import MIN_SAMPLES, WINDOW_S, window_features
 
 # ---------------------------------------------------------------------------
@@ -54,6 +56,10 @@ HAPTIC_SETTLE = 0.15      # ignore swings this long after a haptic finishes (mot
 # Haptics
 KICK_MS = 60              # each jerk of the HIT kick (x2 back and forth, x2)
 MISS_BUZZ_MS = 300        # one long buzz on a MISS
+HIT_BEEP_HZ = 1760        # motor beep on a HIT (and the NEW RECORD triple beep)
+MISS_BEEP_HZ = 220        # motor beep on a MISS
+RECORD_BEEPS_S = 0.6      # how long the NEW RECORD triple beep lasts (swing detection pauses)
+MISS_LIGHT_HOLD = 0.8     # red light stays this long after a miss before going blue
 
 # Ball
 # Per-level difficulty
@@ -86,6 +92,14 @@ WINDOW_AFTER = 0.25       # a swing may be this late after the ball arrives (ear
 PADDLE_MEMORY = 0.7       # use the paddle position last seen within this many seconds
 TAG_PREFERENCE = 0.5      # for a swing, use the last TAG position if it's this recent, even if POSE is newer
 HIT_PAUSE = 0.8           # pause after a hit before the next ball
+
+# Arcade feedback
+COMBO_TIERS = [(10, "UNSTOPPABLE!", (255, 0, 255)),   # streak reached -> label + color (BGR)
+               (5, "ON FIRE!", (0, 140, 255)),
+               (3, "NICE!", (0, 255, 255))]
+COMBO_LABEL_TIME = 1.2    # seconds a combo label stays up
+RECORD_BANNER_TIME = 2.0  # seconds the NEW RECORD! banner stays up
+GOLD = (0, 215, 255)
 
 # Menus
 LEVEL_HOLD = 1.0          # hold a level card this long to start
@@ -160,7 +174,7 @@ class Paddle:
             print("Could not connect to the motor - SPACE = swing instead.")
             return
         print("Motor connected!")
-        self.dm.light_color(le.LEGO_COLOR_GREEN)
+        self.dm.light_color(le.LEGO_COLOR_BLUE)   # blue = waiting
         threading.Thread(target=self._imu_loop, daemon=True).start()
         threading.Thread(target=self._haptic_loop, daemon=True).start()
 
@@ -232,17 +246,34 @@ class Paddle:
             kind = self._haptics.get()
             if kind is None:
                 return
-            # Pause swing detection for a fixed time that always runs out. (A
-            # blocking motor call waits forever if the motor's reply is lost, which
-            # used to leave swing detection switched off for the rest of the game.)
-            steps = ([(KICK_MS, cw), (KICK_MS, ccw)] * 2 if kind == "hit"
-                     else [(MISS_BUZZ_MS, cw)])
-            self._quiet_until = time.time() + sum(ms for ms, _ in steps) / 1000 + HAPTIC_SETTLE
+            # Never wait on the motor (blocking=False everywhere): a blocking call waits
+            # forever if the motor's reply is lost. Swing detection pauses for a fixed
+            # time that always runs out (the motor's own shaking/beeping isn't a swing).
             try:
+                if kind == "idle":                      # WAITING / GAME OVER
+                    self.dm.light_color(le.LEGO_COLOR_BLUE, blocking=False)
+                    continue
+                if kind == "record":                    # pulsing green + 3 quick beeps
+                    self._quiet_until = time.time() + RECORD_BEEPS_S + HAPTIC_SETTLE
+                    self.dm.light_color(le.LEGO_COLOR_GREEN, pattern=le.LIGHT_PATTERN_PULSE, blocking=False)
+                    self.dm.beep(pattern=le.SOUND_PATTERN_BEEP_TRIPLE, frequency=HIT_BEEP_HZ, blocking=False)
+                    time.sleep(RECORD_BEEPS_S)
+                    continue
+                if kind == "hit":                       # green + short high beep + double kick
+                    steps = [(KICK_MS, cw), (KICK_MS, ccw)] * 2
+                    color, beep_hz = le.LEGO_COLOR_GREEN, HIT_BEEP_HZ
+                else:                                   # miss: red + low beep + long buzz
+                    steps = [(MISS_BUZZ_MS, cw)]
+                    color, beep_hz = le.LEGO_COLOR_RED, MISS_BEEP_HZ
+                self._quiet_until = time.time() + sum(ms for ms, _ in steps) / 1000 + HAPTIC_SETTLE
+                self.dm.light_color(color, blocking=False)
+                self.dm.beep(frequency=beep_hz, blocking=False)
                 for ms, direction in steps:
                     self.dm.motor_run_for_time(ms, motor=le.MOTOR_BOTH, speed=100,
                                                direction=direction, blocking=False)
                     time.sleep(ms / 1000)
+                if kind == "miss":
+                    time.sleep(MISS_LIGHT_HOLD)         # keep the red light on a moment before blue
             except Exception as exc:
                 print(f"Haptic error: {exc}")
 
@@ -252,7 +283,7 @@ class Paddle:
         self.peak_p = 0.0
 
     def haptic(self, kind):
-        """kind = "hit" or "miss". Returns immediately; plays in the background."""
+        """kind = "hit", "miss", "record" or "idle". Returns immediately; plays in the background."""
         if self.connected:
             self._haptics.put(kind)
 
@@ -412,7 +443,7 @@ class Scoreboard:
     def publish(self):
         msg = str(self.record)
         if self.client is not None:
-            self.client.publish(TOPIC, msg)
+            self.client.publish(TOPIC, msg, retain=True)   # retained: new subscribers get it at once
             print(f"MQTT -> {TOPIC}: {msg}")
 
     def update(self, streak):
@@ -486,12 +517,15 @@ def main():
             model = load_swing_model()
     paddle = Paddle(use_motor=not args.no_motor, model=model)
     score = Scoreboard()
+    sound = sounds.Sounds()
+    fxv = effects.Effects()
 
     cap = cv2.VideoCapture(CAMERA_INDEX)
     if not cap.isOpened():
         paddle.close()
         score.close()
         pose.close()
+        sound.close()
         raise RuntimeError("Could not open webcam.")
     detector = cv2.aruco.ArucoDetector(cv2.aruco.getPredefinedDictionary(TAG_FAMILY))
 
@@ -528,7 +562,12 @@ def main():
     fx = None                # after-ball animation: {"kind": "hit"/"miss", ...}
     ball = None              # dict while a ball is in the air, None during the hit pause
     next_ball_at = 0.0
-    flash = None             # (text, color, until)
+    record_at_start = 0.0    # the record when this game started (beating it = NEW RECORD)
+    new_record = False       # did this game beat it?
+    combo_label = None       # (text, color, until)
+    banner_until = 0.0       # NEW RECORD! banner
+    last_count = None        # last countdown number beeped
+    go_until = 0.0           # "GO!" shown until
     miss_reason = ""
     last_swing_shown = 0.0
     fps, last_time = 0.0, time.time()
@@ -665,6 +704,8 @@ def main():
                 break
             if key == ord(" "):   # SPACE is always a swing (with or without the motor)
                 paddle.swings.put((now, "SPACE"))
+            if key == ord("m"):
+                sound.toggle_mute()
 
             # --- swings ---
             while not paddle.swings.empty():
@@ -681,7 +722,19 @@ def main():
                             streak += 1
                             score.update(streak)
                             paddle.haptic("hit")
-                            flash = ("HIT!", GREEN, now + HIT_PAUSE)
+                            sound.play("hit")
+                            bx, by = ball["x"] * w, ball["y"] * h
+                            fxv.burst(now, bx, by, S)
+                            fxv.floater(now, "+1", bx, by - HIT_RADIUS[level] * h, GREEN)
+                            if not new_record and streak > record_at_start:   # first time this game
+                                new_record, banner_until = True, now + RECORD_BANNER_TIME
+                                sound.play("record")
+                                paddle.haptic("record")
+                                fxv.burst(now, w / 2, 0.3 * h, S, n=80, colors=effects.CONFETTI,
+                                          speed=500, life=1.6, up=300)
+                            for n, label, color in COMBO_TIERS:
+                                if streak == n:
+                                    combo_label = (label, color, now + COMBO_LABEL_TIME)
                             report_ball("HIT")
                             flight = max(MIN_FLIGHT, flight * SPEEDUP[level])
                             fx = {"kind": "hit", "t0": now, "from": ar_view.ball_state(ball, now, table)}
@@ -715,6 +768,9 @@ def main():
                 bounce_t = ball["start"] + ball["bounce_s"] * (ball["arrive"] - ball["start"])
                 if now >= bounce_t:
                     ar_view.draw_bounce_mark(frame, table, ball, now - bounce_t)
+                    if not ball.get("bounce_heard"):
+                        ball["bounce_heard"] = True
+                        sound.play("bounce")
             if fx_ball:
                 ar_view.draw_shadow(frame, table, *fx_ball, alpha=fx_alpha)
             if playing_ball:
@@ -746,6 +802,12 @@ def main():
                 ar_view.draw_ball(frame, table, *ball_now)
             if fx_ball:
                 ar_view.draw_ball(frame, table, *fx_ball, alpha=fx_alpha)
+            fxv.draw(frame, now, S, text)
+
+            def start_countdown(chosen):
+                nonlocal level, state, state_start, streak, record_at_start, new_record, last_count
+                level, state, state_start, streak = chosen, "COUNTDOWN", now, 0
+                record_at_start, new_record, last_count = score.record, False, None
 
             # --- level card hold (WAITING / GAME OVER) ---
             def check_level_card():
@@ -766,19 +828,28 @@ def main():
 
             # --- game states ---
             if state == "WAITING":
-                text(frame, "Hold up a level card to start", (w // 2, int(0.5 * h)), 1.4 * S, WHITE, 3, center=True)
+                text(frame, "AR PING PONG", (w // 2, int(0.3 * h)), 2.8 * S, GOLD, 7, center=True)
+                text(frame, "Hold up a level card: 1 EASY, 2 MEDIUM, 3 HARD", (w // 2, int(0.45 * h)),
+                     1.1 * S, WHITE, 3, center=True)
+                text(frame, "Paddle in the ring, swing after the bounce", (w // 2, int(0.53 * h)),
+                     1.0 * S, YELLOW, 2, center=True)
                 chosen = check_level_card()
                 if chosen:
-                    level, state, state_start, streak = chosen, "COUNTDOWN", now, 0
+                    start_countdown(chosen)
 
             elif state == "COUNTDOWN":
                 left = COUNTDOWN - (now - state_start)
                 if left > 0:
+                    if math.ceil(left) != last_count:
+                        last_count = math.ceil(left)
+                        sound.play("count")
                     text(frame, str(math.ceil(left)), (w // 2, h // 2), 8 * S, YELLOW, 12, center=True)
                     text(frame, level, (w // 2, int(0.75 * h)), 1.5 * S, WHITE, 3, center=True)
                 else:
                     state, streak, flight = "PLAYING", 0, FLIGHT_TIME[level]
                     ball = new_ball(now)
+                    sound.play("go")
+                    go_until = now + 0.6
 
             elif state == "PLAYING":
                 if ball is None and now >= next_ball_at:
@@ -795,25 +866,40 @@ def main():
                             miss_reason = "TOO LATE"
                         report_ball(f"MISS {miss_reason}")
                         paddle.haptic("miss")
+                        paddle.haptic("idle")   # blue for GAME OVER, after the red miss light
+                        sound.play("miss")
+                        fxv.start_shake(now)
+                        fxv.start_red_flash(now)
                         fx = {"kind": "miss", "t0": now, "ball": ball}
                         ball = None
                         state, state_start = "GAME OVER", now
                         hold_level = None
 
             elif state == "GAME OVER":
-                text(frame, f"MISS - {miss_reason}", (w // 2, int(0.25 * h)), 2.5 * S, RED, 6, center=True)
+                text(frame, f"MISS - {miss_reason}", (w // 2, int(0.22 * h)), 2.5 * S, RED, 6, center=True)
                 text(frame, f"Streak: {streak}    Record: {score.record:.0f}",
-                     (w // 2, int(0.45 * h)), 1.5 * S, WHITE, 3, center=True)
-                text(frame, "Hold up a level card to play again", (w // 2, int(0.56 * h)),
+                     (w // 2, int(0.36 * h)), 1.5 * S, WHITE, 3, center=True)
+                if new_record:
+                    text(frame, "NEW RECORD!", (w // 2, int(0.46 * h)), 1.8 * S, GOLD, 5, center=True)
+                text(frame, "Hold up a card to play again", (w // 2, int(0.56 * h)),
                      1.1 * S, WHITE, 2, center=True)
                 if now - state_start > GAME_OVER_LOCKOUT:
                     chosen = check_level_card()
                     if chosen:
-                        level, state, state_start, streak = chosen, "COUNTDOWN", now, 0
+                        start_countdown(chosen)
 
-            # --- "HIT!" flash ---
-            if flash and now < flash[2]:
-                text(frame, flash[0], (w // 2, int(0.2 * h)), 3 * S, flash[1], 8, center=True)
+            # --- combo, GO!, NEW RECORD! banner ---
+            if state == "PLAYING":
+                if now < go_until:
+                    text(frame, "GO!", (w // 2, h // 2), 5 * S, GREEN, 12, center=True)
+                if streak > 0:
+                    color = next((c for n, _, c in COMBO_TIERS if streak >= n), WHITE)
+                    text(frame, f"x{streak}", (w // 2, int(0.1 * h)), 2.2 * S, color, 6, center=True)
+                if combo_label and now < combo_label[2]:
+                    text(frame, combo_label[0], (w // 2, int(0.19 * h)), 1.5 * S, combo_label[1], 4, center=True)
+            if now < banner_until:
+                pulse = 1 + 0.08 * math.sin(now * 12)
+                text(frame, "NEW RECORD!", (w // 2, int(0.3 * h)), 2.6 * S * pulse, GOLD, 8, center=True)
 
             # --- HUD (always) ---
             text(frame, f"Level: {level or '-'}", (15, int(40 * S)), 1.1 * S, WHITE, 2)
@@ -837,12 +923,18 @@ def main():
             mode = "MODEL" if paddle.model is not None else "THRESHOLD"
             motor_msg = f"Motor: YES ({mode})" if paddle.connected else "Motor: NO (SPACE = swing)"
             text_right(frame, motor_msg, int(85 * S), 1.0 * S, GREEN if paddle.connected else RED, 2)
+            sound_msg = "M: muted" if sound.muted else "M: sound on"
+            (tw, _), _ = cv2.getTextSize(sound_msg, FONT, 0.8 * S, 2)
+            text_right(frame, sound_msg, int(130 * S), 0.8 * S, RED if sound.muted else WHITE, 2)
+            effects.draw_speaker(frame, w - 15 - tw - int(50 * S), int(105 * S), S, sound.muted)
 
+            frame = fxv.post(frame, now, S)   # miss: red edges + screen shake
             cv2.imshow("Ping Pong (press q to quit)", frame)
     finally:
         paddle.close()
         score.close()
         pose.close()
+        sound.close()
         cap.release()
         cv2.destroyAllWindows()
 
