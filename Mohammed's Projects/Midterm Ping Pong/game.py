@@ -821,20 +821,17 @@ def main():
             frame = cv2.flip(frame, 1)
             if table is None or (table.w, table.h) != (w, h):
                 table = ar_view.TableView(w, h)
-            # draw you back on top of the table and the robot (person mask from the pose thread,
-            # ~1 frame old), only where your bounding box overlaps them
+            # draw you back on top of the table (person mask from the pose thread, ~1 frame old),
+            # only where your bounding box overlaps the table
             mask = pose.mask
             region = None
             if mask and now - mask[0] <= POSE_MAX_AGE:
                 bx0, by0, bx1, by1 = mask[3]
                 tx0, ty0, tx1, ty1 = table.roi
-                ty0 = min(ty0, int(ar_view.TABLE_FAR[2] * h - 0.65 * table.width_at(0.0)))   # robot's top
                 x0, y0, x1, y1 = max(bx0, tx0, 0), max(by0, ty0, 0), min(bx1, tx1, w), min(by1, ty1, h)
                 if x1 > x0 and y1 > y0:
                     region = (x0, y0, x1, y1)
                     cam = frame[y0:y1, x0:x1].copy()
-            if bot is not None and level:
-                ar_view.draw_robot(frame, table, bot.x, BOT_COLOR[level], now, opponent_face)
             table.draw_table(frame)
             if region:
                 x0, y0, x1, y1 = region
@@ -843,6 +840,9 @@ def main():
                                 int(x0 * k):max(int(x0 * k) + 1, math.ceil(x1 * k))]
                 m = cv2.resize(small, (x1 - x0, y1 - y0), interpolation=cv2.INTER_LINEAR)
                 frame[y0:y1, x0:x1] = cv2.blendLinear(cam, frame[y0:y1, x0:x1], m, 1 - m)
+            # the opponent goes on top of you, so standing in the middle never hides it
+            if bot is not None and level:
+                ar_view.draw_robot(frame, table, bot.x, BOT_COLOR[level], now, opponent_face)
             levels_seen = []
             tag_pos = None
             if ids is not None:
@@ -1192,9 +1192,10 @@ def main():
                     text(frame, "GO!", (w // 2, h // 2), 5 * S, GREEN, 12, center=True)
                 if streak > 0:
                     color = next((c for n, _, c in COMBO_TIERS if streak >= n), WHITE)
-                    text(frame, f"x{streak}", (w // 2, int(0.17 * h)), 2.0 * S, color, 6, center=True)
+                    # left side under "Record", clear of the opponent at the far end
+                    text(frame, f"x{streak}", (15, int(195 * S)), 2.0 * S, color, 6)
                 if combo_label and now < combo_label[2]:
-                    text(frame, combo_label[0], (w // 2, int(0.25 * h)), 1.4 * S, combo_label[1], 4, center=True)
+                    text(frame, combo_label[0], (15, int(245 * S)), 1.4 * S, combo_label[1], 4)
                 if now < smash_until:
                     text(frame, "SMASH!", (w // 2, int(0.6 * h)), 2.4 * S, (0, 140, 255), 7, center=True)
             if now < banner_until:

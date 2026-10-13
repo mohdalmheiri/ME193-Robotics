@@ -176,7 +176,22 @@ def return_state(ret, now):
 
 FACE_WIDTH = 0.26                 # photo head-and-shoulders width, table widths (body is 0.2 wide)
 FACE_SINK = 0.4                   # the photo's shirt overlaps this fraction of the body's height
-_face_cache = {}                  # resized photo cutout, by size
+OUTLINE = (20, 20, 20)            # dark outline/shadow around the opponent, so it reads over the player
+_face_cache = {}                  # resized photo cutout (+ its soft shadow), by size
+
+
+def _face_images(face, fw, fh):
+    """The cutout resized to (fw, fh) and a soft dark shadow just around its edge (both BGRA)."""
+    if (fw, fh) not in _face_cache:
+        _face_cache.clear()
+        small = cv2.resize(face, (fw, fh), interpolation=cv2.INTER_AREA)
+        pad = max(2, fw // 25)
+        a = cv2.copyMakeBorder(small[:, :, 3], pad, pad, pad, pad, cv2.BORDER_CONSTANT, value=0)
+        halo = cv2.GaussianBlur(cv2.dilate(a, np.ones((3, 3), np.uint8), iterations=pad), (0, 0), pad / 2)
+        shadow = np.dstack([np.full(halo.shape + (3,), OUTLINE, np.uint8)[:, :, i] for i in range(3)]
+                           + [(halo * 0.75).astype(np.uint8)])
+        _face_cache[(fw, fh)] = (small, shadow, pad)
+    return _face_cache[(fw, fh)]
 
 
 def overlay_rgba(frame, img, x0, y0):
@@ -205,34 +220,44 @@ def draw_robot(frame, table, x, color, now, face=None):
     head_top = int(body_top - 0.03 * s - hh)
     dark = tuple(int(c * 0.55) for c in color)
     lw = max(1, int(s / 150))
+    ol = lw + max(2, int(s / 120))                # dark outline width
     if face is not None:
         # body in the level's color, then the photo with its shirt overlapping the body's top
+        cv2.rectangle(frame, (int(cx - bw / 2), body_top), (int(cx + bw / 2), base), OUTLINE, 2 * ol)
         cv2.rectangle(frame, (int(cx - bw / 2), body_top), (int(cx + bw / 2), base), color, -1)
         cv2.rectangle(frame, (int(cx - bw / 2), body_top), (int(cx + bw / 2), base), dark, lw)
         fw = max(8, int(FACE_WIDTH * s))
         fh = max(8, int(fw * face.shape[0] / face.shape[1]))
-        if (fw, fh) not in _face_cache:
-            _face_cache.clear()
-            _face_cache[(fw, fh)] = cv2.resize(face, (fw, fh), interpolation=cv2.INTER_AREA)
-        overlay_rgba(frame, _face_cache[(fw, fh)], cx - fw // 2, int(body_top + FACE_SINK * bh - fh))
-        head_top = int(body_top + FACE_SINK * bh - fh)
+        small, shadow, pad = _face_images(face, fw, fh)
+        fx0, fy0 = cx - fw // 2, int(body_top + FACE_SINK * bh - fh)
+        overlay_rgba(frame, shadow, fx0 - pad, fy0 - pad)
+        overlay_rgba(frame, small, fx0, fy0)
+        head_top = fy0
     else:
-        _draw_robot_head(frame, cx, s, head_top, hw, hh, body_top, color, dark, lw)
+        _draw_robot_head(frame, cx, s, head_top, hw, hh, body_top, color, dark, lw, ol)
+        cv2.rectangle(frame, (int(cx - bw / 2), body_top), (int(cx + bw / 2), base), OUTLINE, 2 * ol)
         cv2.rectangle(frame, (int(cx - bw / 2), body_top), (int(cx + bw / 2), base), color, -1)
         cv2.rectangle(frame, (int(cx - bw / 2), body_top), (int(cx + bw / 2), base), dark, lw)
         cv2.circle(frame, (cx, int(body_top + bh * 0.4)), max(2, int(0.03 * s)), (255, 255, 255), -1, cv2.LINE_AA)
     # arm out to the paddle (in front of the body), paddle = blue disc with a handle
     r = max(4, int(0.07 * s))
-    cv2.line(frame, (int(cx + bw / 2), int(body_top + bh * 0.3)), (int(px), int(py + r)), (150, 150, 150),
-             max(2, int(0.02 * s)), cv2.LINE_AA)
-    cv2.line(frame, (int(px), int(py)), (int(px), int(py + 1.6 * r)), (60, 110, 160), max(2, int(0.025 * s)), cv2.LINE_AA)
+    arm = ((int(cx + bw / 2), int(body_top + bh * 0.3)), (int(px), int(py + r)))
+    handle = ((int(px), int(py)), (int(px), int(py + 1.6 * r)))
+    cv2.line(frame, *arm, OUTLINE, max(2, int(0.02 * s)) + 2 * ol, cv2.LINE_AA)
+    cv2.line(frame, *handle, OUTLINE, max(2, int(0.025 * s)) + 2 * ol, cv2.LINE_AA)
+    cv2.circle(frame, (int(px), int(py)), r + ol, OUTLINE, -1, cv2.LINE_AA)
+    cv2.line(frame, *arm, (150, 150, 150), max(2, int(0.02 * s)), cv2.LINE_AA)
+    cv2.line(frame, *handle, (60, 110, 160), max(2, int(0.025 * s)), cv2.LINE_AA)
     cv2.circle(frame, (int(px), int(py)), r, (200, 90, 20), -1, cv2.LINE_AA)
     cv2.circle(frame, (int(px), int(py)), r, (120, 50, 10), lw, cv2.LINE_AA)
     return int(cx - 0.6 * s), int(head_top - 0.1 * s), int(cx + 0.6 * s), base   # rough box (for occlusion)
 
 
-def _draw_robot_head(frame, cx, s, head_top, hw, hh, body_top, color, dark, lw):
-    """Cartoon robot head: antenna, head with two glowing eyes, neck."""
+def _draw_robot_head(frame, cx, s, head_top, hw, hh, body_top, color, dark, lw, ol):
+    """Cartoon robot head: antenna, head with two glowing eyes, neck (with a dark outline)."""
+    cv2.line(frame, (cx, head_top), (cx, int(head_top - 0.06 * s)), OUTLINE, lw + 2 * ol, cv2.LINE_AA)
+    cv2.rectangle(frame, (int(cx - hw / 2), head_top), (int(cx + hw / 2), int(head_top + hh)), OUTLINE, 2 * ol)
+    cv2.rectangle(frame, (int(cx - 0.02 * s), int(head_top + hh)), (int(cx + 0.02 * s), body_top), OUTLINE, 2 * ol)
     # antenna
     cv2.line(frame, (cx, head_top), (cx, int(head_top - 0.06 * s)), (200, 200, 200), lw, cv2.LINE_AA)
     cv2.circle(frame, (cx, int(head_top - 0.06 * s)), max(2, int(0.015 * s)), (0, 0, 255), -1, cv2.LINE_AA)
