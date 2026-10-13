@@ -1,6 +1,8 @@
-# Step 4: solo ping-pong against a wall.
-# A virtual ball flies toward you on the webcam screen; hit it with the real
-# paddle (Double Motor with AprilTag 0 on it). Swings come from the motor's IMU,
+# AR ping-pong: rallies against a virtual opponent, game to 11 (win by 2).
+# The bot serves; a virtual ball flies toward you on the webcam screen and you hit it
+# with the real paddle (Double Motor with AprilTag 0 on it). Where your paddle center
+# is in the ring aims your return, and how hard you swing sets its speed; the bot's
+# paddle chases it (opponent.py). Swings come from the motor's IMU,
 # paddle position comes from the camera: the AprilTag when it's visible, otherwise
 # the wrist of the paddle hand (MediaPipe Pose) plus the learned wrist->tag offset.
 #
@@ -34,6 +36,7 @@ from mediapipe.tasks.python import BaseOptions, vision
 
 import ar_view
 import effects
+import opponent
 import sounds
 from swing_features import MIN_SAMPLES, WINDOW_S, window_features
 
@@ -71,6 +74,15 @@ SPEEDUP = {"EASY": 0.97, "MEDIUM": 0.95, "HARD": 0.92}     # after each hit, fli
 EARLY_WINDOW = {"EASY": 0.8, "MEDIUM": 0.6, "HARD": 0.45}  # a swing may be this early before the ball
                                                            # arrives (earlier = TOO EARLY)
 MIN_FLIGHT = 0.45         # never faster than this
+# Opponent (opponent.py) - its paddle chases your return with a PD controller
+BOT_NAME = {"EASY": "Rookie Bot", "MEDIUM": "Pro Bot", "HARD": "Champion Bot"}
+BOT_COLOR = {"EASY": (60, 200, 60), "MEDIUM": (0, 140, 255), "HARD": (40, 40, 220)}   # BGR
+BOT_KP = {"EASY": 15.0, "MEDIUM": 25.0, "HARD": 40.0}       # pull toward the landing point (1/s^2)
+BOT_KD = {"EASY": 7.7, "MEDIUM": 10.0, "HARD": 12.6}        # damping (1/s); 2*sqrt(KP) = no overshoot
+BOT_MAX_SPEED = {"EASY": 0.2, "MEDIUM": 0.3, "HARD": 0.5}   # table widths per second
+BOT_REACTION = {"EASY": 0.45, "MEDIUM": 0.3, "HARD": 0.25}  # seconds before it starts chasing
+BOT_CATCH = {"EASY": 0.08, "MEDIUM": 0.08, "HARD": 0.06}    # returns it if this close (table widths)
+BOT_MISS_CHANCE = {"EASY": 0.30, "MEDIUM": 0.10, "HARD": 0.03}  # random miss even when in place
 LAND_X = (0.25, 0.75)     # FIXED target range, normalized - used when no body is detected
 LAND_Y = (0.3, 0.7)
 # BODY targets: placed relative to your shoulders (center = shoulder midpoint, unit = shoulder width)
@@ -89,14 +101,29 @@ DETECT_MAX_W = 1280         # tags are detected on a copy at most this wide (no 
 PERF_REPORT_S = 10          # print the average FPS (and where the time goes) this often
 BODY_MAX_AGE = 0.5          # shoulders seen within this many seconds count as "body detected"
 # Ball look (table, flight path and sizes are in ar_view.py)
-HIT_FX_TIME = 0.7           # seconds the ball flies back up the table after a hit
 MISS_FX_TIME = 0.6          # seconds the ball keeps going past you and fades after a miss
 
 # Hit rules
 WINDOW_AFTER = 0.25       # a swing may be this late after the ball arrives (early limit: EARLY_WINDOW)
 PADDLE_MEMORY = 0.7       # use the paddle position last seen within this many seconds
 TAG_PREFERENCE = 0.5      # for a swing, use the last TAG position if it's this recent, even if POSE is newer
-HIT_PAUSE = 0.8           # pause after a hit before the next ball
+
+# Your return shot (opponent.py)
+AIM_SPREAD = 0.45         # hitting at the ring's edge sends the ball this far from the center (table widths)
+AIM_NOISE = 0.05          # small random scatter on where it lands
+POWER_ACC_FULL = 4000     # swing peak acc diff (milli-g) that counts as full power
+POWER_GYRO_FULL = 900     # swing peak gyro that counts as full power
+POWER_WINDOW = 0.5        # look for the swing's peaks this many seconds before the hit
+SPACE_POWER = 0.5         # power of a SPACE-bar swing (no IMU)
+RETURN_SLOW = 1.4         # seconds for your return to reach the bot at power 0...
+RETURN_FAST = 0.7         # ...and at power 1
+SMASH_POWER = 0.8         # power above this = SMASH!
+SMASH_SPEEDUP = 0.75      # a smash's flight time x this
+
+# Match
+POINTS_TO_WIN = 11        # game to 11...
+WIN_BY = 2                # ...win by 2
+POINT_PAUSE = 1.6         # seconds between a point and the next serve
 
 # Arcade feedback
 COMBO_TIERS = [(10, "UNSTOPPABLE!", (255, 0, 255)),   # streak reached -> label + color (BGR)
@@ -110,7 +137,7 @@ GOLD = (0, 215, 255)
 LEVEL_HOLD = 1.0          # hold a level card this long to start
 LEVEL_DROPOUT = 0.25      # a card can vanish for this long (blur/flicker) without resetting the hold
 COUNTDOWN = 3             # 3, 2, 1
-GAME_OVER_LOCKOUT = 1.0   # seconds on GAME OVER before a level card is accepted
+GAME_OVER_LOCKOUT = 1.0   # seconds on MATCH OVER before a level card is accepted
 
 # Camera / tags (same as paddle_tracker.py)
 CAMERA_INDEX = 0
@@ -163,6 +190,7 @@ class Paddle:
         self.peak_gyro = 0.0       # highest readings since reset_peaks() (debug)
         self.peak_acc_diff = 0.0
         self.peak_p = 0.0
+        self._history = collections.deque(maxlen=600)   # (time, gyro, acc_diff) for swing power
         if use_motor:
             self._connect()
 
@@ -211,6 +239,7 @@ class Paddle:
                 if not quiet and not math.isnan(gyro) and not math.isnan(acc):
                     self.peak_gyro = max(self.peak_gyro, gyro)
                     self.peak_acc_diff = max(self.peak_acc_diff, acc_diff)
+                    self._history.append((now, gyro, acc_diff))
                 if self.model is None:
                     gyro_hit, acc_hit = gyro > GYRO_THRESHOLD, acc_diff > ACC_THRESHOLD
                     if (gyro_hit or acc_hit) and now - last_swing > COOLDOWN and not quiet:
@@ -256,8 +285,22 @@ class Paddle:
             # forever if the motor's reply is lost. Swing detection pauses for a fixed
             # time that always runs out (the motor's own shaking/beeping isn't a swing).
             try:
-                if kind == "idle":                      # WAITING / GAME OVER
+                if kind == "idle":                      # WAITING / MATCH OVER
                     self.dm.light_color(le.LEGO_COLOR_BLUE, blocking=False)
+                    continue
+                if kind in ("victory", "defeat"):       # end of a match
+                    self._quiet_until = time.time() + 1.5
+                    if kind == "victory":               # cycling colors + rising beeps
+                        colors = [le.LEGO_COLOR_RED, le.LEGO_COLOR_YELLOW, le.LEGO_COLOR_GREEN,
+                                  le.LEGO_COLOR_AZURE, le.LEGO_COLOR_PURPLE, le.LEGO_COLOR_GREEN]
+                        notes = [523, 659, 784, 1047, 1319, 1568]
+                    else:                               # red + falling beeps
+                        colors = [le.LEGO_COLOR_RED] * 4
+                        notes = [784, 622, 523, 392]
+                    for color, hz in zip(colors, notes):
+                        self.dm.light_color(color, blocking=False)
+                        self.dm.beep(frequency=hz, blocking=False)
+                        time.sleep(0.18)
                     continue
                 if kind == "record":                    # pulsing green + 3 quick beeps
                     self._quiet_until = time.time() + RECORD_BEEPS_S + HAPTIC_SETTLE
@@ -283,13 +326,20 @@ class Paddle:
             except Exception as exc:
                 print(f"Haptic error: {exc}")
 
+    def peaks_since(self, t0):
+        """(peak acc diff, peak gyro) of readings since time t0 - how hard the swing was."""
+        recent = [(g, a) for t, g, a in list(self._history) if t >= t0]
+        if not recent:
+            return 0.0, 0.0
+        return max(a for _, a in recent), max(g for g, _ in recent)
+
     def reset_peaks(self):
         self.peak_gyro = 0.0
         self.peak_acc_diff = 0.0
         self.peak_p = 0.0
 
     def haptic(self, kind):
-        """kind = "hit", "miss", "record" or "idle". Returns immediately; plays in the background."""
+        """kind = "hit", "miss", "record", "victory", "defeat" or "idle". Returns immediately."""
         if self.connected:
             self._haptics.put(kind)
 
@@ -475,6 +525,12 @@ class Scoreboard:
             self.client.publish(topic, msg, retain=True)   # retained: new subscribers get it at once
             print(f"MQTT -> {topic}: {msg}")
 
+    def publish_game(self, msg):
+        """Live match score for the physical scoreboard, e.g. "7-5" or "11-7 WIN"."""
+        if self.client is not None:
+            self.client.publish(f"{TOPIC}/game", msg, retain=True)
+            print(f"MQTT -> {TOPIC}/game: {msg}")
+
     def update(self, level, streak):
         if streak > self.records[level]:
             old_best = self.best
@@ -600,9 +656,17 @@ def main():
     state_start = time.time()
     hold_level, hold_since, hold_last_seen = None, 0.0, 0.0
     table = None             # ar_view.TableView, built on the first frame
-    fx = None                # after-ball animation: {"kind": "hit"/"miss", ...}
-    ball = None              # dict while a ball is in the air, None during the hit pause
-    next_ball_at = 0.0
+    fx = None                # a ball you missed, flying on past you: {"t0", "ball"}
+    ball = None              # the ball coming to you (None while your return flies, and between points)
+    ret = None               # your return flying to the bot: {"start", "arrive", "from", "land", "lost"}
+    bot = None               # opponent.Opponent for the current match
+    me_pts = bot_pts = 0
+    serve_at = None          # time of the next serve (between points)
+    point_msg = None         # (text, subtext, color, until) shown after a point
+    smash_until = 0.0        # "SMASH!" shown until
+    match_best = 0           # longest streak this match
+    match_won = False
+    prev_now = time.time()
     record_at_start = 0.0    # the record when this game started (beating it = NEW RECORD)
     new_record = False       # did this game beat it?
     combo_label = None       # (text, color, until)
@@ -670,7 +734,8 @@ def main():
         _, zt = table.target_to_table(x, y)
         bounce_s, bounce_d = ar_view.bounce_plan(flight, EARLY_WINDOW[level])   # bounce = hit window opens
         return {"x": x, "y": y, "start": now, "arrive": now + flight, "swung_wrong": False, "last_swing": None,
-                "zt": zt, "bounce_s": bounce_s, "bounce_d": bounce_d}   # 3D flight path (ar_view)
+                "zt": zt, "bounce_s": bounce_s, "bounce_d": bounce_d,   # 3D flight path (ar_view)
+                "u0": bot.x}                                            # leaves from the bot's paddle
 
     try:
         while True:
@@ -687,6 +752,9 @@ def main():
                 frame = cv2.resize(frame, CAMERA_RES, interpolation=cv2.INTER_AREA)
             h, w = frame.shape[:2]
             S = h / 720   # scale text/shapes to the camera resolution
+            dt_frame, prev_now = min(now - prev_now, 0.1), now
+            if bot is not None:
+                bot.update(now, dt_frame)
 
             # --- camera: detect before mirroring (mirrored tags don't decode) ---
             if w > DETECT_MAX_W:   # big frames: detect on a smaller copy, scale the corners back
@@ -701,17 +769,20 @@ def main():
             frame = cv2.flip(frame, 1)
             if table is None or (table.w, table.h) != (w, h):
                 table = ar_view.TableView(w, h)
-            # draw you back on top of the table (person mask from the pose thread, ~1 frame old),
-            # only where your bounding box overlaps the table
+            # draw you back on top of the table and the robot (person mask from the pose thread,
+            # ~1 frame old), only where your bounding box overlaps them
             mask = pose.mask
             region = None
             if mask and now - mask[0] <= POSE_MAX_AGE:
                 bx0, by0, bx1, by1 = mask[3]
                 tx0, ty0, tx1, ty1 = table.roi
+                ty0 = min(ty0, int(ar_view.TABLE_FAR[2] * h - 0.65 * table.width_at(0.0)))   # robot's top
                 x0, y0, x1, y1 = max(bx0, tx0, 0), max(by0, ty0, 0), min(bx1, tx1, w), min(by1, ty1, h)
                 if x1 > x0 and y1 > y0:
                     region = (x0, y0, x1, y1)
                     cam = frame[y0:y1, x0:x1].copy()
+            if bot is not None and level:
+                ar_view.draw_robot(frame, table, bot.x, BOT_COLOR[level], now)
             table.draw_table(frame)
             if region:
                 x0, y0, x1, y1 = region
@@ -733,7 +804,7 @@ def main():
                         cv2.polylines(frame, box, True, GREEN, 3)
                     elif tag_id in LEVELS:
                         levels_seen.append(int(tag_id))
-                        if state in ("WAITING", "GAME OVER"):
+                        if state in ("WAITING", "MATCH OVER"):
                             cv2.polylines(frame, box, True, BLUE, 3)
                             text(frame, LEVELS[tag_id], (int(pts[:, 0].max()) + 10, int(cy)),
                                  1.2 * S, BLUE, 3)
@@ -787,13 +858,13 @@ def main():
                     if ball["arrive"] - EARLY_WINDOW[level] <= ts <= ball["arrive"] + WINDOW_AFTER:
                         if dist is not None and dist <= HIT_RADIUS[level]:
                             streak += 1
+                            match_best = max(match_best, streak)
                             score.update(level, streak)
                             paddle.haptic("hit")
-                            sound.play("hit")
                             bx, by = ball["x"] * w, ball["y"] * h
                             fxv.burst(now, bx, by, S)
                             fxv.floater(now, "+1", bx, by - HIT_RADIUS[level] * h, GREEN)
-                            if not new_record and streak > record_at_start:   # first time this game
+                            if not new_record and streak > record_at_start:   # first time this match
                                 new_record, banner_until = True, now + RECORD_BANNER_TIME
                                 sound.play("record")
                                 paddle.haptic("record")
@@ -804,29 +875,53 @@ def main():
                                     combo_label = (label, color, now + COMBO_LABEL_TIME)
                             report_ball("HIT")
                             flight = max(MIN_FLIGHT, flight * SPEEDUP[level])
-                            fx = {"kind": "hit", "t0": now, "from": ar_view.ball_state(ball, now, table)}
+                            # your return: AIM = where the paddle center is in the ring (left/right),
+                            # POWER = how hard the swing was
+                            aim = max(-1.0, min(1.0, (pos[0] - ball["x"]) / HIT_RADIUS[level]))
+                            if trigger == "SPACE" or not paddle.connected:
+                                power = SPACE_POWER
+                            else:
+                                power = opponent.swing_power(*paddle.peaks_since(ts - POWER_WINDOW),
+                                                             POWER_ACC_FULL, POWER_GYRO_FULL)
+                            land, ret_time, smash = opponent.plan_return(
+                                aim, power, AIM_SPREAD, AIM_NOISE, RETURN_SLOW, RETURN_FAST,
+                                SMASH_POWER, SMASH_SPEEDUP)
+                            print(f"return: aim {aim:+.2f}, power {power:.2f}{' SMASH!' if smash else ''}"
+                                  f" -> lands at {land:.2f} in {ret_time:.2f} s")
+                            ret = {"start": now, "arrive": now + ret_time, "land": land, "lost": False,
+                                   "from": ar_view.ball_state(ball, now, table)}
+                            bot.chase(land, now)
+                            if smash:
+                                sound.play("smash")
+                                smash_until = now + 0.9
+                                fxv.burst(now, bx, by, S, n=45, colors=((0, 140, 255), (0, 215, 255),
+                                                                         (255, 255, 255)), speed=650)
+                            else:
+                                sound.play("hit")
                             ball = None
-                            next_ball_at = now + HIT_PAUSE
                         else:
                             ball["swung_wrong"] = True
                 else:
-                    print(f"swing ignored ({trigger}; no ball in the air, state {state})")
+                    print(f"swing ignored ({trigger}; no ball coming to you, state {state})")
 
             # --- AR layer (before the state text so text stays on top) ---
-            # order: shadows/bounce mark on the table, paddle, target ring, ball
+            # order: shadows/bounce mark on the table, your return (far away), paddle, target ring, ball
             pos = paddle_at(now)
-            if fx and now - fx["t0"] >= (HIT_FX_TIME if fx["kind"] == "hit" else MISS_FX_TIME):
+            if fx and now - fx["t0"] >= MISS_FX_TIME:
                 fx = None
             fx_ball = fx_alpha = None
-            if fx and fx["kind"] == "hit":   # flies back up the table to the far end, shrinking with distance
-                q = (now - fx["t0"]) / HIT_FX_TIME
-                u1, d1, z1 = fx["from"]
-                fx_ball = (ar_view.lerp(u1, 0.5, q), ar_view.lerp(d1, 0.0, q),
-                           ar_view.lerp(z1, 0.15, q) + 0.25 * 4 * q * (1 - q))
-                fx_alpha = 1.0
-            elif fx and fx["kind"] == "miss":   # keeps going past you and fades out
+            if fx:   # a ball you missed keeps going past you and fades out
                 fx_ball = ar_view.ball_state(fx["ball"], now, table)
                 fx_alpha = 1 - (now - fx["t0"]) / MISS_FX_TIME
+            if ret and ret["lost"] and now - ret["arrive"] >= MISS_FX_TIME:
+                ret = None
+            ret_ball = ret_alpha = None
+            if ret:   # your return flying to the bot (fades past its end if the bot missed)
+                ret_ball = ar_view.return_state(ret, now)
+                ret_alpha = max(0.0, 1 - (now - ret["arrive"]) / MISS_FX_TIME) if ret["lost"] else 1.0
+                if not ret.get("bounce_heard") and now >= ret["start"] + ar_view.RET_BOUNCE_S * (ret["arrive"] - ret["start"]):
+                    ret["bounce_heard"] = True
+                    sound.play("bounce")
             playing_ball = ball if state == "PLAYING" and ball is not None else None
             ball_now = ar_view.ball_state(playing_ball, now, table) if playing_ball else None
 
@@ -840,6 +935,9 @@ def main():
                         sound.play("bounce")
             if fx_ball:
                 ar_view.draw_shadow(frame, table, *fx_ball, alpha=fx_alpha)
+            if ret_ball:
+                ar_view.draw_shadow(frame, table, *ret_ball, alpha=ret_alpha)
+                ar_view.draw_ball(frame, table, *ret_ball, alpha=ret_alpha)
             if playing_ball:
                 bx, by = int(ball["x"] * w), int(ball["y"] * h)
                 rx, ry = int(HIT_RADIUS[level] * w), int(HIT_RADIUS[level] * h)
@@ -872,11 +970,48 @@ def main():
             fxv.draw(frame, now, S, text)
 
             def start_countdown(chosen):
+                """A level card was held: reset everything for a new match."""
                 nonlocal level, state, state_start, streak, record_at_start, new_record, last_count
+                nonlocal bot, me_pts, bot_pts, ball, ret, fx, serve_at, point_msg, match_best
                 level, state, state_start, streak = chosen, "COUNTDOWN", now, 0
                 record_at_start, new_record, last_count = score.records[chosen], False, None
+                bot = opponent.Opponent(BOT_KP[chosen], BOT_KD[chosen], BOT_MAX_SPEED[chosen],
+                                        BOT_REACTION[chosen], BOT_CATCH[chosen], BOT_MISS_CHANCE[chosen])
+                me_pts = bot_pts = match_best = 0
+                ball = ret = fx = serve_at = point_msg = None
+                score.publish_game("0-0")
 
-            # --- level card hold (WAITING / GAME OVER) ---
+            def end_point(i_won, msg):
+                """Score a point; then the next serve, or the end of the match."""
+                nonlocal me_pts, bot_pts, point_msg, serve_at, state, state_start, hold_level, match_won
+                if i_won:
+                    me_pts += 1
+                    sound.play("point_won")
+                else:
+                    bot_pts += 1
+                    sound.play("point_lost")
+                point_msg = (msg, "YOUR POINT" if i_won else f"{BOT_NAME[level].upper()}'S POINT",
+                             GREEN if i_won else RED, now + POINT_PAUSE)
+                print(f"point: ME {me_pts} - {bot_pts} {BOT_NAME[level]}")
+                if max(me_pts, bot_pts) >= POINTS_TO_WIN and abs(me_pts - bot_pts) >= WIN_BY:
+                    match_won = me_pts > bot_pts
+                    score.publish_game(f"{me_pts}-{bot_pts} {'WIN' if match_won else 'LOSS'}")
+                    state, state_start, hold_level, serve_at = "MATCH OVER", now, None, None
+                    if match_won:
+                        sound.play("win")
+                        paddle.haptic("victory")
+                        for cx in (0.25, 0.5, 0.75):
+                            fxv.burst(now, cx * w, 0.35 * h, S, n=50, colors=effects.CONFETTI,
+                                      speed=550, life=2.0, up=350)
+                    else:
+                        sound.play("lose")
+                        paddle.haptic("defeat")
+                    paddle.haptic("idle")   # blue when the victory/defeat feedback is done
+                else:
+                    score.publish_game(f"{me_pts}-{bot_pts}")
+                    serve_at = now + POINT_PAUSE
+
+            # --- level card hold (WAITING / MATCH OVER) ---
             def check_level_card():
                 nonlocal hold_level, hold_since, hold_last_seen
                 if hold_level in levels_seen:
@@ -913,59 +1048,95 @@ def main():
                         last_count = math.ceil(left)
                         sound.play("count")
                     text(frame, str(math.ceil(left)), (w // 2, h // 2), 8 * S, YELLOW, 12, center=True)
-                    text(frame, level, (w // 2, int(0.75 * h)), 1.5 * S, WHITE, 3, center=True)
+                    text(frame, f"{level}: you vs {BOT_NAME[level]}", (w // 2, int(0.75 * h)), 1.3 * S,
+                         WHITE, 3, center=True)
                 else:
-                    state, streak, flight = "PLAYING", 0, FLIGHT_TIME[level]
-                    ball = new_ball(now)
+                    state, flight = "PLAYING", FLIGHT_TIME[level]
+                    ball = new_ball(now)    # the bot serves
                     sound.play("go")
                     go_until = now + 0.6
 
             elif state == "PLAYING":
-                if ball is None and now >= next_ball_at:
+                # your return reaches the bot's end: did its paddle get there?
+                if ret and not ret["lost"] and now >= ret["arrive"]:
+                    if bot.returns(ret["land"]):
+                        sound.play("bot_hit")
+                        ret = None
+                        ball = new_ball(now)          # it hits the ball back to you
+                        bot.recenter(now)
+                    else:
+                        ret["lost"] = True
+                        why = ("too far" if abs(bot.x - ret["land"]) > bot.catch_radius
+                               else "random miss chance")
+                        print(f"{BOT_NAME[level]} missed ({why}): paddle at {bot.x:.2f}, ball at {ret['land']:.2f}")
+                        end_point(True, "POINT!")
+                # the ball coming to you: missed?
+                if ball is not None and now > ball["arrive"] + WINDOW_AFTER + IMU_POLL:
+                    if ball["last_swing"] is not None and ball["last_swing"] < ball["arrive"] - EARLY_WINDOW[level]:
+                        miss_reason = "TOO EARLY"
+                    elif ball["swung_wrong"]:
+                        miss_reason = "WRONG SPOT"
+                    elif ball["last_swing"] is None and in_ring(swing_paddle_at(ball["arrive"]), ball):
+                        miss_reason = "NO SWING!"   # in position at arrival, just didn't swing
+                    else:
+                        miss_reason = "TOO LATE"
+                    report_ball(f"MISS {miss_reason}")
+                    paddle.haptic("miss")
+                    sound.play("miss")
+                    fxv.start_shake(now)
+                    fxv.start_red_flash(now)
+                    fx = {"t0": now, "ball": ball}
+                    ball = None
+                    streak = 0                        # the streak ends when YOU miss
+                    end_point(False, f"MISS - {miss_reason}")
+                # next serve (the bot serves every point)
+                if state == "PLAYING" and serve_at is not None and now >= serve_at:
+                    serve_at, flight = None, FLIGHT_TIME[level]
+                    bot.recenter(now)
                     ball = new_ball(now)
-                if ball is not None:
-                    if now > ball["arrive"] + WINDOW_AFTER + IMU_POLL:
-                        if ball["last_swing"] is not None and ball["last_swing"] < ball["arrive"] - EARLY_WINDOW[level]:
-                            miss_reason = "TOO EARLY"
-                        elif ball["swung_wrong"]:
-                            miss_reason = "WRONG SPOT"
-                        elif ball["last_swing"] is None and in_ring(swing_paddle_at(ball["arrive"]), ball):
-                            miss_reason = "NO SWING!"   # in position at arrival, just didn't swing
-                        else:
-                            miss_reason = "TOO LATE"
-                        report_ball(f"MISS {miss_reason}")
-                        paddle.haptic("miss")
-                        paddle.haptic("idle")   # blue for GAME OVER, after the red miss light
-                        sound.play("miss")
-                        fxv.start_shake(now)
-                        fxv.start_red_flash(now)
-                        fx = {"kind": "miss", "t0": now, "ball": ball}
-                        ball = None
-                        state, state_start = "GAME OVER", now
-                        hold_level = None
+                    sound.play("bot_hit")
+                if point_msg and now < point_msg[3]:
+                    text(frame, point_msg[0], (w // 2, int(0.36 * h)), 2.2 * S, point_msg[2], 6, center=True)
+                    text(frame, point_msg[1], (w // 2, int(0.46 * h)), 1.2 * S, WHITE, 3, center=True)
 
-            elif state == "GAME OVER":
-                text(frame, f"MISS - {miss_reason}", (w // 2, int(0.22 * h)), 2.5 * S, RED, 6, center=True)
-                text(frame, f"Streak: {streak}    {level} record: {score.records[level]:.0f}",
-                     (w // 2, int(0.36 * h)), 1.5 * S, WHITE, 3, center=True)
+            elif state == "MATCH OVER":
+                if match_won:
+                    text(frame, "YOU WIN!", (w // 2, int(0.22 * h)), 3.0 * S, GOLD, 8, center=True)
+                    if now - state_start < 3 and int((now - state_start) / 0.5) != int((now - state_start - dt_frame) / 0.5):
+                        fxv.burst(now, random.uniform(0.2, 0.8) * w, 0.3 * h, S, n=35,
+                                  colors=effects.CONFETTI, speed=500, life=1.8, up=300)
+                else:
+                    text(frame, f"{BOT_NAME[level].upper()} WINS", (w // 2, int(0.22 * h)), 2.6 * S, RED, 7,
+                         center=True)
+                text(frame, f"{me_pts} - {bot_pts}", (w // 2, int(0.34 * h)), 2.0 * S, WHITE, 5, center=True)
+                text(frame, f"Best streak: {match_best}    {level} record: {score.records[level]:.0f}",
+                     (w // 2, int(0.44 * h)), 1.2 * S, WHITE, 3, center=True)
                 if new_record:
-                    text(frame, "NEW RECORD!", (w // 2, int(0.46 * h)), 1.8 * S, GOLD, 5, center=True)
-                text(frame, "Hold up a card to play again", (w // 2, int(0.56 * h)),
-                     1.1 * S, WHITE, 2, center=True)
+                    text(frame, "NEW RECORD!", (w // 2, int(0.52 * h)), 1.6 * S, GOLD, 5, center=True)
+                text(frame, "Hold up a card to play again", (w // 2, int(0.59 * h)),
+                     1.0 * S, WHITE, 2, center=True)
                 if now - state_start > GAME_OVER_LOCKOUT:
                     chosen = check_level_card()
                     if chosen:
                         start_countdown(chosen)
 
-            # --- combo, GO!, NEW RECORD! banner ---
+            # --- scoreboard, combo, GO!, SMASH!, NEW RECORD! banner ---
+            if state in ("COUNTDOWN", "PLAYING", "MATCH OVER"):
+                board = f"ME  {me_pts} - {bot_pts}  {BOT_NAME[level]}"
+                (bw_, bh_), _ = cv2.getTextSize(board, FONT, 1.1 * S, 3)
+                ar_view.blend(frame, 0.55, (w // 2 - bw_ // 2 - 18 * S, 8 * S, w // 2 + bw_ // 2 + 18 * S, 20 * S + bh_ + 14 * S),
+                              lambda img, ox, oy: img.fill(0))
+                text(frame, board, (w // 2, int(14 * S + bh_ / 2 + 7 * S)), 1.1 * S, WHITE, 3, center=True)
             if state == "PLAYING":
                 if now < go_until:
                     text(frame, "GO!", (w // 2, h // 2), 5 * S, GREEN, 12, center=True)
                 if streak > 0:
                     color = next((c for n, _, c in COMBO_TIERS if streak >= n), WHITE)
-                    text(frame, f"x{streak}", (w // 2, int(0.1 * h)), 2.2 * S, color, 6, center=True)
+                    text(frame, f"x{streak}", (w // 2, int(0.17 * h)), 2.0 * S, color, 6, center=True)
                 if combo_label and now < combo_label[2]:
-                    text(frame, combo_label[0], (w // 2, int(0.19 * h)), 1.5 * S, combo_label[1], 4, center=True)
+                    text(frame, combo_label[0], (w // 2, int(0.25 * h)), 1.4 * S, combo_label[1], 4, center=True)
+                if now < smash_until:
+                    text(frame, "SMASH!", (w // 2, int(0.6 * h)), 2.4 * S, (0, 140, 255), 7, center=True)
             if now < banner_until:
                 pulse = 1 + 0.08 * math.sin(now * 12)
                 text(frame, "NEW RECORD!", (w // 2, int(0.3 * h)), 2.6 * S * pulse, GOLD, 8, center=True)

@@ -26,6 +26,15 @@ ARC_OUT = 0.18                    # extra height of the arc after the bounce
 BALL_SIZE = 0.049                 # ball radius as a fraction of the table width at its depth
 BALL_COLOR = (40, 150, 255)       # BGR orange
 MAX_D = 1.35                      # stop extrapolating past you beyond this depth
+LEAVE_PADDLE_D = 0.6              # an incoming ball leaves the bot's paddle and lines up with your
+                                  # target by this fraction of the way to its bounce
+
+# Your return shot, flying to the bot's end
+RET_BOUNCE_S = 0.6                # bounces on the bot's half at this fraction of the flight...
+RET_BOUNCE_D = 0.3                # ...at this depth
+RET_ARC = 0.22                    # extra height of the arcs
+BOT_PADDLE_Z = 0.15               # the bot hits the ball at this height above its end of the table
+MIN_D = -0.45                     # a ball the bot missed flies on past its end, up to here
 
 
 def lerp(a, b, q):
@@ -139,7 +148,67 @@ def ball_state(ball, now, table):
         d = db + (1 - db) * q
         z = max(0.0, q * ball["zt"] + ARC_OUT * 4 * q * (1 - q))
     d = min(d, MAX_D)
-    return table.u_for_x(ball["x"] * table.w, d), d, z
+    u = table.u_for_x(ball["x"] * table.w, d)
+    if "u0" in ball:   # leaves from the bot's paddle, then lines up with your target
+        q = min(1.0, d / (LEAVE_PADDLE_D * db))
+        q = q * q * (3 - 2 * q)
+        u = lerp(ball["u0"], u, q)
+    return u, d, z
+
+
+def return_state(ret, now):
+    """Your return shot's table position (u, d, z): from where you hit it, a bounce on the
+    bot's half, then up to the bot's paddle height at ret["land"] exactly at ret["arrive"].
+    Past arrival (the bot missed) it keeps flying beyond the far end."""
+    s = (now - ret["start"]) / (ret["arrive"] - ret["start"])
+    u1, d1, z1 = ret["from"]
+    u = lerp(u1, ret["land"], s)
+    if s <= RET_BOUNCE_S:
+        q = max(0.0, s / RET_BOUNCE_S)
+        d = lerp(d1, RET_BOUNCE_D, q)
+        z = lerp(z1, 0.0, q) + RET_ARC * 4 * q * (1 - q)
+    else:
+        q = (s - RET_BOUNCE_S) / (1 - RET_BOUNCE_S)
+        d = lerp(RET_BOUNCE_D, 0.0, q)
+        z = max(0.0, lerp(0.0, BOT_PADDLE_Z, q) + RET_ARC * 4 * q * (1 - q))
+    return u, max(d, MIN_D), z
+
+
+def draw_robot(frame, table, x, color, now):
+    """An original cartoon robot standing behind the far end, holding a blue paddle at x."""
+    s = table.width_at(0.0)                       # pixels per table width at the far end
+    (px, py), (fx, fy), _ = table.project(x, 0.0, BOT_PADDLE_Z)
+    bob = 0.006 * s * math.sin(now * 6)           # idle bobbing
+    cx = int(fx)
+    base = int(fy - 0.02 * s + bob)
+    bw, bh, hw, hh = 0.2 * s, 0.24 * s, 0.17 * s, 0.13 * s
+    body_top = int(base - bh)
+    head_top = int(body_top - 0.03 * s - hh)
+    dark = tuple(int(c * 0.55) for c in color)
+    lw = max(1, int(s / 150))
+    # antenna
+    cv2.line(frame, (cx, head_top), (cx, int(head_top - 0.06 * s)), (200, 200, 200), lw, cv2.LINE_AA)
+    cv2.circle(frame, (cx, int(head_top - 0.06 * s)), max(2, int(0.015 * s)), (0, 0, 255), -1, cv2.LINE_AA)
+    # head with two glowing eyes
+    cv2.rectangle(frame, (int(cx - hw / 2), head_top), (int(cx + hw / 2), int(head_top + hh)), (200, 200, 200), -1)
+    cv2.rectangle(frame, (int(cx - hw / 2), head_top), (int(cx + hw / 2), int(head_top + hh)), dark, lw)
+    for ex in (-0.045, 0.045):
+        cv2.circle(frame, (int(cx + ex * s), int(head_top + hh * 0.45)), max(2, int(0.022 * s)), color, -1, cv2.LINE_AA)
+    cv2.line(frame, (int(cx - 0.035 * s), int(head_top + hh * 0.78)), (int(cx + 0.035 * s), int(head_top + hh * 0.78)),
+             dark, lw, cv2.LINE_AA)
+    # neck + body in the bot's color
+    cv2.rectangle(frame, (int(cx - 0.02 * s), int(head_top + hh)), (int(cx + 0.02 * s), body_top), (150, 150, 150), -1)
+    cv2.rectangle(frame, (int(cx - bw / 2), body_top), (int(cx + bw / 2), base), color, -1)
+    cv2.rectangle(frame, (int(cx - bw / 2), body_top), (int(cx + bw / 2), base), dark, lw)
+    cv2.circle(frame, (cx, int(body_top + bh * 0.4)), max(2, int(0.03 * s)), (255, 255, 255), -1, cv2.LINE_AA)
+    # arm out to the paddle (in front of the body), paddle = blue disc with a handle
+    r = max(4, int(0.07 * s))
+    cv2.line(frame, (int(cx + bw / 2), int(body_top + bh * 0.3)), (int(px), int(py + r)), (150, 150, 150),
+             max(2, int(0.02 * s)), cv2.LINE_AA)
+    cv2.line(frame, (int(px), int(py)), (int(px), int(py + 1.6 * r)), (60, 110, 160), max(2, int(0.025 * s)), cv2.LINE_AA)
+    cv2.circle(frame, (int(px), int(py)), r, (200, 90, 20), -1, cv2.LINE_AA)
+    cv2.circle(frame, (int(px), int(py)), r, (120, 50, 10), lw, cv2.LINE_AA)
+    return int(cx - 0.6 * s), int(head_top - 0.1 * s), int(cx + 0.6 * s), base   # rough box (for occlusion)
 
 
 def draw_shadow(frame, table, u, d, z, alpha=1.0):

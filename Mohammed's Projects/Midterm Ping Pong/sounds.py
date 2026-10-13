@@ -45,7 +45,24 @@ def make_sounds():
     pop = np.sin(2 * np.pi * (1300 * pop_t + 3000 * pop_t ** 2)) * np.exp(-pop_t / 0.04)   # rising "pop"
     buzz = _tone(110, 0.4, shape="square") * 0.7                              # low buzz
     jingle = np.concatenate([_tone(f, 0.11, decay=0.08) for f in (523, 659, 784)] + [_tone(1047, 0.25, decay=0.12)])
+    bot_t = _t(0.07)
+    bot_hit = (0.8 * np.sin(2 * np.pi * 620 * bot_t) + 0.4 * rng.uniform(-1, 1, len(bot_t))
+               * np.exp(-bot_t / 0.004)) * np.exp(-bot_t / 0.02)              # lower, rounder "tock"
+    smash_t = _t(0.25)
+    smash = (np.sin(2 * np.pi * (900 * smash_t + 4000 * smash_t ** 2)) * 0.8
+             + 0.6 * rng.uniform(-1, 1, len(smash_t)) * np.exp(-smash_t / 0.03)) * np.exp(-smash_t / 0.08)
+    chime = np.concatenate([_tone(880, 0.09, decay=0.07), _tone(1319, 0.22, decay=0.12)])   # point won
+    lost = np.concatenate([_tone(392, 0.12, decay=0.1), _tone(294, 0.25, decay=0.15)]) * 0.8  # point lost
+    win = np.concatenate([_tone(f, 0.12, decay=0.1) for f in (523, 659, 784, 1047, 784)]
+                         + [_tone(1047, 0.5, decay=0.25)])
+    lose = np.concatenate([_tone(f, 0.18, decay=0.15) for f in (523, 466, 415)] + [_tone(349, 0.6, decay=0.3)])
     return {
+        "bot_hit": bot_hit,
+        "smash": smash,
+        "point_won": chime,
+        "point_lost": lost,
+        "win": win,
+        "lose": lose,
         "bounce": tock,
         "hit": pop,
         "miss": buzz,
