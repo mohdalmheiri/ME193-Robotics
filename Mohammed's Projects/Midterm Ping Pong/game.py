@@ -75,7 +75,7 @@ EARLY_WINDOW = {"EASY": 0.8, "MEDIUM": 0.6, "HARD": 0.45}  # a swing may be this
                                                            # arrives (earlier = TOO EARLY)
 MIN_FLIGHT = 0.45         # never faster than this
 # Opponent (opponent.py) - its paddle chases your return with a PD controller
-BOT_NAME = {"EASY": "Rookie Bot", "MEDIUM": "Pro Bot", "HARD": "Champion Bot"}
+BOT_NAME = {"EASY": "Rookie Chris", "MEDIUM": "Pro Chris", "HARD": "Champion Chris"}
 BOT_COLOR = {"EASY": (60, 200, 60), "MEDIUM": (0, 140, 255), "HARD": (40, 40, 220)}   # BGR
 BOT_KP = {"EASY": 15.0, "MEDIUM": 25.0, "HARD": 40.0}       # pull toward the landing point (1/s^2)
 BOT_KD = {"EASY": 7.7, "MEDIUM": 10.0, "HARD": 12.6}        # damping (1/s); 2*sqrt(KP) = no overshoot
@@ -158,6 +158,12 @@ MODEL_URL = (
     "pose_landmarker_lite/float16/latest/pose_landmarker_lite.task"
 )
 POSE_LEFT_SHOULDER, POSE_RIGHT_SHOULDER = 11, 12
+# Opponent's face: a head-and-shoulders photo, cut out once with MediaPipe and cached
+# (both files are in .gitignore - kept on this laptop only)
+OPPONENT_PHOTO = Path(__file__).parent / "chris_photo.png"
+OPPONENT_CUTOUT = Path(__file__).parent / "chris_cutout.png"
+CUTOUT_EDGE = (0.45, 0.9)  # mask values below/above this range = fully cut out / fully kept (no halo)
+CUTOUT_EDGE_BLUR = 1.0    # soft edge of the cutout (pixels of the photo)
 POSE_LEFT_WRIST, POSE_RIGHT_WRIST = 15, 16
 
 # MQTT (same broker as HW4)
@@ -389,6 +395,49 @@ def ensure_model():
             MODEL_PATH.write_bytes(response.read())
 
 
+def load_opponent_face():
+    """The opponent's photo cut out from its background (BGRA, soft edges, cropped), or None.
+
+    Uses the cached OPPONENT_CUTOUT if it's newer than the photo; otherwise runs MediaPipe's
+    person segmentation on the still photo once and saves the result."""
+    if not OPPONENT_PHOTO.exists():
+        print(f"No {OPPONENT_PHOTO.name} - the opponent is the cartoon robot.")
+        return None
+    if OPPONENT_CUTOUT.exists() and OPPONENT_CUTOUT.stat().st_mtime >= OPPONENT_PHOTO.stat().st_mtime:
+        cut = cv2.imread(str(OPPONENT_CUTOUT), cv2.IMREAD_UNCHANGED)
+        if cut is not None and cut.ndim == 3 and cut.shape[2] == 4:
+            return cut
+    try:
+        photo = cv2.imread(str(OPPONENT_PHOTO), cv2.IMREAD_UNCHANGED)
+        bgr = photo[:, :, :3]
+        alpha0 = photo[:, :, 3].astype(np.float32) / 255 if photo.ndim == 3 and photo.shape[2] == 4 else 1.0
+        ensure_model()
+        segmenter = vision.PoseLandmarker.create_from_options(vision.PoseLandmarkerOptions(
+            base_options=BaseOptions(model_asset_path=str(MODEL_PATH)),
+            running_mode=vision.RunningMode.IMAGE,
+            output_segmentation_masks=True,
+        ))
+        result = segmenter.detect(mp.Image(image_format=mp.ImageFormat.SRGB,
+                                           data=np.ascontiguousarray(cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB))))
+        segmenter.close()
+        if not result.segmentation_masks:
+            print(f"No person found in {OPPONENT_PHOTO.name} - the opponent is the cartoon robot.")
+            return None
+        m = result.segmentation_masks[0].numpy_view().copy()
+        lo, hi = CUTOUT_EDGE
+        m = cv2.GaussianBlur(np.clip((m - lo) / (hi - lo), 0, 1), (0, 0), CUTOUT_EDGE_BLUR)
+        alpha = (m * alpha0 * 255).astype(np.uint8)
+        x, y, w, h = cv2.boundingRect((alpha > 25).astype(np.uint8))
+        x0, y0 = max(0, x - 4), max(0, y - 4)
+        cut = np.dstack([bgr, alpha])[y0:y + h + 4, x0:x + w + 4]
+        cv2.imwrite(str(OPPONENT_CUTOUT), cut)
+        print(f"Cut out the opponent from {OPPONENT_PHOTO.name} -> {OPPONENT_CUTOUT.name}")
+        return cut
+    except Exception as exc:
+        print(f"Could not cut out {OPPONENT_PHOTO.name} ({exc}) - the opponent is the cartoon robot.")
+        return None
+
+
 class PoseTracker:
     """Runs MediaPipe Pose on the newest camera frame in a background thread.
 
@@ -603,6 +652,7 @@ def main():
     args = parser.parse_args()
 
     pose = PoseTracker()   # first: if MediaPipe fails, nothing else is connected yet
+    opponent_face = load_opponent_face()
     model = None
     if not args.no_motor:
         if args.threshold:
@@ -784,7 +834,7 @@ def main():
                     region = (x0, y0, x1, y1)
                     cam = frame[y0:y1, x0:x1].copy()
             if bot is not None and level:
-                ar_view.draw_robot(frame, table, bot.x, BOT_COLOR[level], now)
+                ar_view.draw_robot(frame, table, bot.x, BOT_COLOR[level], now, opponent_face)
             table.draw_table(frame)
             if region:
                 x0, y0, x1, y1 = region
