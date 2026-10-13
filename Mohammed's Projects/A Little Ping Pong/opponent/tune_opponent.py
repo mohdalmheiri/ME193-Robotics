@@ -7,9 +7,12 @@
 # anywhere in the ring (uniform over the disk); power mostly medium, sometimes a smash.
 import math
 import random
+import sys
+from pathlib import Path
 
-import game
-from opponent import Opponent, plan_return
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))   # the game folder, to import game.py
+import game  # noqa: E402
+from opponent.opponent import Opponent, plan_return  # noqa: E402
 
 DT = 1 / 30
 SHOTS = 20000

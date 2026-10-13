@@ -1,7 +1,7 @@
 # Step 3a: make printable AprilTags for the paddle and the level picker.
 # Run:  python make_tags.py
-# Saves tags/tag_0.png ... tags/tag_3.png plus tags/tags_sheet.png (all four
-# on one page). Same family as HW2 (OpenCV aruco, AprilTag 36h11).
+# Saves tag_0.png ... tag_3.png plus tags_sheet.png (all four on one page) in
+# this folder. Same family as HW2 (OpenCV aruco, AprilTag 36h11).
 import os
 
 import cv2
@@ -13,7 +13,7 @@ TAG_SIZE_PX = 400   # size of the black-and-white pattern itself
 BORDER_PX = 60      # white quiet-zone border so the detector can find the edges
 LABEL_PX = 80       # extra white space under the tag for the label
 
-OUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tags")
+OUT_DIR = os.path.dirname(os.path.abspath(__file__))   # the images go next to this script
 
 
 def make_tag(dictionary, tag_id):

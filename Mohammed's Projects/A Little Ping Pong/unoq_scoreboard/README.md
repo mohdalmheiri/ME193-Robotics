@@ -31,7 +31,7 @@ has `tools/deploy.py`). `deploy.py` only deploys apps that are inside that folde
 so copy this app there first:
 
 ```bash
-cp -R ~/Documents/GitHub/ME193-Robotics/"Mohammed's Projects/Midterm Ping Pong/unoq_scoreboard" \
+cp -R ~/Documents/GitHub/ME193-Robotics/"Mohammed's Projects/A Little Ping Pong/unoq_scoreboard" \
       ~/Documents/GitHub/ArduinoApps/
 cd ~/Documents/GitHub/ArduinoApps
 python3 tools/deploy.py unoq_scoreboard

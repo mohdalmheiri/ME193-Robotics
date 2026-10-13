@@ -35,11 +35,9 @@ import numpy as np
 import paho.mqtt.client as mqtt
 from mediapipe.tasks.python import BaseOptions, vision
 
-import ar_view
-import effects
-import opponent
-import sounds
-from swing_features import MIN_SAMPLES, WINDOW_S, window_features
+from opponent import opponent
+from swing_classifier.swing_features import MIN_SAMPLES, WINDOW_S, window_features
+from visuals_and_sounds import ar_view, effects, sounds
 
 # ---------------------------------------------------------------------------
 # Tunable numbers
@@ -48,7 +46,7 @@ from swing_features import MIN_SAMPLES, WINDOW_S, window_features
 SWING_PROB = 0.5          # model probability above this = a swing
 CLASSIFY_EVERY = 3        # run the model every this many new IMU readings (~every 60 ms)
 MODEL_POLL = 0.005        # check for a new IMU reading this often in model mode (readings come every 20 ms)
-MODEL_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "swing_model.joblib")
+MODEL_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "swing_classifier", "swing_model.joblib")
 # Fallback threshold detection (--threshold, or when there's no model; from swing_test.py)
 GYRO_THRESHOLD = 560      # gyro magnitude above this = a swing (rotating the paddle)...
 ACC_THRESHOLD = 500       # ...OR acceleration this far from gravity (1000 milli-g), i.e. acc > 1500
@@ -161,8 +159,8 @@ MODEL_URL = (
 POSE_LEFT_SHOULDER, POSE_RIGHT_SHOULDER = 11, 12
 # Opponent's face: a head-and-shoulders photo, cut out once with MediaPipe and cached
 # (both files are in .gitignore - kept on this laptop only)
-OPPONENT_PHOTO = Path(__file__).parent / "chris_photo.png"
-OPPONENT_CUTOUT = Path(__file__).parent / "chris_cutout.png"
+OPPONENT_PHOTO = Path(__file__).parent / "opponent" / "chris_photo.png"
+OPPONENT_CUTOUT = Path(__file__).parent / "opponent" / "chris_cutout.png"
 CUTOUT_EDGE = (0.45, 0.9)  # mask values below/above this range = fully cut out / fully kept (no halo)
 CUTOUT_EDGE_BLUR = 1.0    # soft edge of the cutout (pixels of the photo)
 POSE_LEFT_WRIST, POSE_RIGHT_WRIST = 15, 16

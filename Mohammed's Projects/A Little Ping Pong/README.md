@@ -1,5 +1,7 @@
 # AR Ping-Pong
 
+*ME193-3 Midterm: "A little ping pong"*
+
 A ping-pong game played in augmented reality: the laptop webcam shows you standing at the end of a virtual table, and you return balls from a virtual opponent, "Chris", using a real paddle: a LEGO Education Double Motor with an AprilTag on it. The motor's IMU detects your swings with a trained classifier and buzzes in your hand when you hit, and the live score is published over MQTT to a scoreboard on an Arduino UNO Q.
 
 ## How to play
@@ -26,7 +28,7 @@ Your **streak** is how many balls in a row you've hit (it resets when you miss).
 
 - **Laptop:** a Mac with a webcam. The game asks the camera for 1280x720.
 - **Double Motor:** a LEGO Education Double Motor (Bluetooth) used as the paddle, with **AprilTag 0** stuck on it.
-- **Level cards:** AprilTags **1, 2, 3** (print `tags/tags_sheet.png` at 100% scale).
+- **Level cards:** AprilTags **1, 2, 3** (print `apriltags/tags_sheet.png` at 100% scale).
 - **Optional:** an Arduino UNO Q for the LED-matrix scoreboard ([unoq_scoreboard/README.md](unoq_scoreboard/README.md)).
 
 ## Setup and run
@@ -36,41 +38,56 @@ The game runs on the repo's Python virtual environment (`.venv`, Python 3.11 or 
 ```bash
 cd ME193-Robotics
 python3 -m venv .venv          # first time only
-.venv/bin/python -m pip install legoeducation opencv-python "mediapipe==0.10.35" numpy \
-    paho-mqtt scikit-learn joblib sounddevice certifi
+.venv/bin/python -m pip install -r "Mohammed's Projects/requirements.txt"
 ```
 
 Run it from the repo root:
 
 ```bash
-.venv/bin/python "Mohammed's Projects/Midterm Ping Pong/game.py"              # normal: Double Motor paddle
-.venv/bin/python "Mohammed's Projects/Midterm Ping Pong/game.py" --no-motor   # no motor: press S to swing
-.venv/bin/python "Mohammed's Projects/Midterm Ping Pong/game.py" --threshold  # old threshold swing detection
+.venv/bin/python "Mohammed's Projects/A Little Ping Pong/game.py"              # normal: Double Motor paddle
+.venv/bin/python "Mohammed's Projects/A Little Ping Pong/game.py" --no-motor   # no motor: press S to swing
+.venv/bin/python "Mohammed's Projects/A Little Ping Pong/game.py" --threshold  # old threshold swing detection
 ```
 
 Turn the Double Motor on before starting. On first use, macOS asks to let the terminal use the camera and Bluetooth. Every 10 seconds the terminal prints the frame rate and where the time goes (`[perf] ...`).
 
 ## File map
 
-| File / folder | What it does |
+```
+A Little Ping Pong/
+├── game.py                  run this
+├── record.json              best streak per level
+├── visuals_and_sounds/      what you see and hear
+├── opponent/                the virtual opponent
+├── swing_classifier/        IMU swing detection: data, training, model
+├── apriltags/               printable tags + their generator
+├── models/                  MediaPipe pose model
+├── unoq_scoreboard/         Arduino UNO Q scoreboard app
+└── steps/                   early standalone tests
+```
+
+| File | What it does |
 |---|---|
 | [game.py](game.py) | The game: camera loop, game states, hit check, rallies and scoring, MQTT. **All tunable constants are at the top.** |
-| [ar_view.py](ar_view.py) | Drawing: the perspective table, the ball's flight and bounce, the paddle, the opponent |
-| [opponent.py](opponent.py) | The opponent's PD-controlled paddle, and how your return's aim and power become a landing point and speed |
-| [effects.py](effects.py) | Arcade effects: particles, floating "+1", screen shake, red flash, speaker icon |
-| [sounds.py](sounds.py) | All sounds, synthesized with numpy (no sound files) and played through `sounddevice` |
-| [swing_features.py](swing_features.py) | The 14 IMU window features used by both the classifier training and the game |
-| [collect_swing_data.py](collect_swing_data.py) | Records labeled IMU data (swings after beeps, plus normal non-swing moves) into `swing_data.csv` |
-| [train_swing_classifier.py](train_swing_classifier.py) | Trains the logistic-regression swing classifier and saves `swing_model.joblib` |
-| [tune_opponent.py](tune_opponent.py) | Simulates thousands of rallies to check how hard each level's opponent is |
-| [make_tags.py](make_tags.py) | Makes the AprilTag images in `tags/` |
-| `swing_data.csv` | The recorded swing / non-swing IMU data |
-| `swing_model.joblib` | The trained swing classifier the game loads |
-| `record.json` | Best streak per level (EASY / MEDIUM / HARD) |
-| [models/](models/) | MediaPipe pose landmarker model (`pose_landmarker_lite.task`) |
-| [tags/](tags/) | Printable AprilTags: 0 = paddle, 1-3 = level cards, plus a one-page sheet |
-| [unoq_scoreboard/](unoq_scoreboard/) | Arduino UNO Q app: shows the live score from MQTT on its LED matrix |
-| [steps/](steps/) | Early standalone tests: `imu_test.py` (IMU readout), `swing_test.py` (threshold swing + haptic kick), `paddle_tracker.py` (AprilTag tracking) |
+| `record.json` | Best streak per level (EASY / MEDIUM / HARD), written by the game |
+| **visuals_and_sounds/** | |
+| [ar_view.py](visuals_and_sounds/ar_view.py) | Drawing: the perspective table, the ball's flight and bounce, the paddle, the opponent |
+| [effects.py](visuals_and_sounds/effects.py) | Arcade effects: particles, floating "+1", screen shake, red flash, speaker icon |
+| [sounds.py](visuals_and_sounds/sounds.py) | All sounds, synthesized with numpy (no sound files) and played through `sounddevice` |
+| **opponent/** | |
+| [opponent.py](opponent/opponent.py) | The opponent's PD-controlled paddle, and how your return's aim and power become a landing point and speed |
+| [tune_opponent.py](opponent/tune_opponent.py) | Simulates thousands of rallies to check how hard each level's opponent is |
+| **swing_classifier/** | |
+| [collect_swing_data.py](swing_classifier/collect_swing_data.py) | Records labeled IMU data (swings after beeps, plus normal non-swing moves) into `swing_data.csv` |
+| [train_swing_classifier.py](swing_classifier/train_swing_classifier.py) | Trains the logistic-regression swing classifier and saves `swing_model.joblib` |
+| [swing_features.py](swing_classifier/swing_features.py) | The 14 IMU window features, shared by training and the game |
+| `swing_data.csv`, `swing_model.joblib` | The recorded IMU data and the trained classifier the game loads |
+| **apriltags/** | |
+| [make_tags.py](apriltags/make_tags.py) | Makes the tag images in this folder |
+| `tag_0.png` … `tag_3.png`, `tags_sheet.png` | 0 = paddle, 1-3 = level cards, plus all four on one printable page |
+| **models/** | `pose_landmarker_lite.task`, the MediaPipe pose model |
+| **[unoq_scoreboard/](unoq_scoreboard/README.md)** | Arduino UNO Q app: shows the live score from MQTT on its LED matrix (has its own README) |
+| **steps/** | Early standalone tests: `imu_test.py` (IMU readout), `swing_test.py` (threshold swing + haptic kick), `paddle_tracker.py` (AprilTag tracking) |
 
 ## How it works
 
@@ -121,11 +138,11 @@ The physical scoreboard that shows these is in [unoq_scoreboard/](unoq_scoreboar
 If swings are missed or gentle moves count as swings, record more data and retrain (the Double Motor must be on):
 
 ```bash
-.venv/bin/python "Mohammed's Projects/Midterm Ping Pong/collect_swing_data.py"        # 30 beeps + 60 s moving + 10 s still
-.venv/bin/python "Mohammed's Projects/Midterm Ping Pong/train_swing_classifier.py"    # prints accuracy, saves swing_model.joblib
+.venv/bin/python "Mohammed's Projects/A Little Ping Pong/swing_classifier/collect_swing_data.py"      # 30 beeps + 60 s moving + 10 s still
+.venv/bin/python "Mohammed's Projects/A Little Ping Pong/swing_classifier/train_swing_classifier.py"  # prints accuracy, saves swing_model.joblib
 ```
 
-- **What the collector does:** after each beep, swing like you do in the game. Then move around normally without swinging. Every run appends to `swing_data.csv`, so you can add data later (for example `--swings 10 --idle 20 --still 5`).
+- **What the collector does:** after each beep, swing like you do in the game. Then move around normally without swinging. Every run appends to `swing_classifier/swing_data.csv`, so you can add data later (for example `--swings 10 --idle 20 --still 5`).
 - **What training reports:** test accuracy and a confusion matrix on swings it never trained on (the split is by event), plus the three most important features.
 
 ## Tuning
@@ -137,12 +154,5 @@ If swings are missed or gentle moves count as swings, record more data and retra
   - match rules (`POINTS_TO_WIN`, `WIN_BY`, `SKUNK_SCORE`)
   - swing detection (`SWING_PROB`, thresholds)
   - targets, camera and performance
-- **Drawing constants:** table and ball-flight constants are at the top of [ar_view.py](ar_view.py).
-- **Checking the opponent:** after changing the opponent's `BOT_*` values, run `.venv/bin/python "Mohammed's Projects/Midterm Ping Pong/tune_opponent.py"`. It uses the same opponent code as the game and prints, per level, how often the opponent fails to return different kinds of shots, and how often a player who hits 90% or 60% of balls wins points and games.
-
-## Opponent photo
-
-The opponent shows a head-and-shoulders photo, `chris_photo.png`, on a cartoon robot body. The photo is **not in this repository** (it's in `.gitignore`).
-
-- **With the photo:** put it in this folder and the game cuts the person out with MediaPipe on the first run, caching the result as `chris_cutout.png` (also not committed).
-- **Without it:** the game uses a cartoon robot head instead. Everything else works the same.
+- **Drawing constants:** table and ball-flight constants are at the top of [visuals_and_sounds/ar_view.py](visuals_and_sounds/ar_view.py).
+- **Checking the opponent:** after changing the opponent's `BOT_*` values, run `.venv/bin/python "Mohammed's Projects/A Little Ping Pong/opponent/tune_opponent.py"`. It uses the same opponent code as the game and prints, per level, how often the opponent fails to return different kinds of shots, and how often a player who hits 90% or 60% of balls wins points and games.

@@ -10,4 +10,6 @@ pyaudio                   # whistling.py, songs.py — mic capture + song playba
 numpy                     # whistling.py, songs.py, spectogram.py — FFT pitch detection + tone synthesis
 matplotlib                # whistling.py, spectogram.py — live waveform/spectrum plots
 paho-mqtt>=2.0            # mqttlib.py — MQTT match start/result messages
-sounddevice               # spectogram.py — mic capture for the standalone spectrogram
+scikit-learn              # A Little Ping Pong — swing classifier (training + in-game)
+joblib                    # A Little Ping Pong — saves/loads the swing classifier
+sounddevice               # spectogram.py — mic capture for the standalone spectrogram; A Little Ping Pong — game sounds
