@@ -11,7 +11,8 @@
 #
 # Run:  python game.py              (press q in the video window to quit)
 #       python game.py --threshold  (old threshold swing detection)
-#       python game.py --no-motor   (SPACE = swing, for testing without the motor)
+#       python game.py --no-motor   (S = swing, for testing without the motor)
+# SPACE pauses a match (and resumes it).
 import argparse
 import collections
 import json
@@ -114,7 +115,7 @@ AIM_NOISE = 0.05          # small random scatter on where it lands
 POWER_ACC_FULL = 4000     # swing peak acc diff (milli-g) that counts as full power
 POWER_GYRO_FULL = 900     # swing peak gyro that counts as full power
 POWER_WINDOW = 0.5        # look for the swing's peaks this many seconds before the hit
-SPACE_POWER = 0.5         # power of a SPACE-bar swing (no IMU)
+KEY_SWING_POWER = 0.5     # power of an S-key swing (no IMU)
 RETURN_SLOW = 1.4         # seconds for your return to reach the bot at power 0...
 RETURN_FAST = 0.7         # ...and at power 1
 SMASH_POWER = 0.8         # power above this = SMASH!
@@ -212,7 +213,7 @@ class Paddle:
         except Exception as exc:
             print(f"Motor connection error: {exc}")
         if not self.connected:
-            print("Could not connect to the motor - SPACE = swing instead.")
+            print("Could not connect to the motor - S key = swing instead.")
             return
         print("Motor connected!")
         self.dm.light_color(le.LEGO_COLOR_BLUE)   # blue = waiting
@@ -646,7 +647,7 @@ def text_right(frame, msg, y, scale, color, thick=2):
 # ---------------------------------------------------------------------------
 def main():
     parser = argparse.ArgumentParser(description="Virtual ping-pong with the LEGO Double Motor paddle.")
-    parser.add_argument("--no-motor", action="store_true", help="don't connect the motor; SPACE = swing")
+    parser.add_argument("--no-motor", action="store_true", help="don't connect the motor; S key = swing")
     parser.add_argument("--threshold", action="store_true",
                         help="use the old gyro/acc thresholds instead of the trained swing model")
     args = parser.parse_args()
@@ -719,6 +720,11 @@ def main():
     match_won = False
     skunk = False            # did the match end by the skunk rule?
     prev_now = time.time()
+    # Game clock: `now` below is wall time minus all paused time, and it stands still while
+    # paused - so the ball, hit window, serve delay, opponent, countdown and effects all freeze.
+    paused = False
+    paused_total = 0.0       # seconds spent paused so far
+    paused_at = 0.0          # wall time the current pause started
     record_at_start = 0.0    # the record when this game started (beating it = NEW RECORD)
     new_record = False       # did this game beat it?
     combo_label = None       # (text, color, until)
@@ -795,7 +801,8 @@ def main():
             ok, frame = cap.read()
             if not ok:
                 break
-            now = time.time()
+            wall_now = time.time()
+            now = (paused_at if paused else wall_now) - paused_total   # game time
             if table is None:
                 fh, fw = frame.shape[:2]
                 print(f"Camera: first frame is {fw}x{fh}"
@@ -892,14 +899,27 @@ def main():
             key = cv2.waitKey(1) & 0xFF
             if key == ord("q"):
                 break
-            if key == ord(" "):   # SPACE is always a swing (with or without the motor)
-                paddle.swings.put((now, "SPACE"))
+            if key == ord("s"):   # S is always a swing (with or without the motor)
+                paddle.swings.put((wall_now, "S KEY"))
             if key == ord("m"):
                 sound.toggle_mute()
+            if key == ord(" ") and state in ("COUNTDOWN", "PLAYING"):   # pause / resume a match
+                if paused:
+                    paused = False
+                    paused_total += wall_now - paused_at
+                    print("Resumed")
+                else:
+                    paused, paused_at, hold_level = True, wall_now, None
+                    paddle.haptic("idle")   # blue while paused
+                    print("Paused")
 
             # --- swings ---
             while not paddle.swings.empty():
-                ts, trigger = paddle.swings.get()
+                ts_wall, trigger = paddle.swings.get()   # swing times come in wall time
+                if paused:
+                    print("swing ignored (paused)")
+                    continue
+                ts = ts_wall - paused_total               # -> game time
                 last_swing_shown = ts
                 if state == "PLAYING" and ball is not None:
                     ball["last_swing"] = ts
@@ -930,10 +950,10 @@ def main():
                             # your return: AIM = where the paddle center is in the ring (left/right),
                             # POWER = how hard the swing was
                             aim = max(-1.0, min(1.0, (pos[0] - ball["x"]) / HIT_RADIUS[level]))
-                            if trigger == "SPACE" or not paddle.connected:
-                                power = SPACE_POWER
+                            if trigger == "S KEY" or not paddle.connected:
+                                power = KEY_SWING_POWER
                             else:
-                                power = opponent.swing_power(*paddle.peaks_since(ts - POWER_WINDOW),
+                                power = opponent.swing_power(*paddle.peaks_since(ts_wall - POWER_WINDOW),
                                                              POWER_ACC_FULL, POWER_GYRO_FULL)
                             land, ret_time, smash = opponent.plan_return(
                                 aim, power, AIM_SPREAD, AIM_NOISE, RETURN_SLOW, RETURN_FAST,
@@ -1068,6 +1088,7 @@ def main():
             # --- level card hold (WAITING / MATCH OVER) ---
             def check_level_card():
                 nonlocal hold_level, hold_since, hold_last_seen
+                now = wall_now if paused else game_now   # the game clock is stopped while paused
                 if hold_level in levels_seen:
                     hold_last_seen = now
                 elif hold_level is None or now - hold_last_seen > LEVEL_DROPOUT:
@@ -1083,7 +1104,21 @@ def main():
                 return LEVELS[hold_level] if progress >= 1 else None
 
             # --- game states ---
-            if state == "WAITING":
+            game_now = now
+            if paused:
+                frame[:] = cv2.convertScaleAbs(frame, alpha=0.35)   # darken everything drawn so far
+                text(frame, "PAUSED", (w // 2, int(0.3 * h)), 3.0 * S, WHITE, 8, center=True)
+                text(frame, f"{level}   ME {me_pts} - {bot_pts} {BOT_NAME[level]}", (w // 2, int(0.42 * h)),
+                     1.3 * S, YELLOW, 3, center=True)
+                text(frame, "SPACE: resume  |  Hold up a level card: new match at that level  |  Q: quit",
+                     (w // 2, int(0.52 * h)), 0.75 * S, WHITE, 2, center=True)
+                chosen = check_level_card()
+                if chosen:   # abandon this match (no result published) and start a new one
+                    paused = False
+                    paused_total += wall_now - paused_at
+                    print(f"Match abandoned - new match at {chosen}")
+                    start_countdown(chosen)
+            elif state == "WAITING":
                 text(frame, "AR PING PONG", (w // 2, int(0.3 * h)), 2.8 * S, GOLD, 7, center=True)
                 text(frame, "Hold up a level card: 1 EASY, 2 MEDIUM, 3 HARD", (w // 2, int(0.45 * h)),
                      1.1 * S, WHITE, 3, center=True)
@@ -1187,7 +1222,7 @@ def main():
                 ar_view.blend(frame, 0.55, (w // 2 - bw_ // 2 - 18 * S, 8 * S, w // 2 + bw_ // 2 + 18 * S, 20 * S + bh_ + 14 * S),
                               lambda img, ox, oy: img.fill(0))
                 text(frame, board, (w // 2, int(14 * S + bh_ / 2 + 7 * S)), 1.1 * S, WHITE, 3, center=True)
-            if state == "PLAYING":
+            if state == "PLAYING" and not paused:
                 if now < go_until:
                     text(frame, "GO!", (w // 2, h // 2), 5 * S, GREEN, 12, center=True)
                 if streak > 0:
@@ -1198,7 +1233,7 @@ def main():
                     text(frame, combo_label[0], (15, int(245 * S)), 1.4 * S, combo_label[1], 4)
                 if now < smash_until:
                     text(frame, "SMASH!", (w // 2, int(0.6 * h)), 2.4 * S, (0, 140, 255), 7, center=True)
-            if now < banner_until:
+            if now < banner_until and not paused:
                 pulse = 1 + 0.08 * math.sin(now * 12)
                 text(frame, "NEW RECORD!", (w // 2, int(0.3 * h)), 2.6 * S * pulse, GOLD, 8, center=True)
 
@@ -1217,27 +1252,28 @@ def main():
             if now - last_swing_shown < 0.3:
                 text_right(frame, "SWING", h - int(20 * S), 1.3 * S, YELLOW, 3)
 
-            dt = now - last_time
-            last_time = now
+            dt = wall_now - last_time
+            last_time = wall_now
             if dt > 0:
                 fps = 0.9 * fps + 0.1 * (1.0 / dt) if fps else 1.0 / dt
             text_right(frame, f"FPS {fps:.0f}", int(40 * S), 1.0 * S, WHITE, 2)
             mode = "MODEL" if paddle.model is not None else "THRESHOLD"
-            motor_msg = f"Motor: YES ({mode})" if paddle.connected else "Motor: NO (SPACE = swing)"
+            motor_msg = f"Motor: YES ({mode})" if paddle.connected else "Motor: NO (S = swing)"
             text_right(frame, motor_msg, int(85 * S), 1.0 * S, GREEN if paddle.connected else RED, 2)
             sound_msg = "M: muted" if sound.muted else "M: sound on"
             (tw, _), _ = cv2.getTextSize(sound_msg, FONT, 0.8 * S, 2)
             text_right(frame, sound_msg, int(130 * S), 0.8 * S, RED if sound.muted else WHITE, 2)
             effects.draw_speaker(frame, w - 15 - tw - int(50 * S), int(105 * S), S, sound.muted)
 
-            frame = fxv.post(frame, now, S)   # miss: red edges + screen shake
+            if not paused:
+                frame = fxv.post(frame, now, S)   # miss: red edges + screen shake
             cv2.imshow("Ping Pong (press q to quit)", frame)
 
             # --- FPS report in the terminal ---
             t_end = time.time()
             perf["frames"] += 1
-            perf["read"] += now - t_loop
-            perf["tags"] += t_tags - now
+            perf["read"] += wall_now - t_loop
+            perf["tags"] += t_tags - wall_now
             perf["total"] += t_end - t_loop
             if t_end - perf["start"] >= PERF_REPORT_S:
                 n, span = perf["frames"], t_end - perf["start"]
