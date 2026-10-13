@@ -123,6 +123,7 @@ SMASH_SPEEDUP = 0.75      # a smash's flight time x this
 # Match
 POINTS_TO_WIN = 11        # game to 11...
 WIN_BY = 2                # ...win by 2
+SKUNK_SCORE = 7           # leading 7-0 ends the match right away (skunk)
 POINT_PAUSE = 1.6         # seconds between a point and the next serve
 
 # Arcade feedback
@@ -666,6 +667,7 @@ def main():
     smash_until = 0.0        # "SMASH!" shown until
     match_best = 0           # longest streak this match
     match_won = False
+    skunk = False            # did the match end by the skunk rule?
     prev_now = time.time()
     record_at_start = 0.0    # the record when this game started (beating it = NEW RECORD)
     new_record = False       # did this game beat it?
@@ -983,7 +985,7 @@ def main():
 
             def end_point(i_won, msg):
                 """Score a point; then the next serve, or the end of the match."""
-                nonlocal me_pts, bot_pts, point_msg, serve_at, state, state_start, hold_level, match_won
+                nonlocal me_pts, bot_pts, point_msg, serve_at, state, state_start, hold_level, match_won, skunk
                 if i_won:
                     me_pts += 1
                     sound.play("point_won")
@@ -993,9 +995,11 @@ def main():
                 point_msg = (msg, "YOUR POINT" if i_won else f"{BOT_NAME[level].upper()}'S POINT",
                              GREEN if i_won else RED, now + POINT_PAUSE)
                 print(f"point: ME {me_pts} - {bot_pts} {BOT_NAME[level]}")
-                if max(me_pts, bot_pts) >= POINTS_TO_WIN and abs(me_pts - bot_pts) >= WIN_BY:
+                skunk = max(me_pts, bot_pts) == SKUNK_SCORE and min(me_pts, bot_pts) == 0
+                if skunk or (max(me_pts, bot_pts) >= POINTS_TO_WIN and abs(me_pts - bot_pts) >= WIN_BY):
                     match_won = me_pts > bot_pts
-                    score.publish_game(f"{me_pts}-{bot_pts} {'WIN' if match_won else 'LOSS'}")
+                    score.publish_game(f"{me_pts}-{bot_pts} {'WIN' if match_won else 'LOSS'}"
+                                       + (" (SKUNK)" if skunk else ""))
                     state, state_start, hold_level, serve_at = "MATCH OVER", now, None, None
                     if match_won:
                         sound.play("win")
@@ -1101,10 +1105,16 @@ def main():
 
             elif state == "MATCH OVER":
                 if match_won:
-                    text(frame, "YOU WIN!", (w // 2, int(0.22 * h)), 3.0 * S, GOLD, 8, center=True)
+                    if skunk:
+                        text(frame, f"SKUNK! YOU WIN {me_pts}-{bot_pts}", (w // 2, int(0.22 * h)), 2.2 * S, GOLD, 7,
+                             center=True)
+                    else:
+                        text(frame, "YOU WIN!", (w // 2, int(0.22 * h)), 3.0 * S, GOLD, 8, center=True)
                     if now - state_start < 3 and int((now - state_start) / 0.5) != int((now - state_start - dt_frame) / 0.5):
                         fxv.burst(now, random.uniform(0.2, 0.8) * w, 0.3 * h, S, n=35,
                                   colors=effects.CONFETTI, speed=500, life=1.8, up=300)
+                elif skunk:
+                    text(frame, f"SKUNKED! {me_pts}-{bot_pts}", (w // 2, int(0.22 * h)), 2.6 * S, RED, 7, center=True)
                 else:
                     text(frame, f"{BOT_NAME[level].upper()} WINS", (w // 2, int(0.22 * h)), 2.6 * S, RED, 7,
                          center=True)
