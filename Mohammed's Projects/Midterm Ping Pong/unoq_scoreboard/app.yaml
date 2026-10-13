@@ -1,0 +1,5 @@
+name: Ping Pong Scoreboard
+description: "Live AR ping-pong score from MQTT on the LED matrix"
+ports: []
+bricks: []
+icon: 🏓
