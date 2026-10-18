@@ -1,0 +1,5 @@
+name: Sumo Distance
+description: "HC-SR04 opponent distance published over MQTT for the sumo robot"
+ports: []
+bricks: []
+icon: 📏

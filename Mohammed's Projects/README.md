@@ -11,6 +11,7 @@ My ME193-3 (AI in Mobile Robots) coursework and projects.
 | [`The Whistling World Cup/`](./The%20Whistling%20World%20Cup) | The Whistling World Cup (HW3) | Drive a LEGO car with recorder notes and claps picked up by the laptop mic, playing ball vs. goalie over MQTT |
 | [`Door-to-door Service/`](./Door-to-door%20Service) | Door-to-door Service (HW4) | Detect LEGO minifigs with a YOLO model on the laptop camera and send their position over MQTT to an Arduino UNO Q car |
 | [`A Little Ping Pong/`](./A%20Little%20Ping%20Pong) | A Little Ping Pong (Midterm) | Augmented-reality ping-pong against a virtual opponent: a LEGO Double Motor is the paddle (AprilTag + MediaPipe tracking, trained IMU swing classifier, haptics), with the live score over MQTT on an Arduino UNO Q scoreboard |
+| [`Sumo Wrestling/`](./Sumo%20Wrestling) | Sumo Wrestling (HW5) | LEGO sumo robot with shared control: a behavior tree fuses the controller levers with a color sensor (tape edge) and an HC-SR04 on an Arduino UNO Q over MQTT (opponent boost) |
 
 ## Setup
 

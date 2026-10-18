@@ -1,0 +1,2 @@
+legoeducation==1.2.0   # LEGO Education hub BLE protocol (1.2.0 works with our controller)
+paho-mqtt==2.1.0       # MQTT: HC-SR04 distance from the UNO Q
