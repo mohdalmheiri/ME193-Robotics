@@ -28,11 +28,11 @@ CARD_COLOR = le.LEGO_COLOR_ORANGE
 CARD_SERIAL = "0994"                   # string, so the leading zero is kept
 
 # ---- Edge detection (set these after running connect_test.py on the real tape) --
-# measured: floor hue ~21 sat ~38, blue tape hue 205 sat 73
+# measured: floor hue ~13-23 sat ~29-41; old tape hue ~206 sat 62-77; new tape hue ~208 sat 52-56
 TAPE_MODE = "hue"                      # "color" uses LEGO's color id, "hue" uses hue/saturation
 TAPE_COLORS = {le.LEGO_COLOR_BLUE, le.LEGO_COLOR_AZURE}
 TAPE_HUE_RANGE = (180, 240)            # only used when TAPE_MODE = "hue"
-TAPE_MIN_SATURATION = 55               # only used when TAPE_MODE = "hue"
+TAPE_MIN_SATURATION = 45               # only used when TAPE_MODE = "hue"
 
 # ---- Driving setup (flip these if the robot drives the wrong way) ------------
 LEFT_SIGN = -1       # set to -1 if the left wheel spins backward when it should go forward

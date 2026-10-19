@@ -118,9 +118,11 @@ Read with `connect_test.py` on our ring:
 
 | Surface | Hue | Saturation |
 |---|---|---|
-| Floor | ~15-21 | ~30-38 |
-| Blue tape | ~206 | ~62-77 |
+| Floor | ~13-23 | ~29-41 |
+| Old blue tape | ~206 | ~62-77 |
+| New blue tape | ~208 | ~52-56 |
 
 Based on these, `sumo.py` uses `TAPE_MODE = "hue"` with
-`TAPE_HUE_RANGE = (180, 240)` and `TAPE_MIN_SATURATION = 55`. The tape is well inside the hue range
-and above the saturation cutoff, while the floor fails both checks.
+`TAPE_HUE_RANGE = (180, 240)` and `TAPE_MIN_SATURATION = 45`. The threshold was lowered from 55 because
+the new ring tape is less saturated. Both tapes are well inside the hue range and above the saturation
+cutoff. The floor fails the hue check by a wide margin, and its saturation stays below 45 too.
