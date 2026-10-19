@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Q-Learning</title>
+<title>Pascal's Q-Learning Visualizer</title>
 <link rel="stylesheet" href="https://pyscript.net/releases/2024.1.1/core.css">
 <script type="module" src="https://pyscript.net/releases/2024.1.1/core.js"></script>
 <style>
@@ -155,7 +155,7 @@
   th.action-value-header {
     background: #ffffff;
   }
-  /* Matches the "State (Robot Orientation)" axis-label's look (font, weight, color,
+  /* Matches the "State (Yaw)" axis-label's look (font, weight, color,
      background) for the "Actions" group header text. */
   th.axis-style-header {
     background: #f8fafc;
@@ -593,7 +593,7 @@
 </script>
 
 <div class="header">
-  <h1>Q-Learning Visualizer</h1>
+  <h1>Pascal's Q-Learning Visualizer</h1>
   <p>Train a LEGO® CS+AI robot to walk straight!</p>
 </div>
 
@@ -1308,7 +1308,7 @@
   </div>
 </div>
 
-<!-- Used only for the "State (Robot Orientation)" axis-label's help-icon: that
+<!-- Used only for the "State (Yaw)" axis-label's help-icon: that
      icon lives inside a rotate(180deg) cell (for its vertical text), and a
      normal nested CSS tooltip would inherit that rotation. This floating
      div has no rotated ancestors, so JS positions it directly instead. -->
@@ -1381,7 +1381,7 @@
     setTimeout(() => headerCell.classList.remove('active-action'), durationMs || 900);
   };
 
-  // ── Floating tooltip for the "State (Robot Orientation)" axis-label help-icon ──
+  // ── Floating tooltip for the "State (Yaw)" axis-label help-icon ──
   // That icon lives inside a rotate(180deg) cell, so a normal nested CSS
   // tooltip would inherit the rotation. Instead, position this tooltip
   // (which lives outside any rotated ancestor) using real pixel coordinates
@@ -1831,7 +1831,7 @@
       const valueCells = actionNames.map(() => '<td>0.00</td>').join('');
       const tr = document.createElement('tr');
       const axisLabelCell = s === 0
-        ? `<td rowspan="${n}" class="axis-label"><span>States (Robot Orientation)</span> <span class="tooltip-trigger tooltip-below help-icon">?<span class="tooltip-text">How can we discretize the orientation of the robot at the start of each step, based on its yaw-orientation?</span></span></td>`
+        ? `<td rowspan="${n}" class="axis-label"><span>States (Yaw)</span> <span class="tooltip-trigger tooltip-below help-icon">?<span class="tooltip-text">How can we discretize the orientation of the robot at the start of each step, based on its yaw-orientation?</span></span></td>`
         : '';
       tr.innerHTML = `${axisLabelCell}<td class="state-cell">${stateCellHTML}</td>${valueCells}`;
       tbody.appendChild(tr);
@@ -1863,7 +1863,7 @@
           </td>`;
       }).join('');
       const axisLabelCell = s === 0
-        ? `<td rowspan="${n}" class="axis-label"><span>States (Robot Orientation)</span> <span class="tooltip-trigger tooltip-below help-icon">?<span class="tooltip-text">How can we discretize the orientation of the robot at the start of each step, based on its yaw-orientation?</span></span></td>`
+        ? `<td rowspan="${n}" class="axis-label"><span>States (Yaw)</span> <span class="tooltip-trigger tooltip-below help-icon">?<span class="tooltip-text">How can we discretize the orientation of the robot at the start of each step, based on its yaw-orientation?</span></span></td>`
         : '';
       bodyRows += `<tr>${axisLabelCell}<td class="state-cell"><b>${cfg.names[s]}</b></td>${valueCells}</tr>`;
     }

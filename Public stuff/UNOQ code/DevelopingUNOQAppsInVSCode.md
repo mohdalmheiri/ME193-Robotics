@@ -1,6 +1,6 @@
 # Developing UNO Q Apps in VS Code
 
-Oct 6, 2026 · @Chris Rogers
+Oct 7, 2026 · @Chris Rogers
 
 ## Overview
 
@@ -8,7 +8,7 @@ After this setup, you write code in VS Code on your laptop, press one key, and i
 
 How the pieces connect:
 
-- **Laptop (VS Code):** where you edit. A script called `deploy.py` copies your app to the board and starts it.
+- **Laptop (VS Code):** where you edit. A script called `deploy.py` (in a `tools` folder) copies your app to the board and starts it.
 - **UNO Q:** where your app runs. Its apps live in `/home/arduino/ArduinoApps`.
 - **GitHub:** a private repo with a copy of that folder. You push from the laptop, and the board can pull from it.
 
@@ -92,9 +92,13 @@ Keep the page open. You'll need its SSH address, which looks like `git@github.co
 
 ## Step 4: Push your board's apps to GitHub
 
-This step happens **on the board**. Log in from your laptop with `ssh arduino@10.5.14.200`, then run the commands below.
+This step happens **on the board**, in several short parts.
 
-**Set up Git:**
+### 4a. Log in to the board
+
+From your laptop, run `ssh arduino@10.5.14.200`.
+
+### 4b. Set up Git
 
 ```
 git --version || sudo apt install -y git
@@ -102,7 +106,9 @@ git config --global user.name "Your Name"
 git config --global user.email "you@example.edu"
 ```
 
-**Give the board permission to push.** Make a key on the board, pressing Enter at every question:
+### 4c. Make a key on the board
+
+Press Enter at every question:
 
 ```
 ssh-keygen -t ed25519 -C "Fred2"
@@ -111,11 +117,21 @@ cat ~/.ssh/id_ed25519.pub
 
 The second command prints **one line** that starts with `ssh-ed25519` and ends with `Fred2`. Copy that whole line. Only ever share the file ending in `.pub`; the one without `.pub` is private and never leaves the board.
 
+### 4d. Give the key to GitHub
+
 On your GitHub repo page, go to **Settings → Deploy keys → Add deploy key**. Paste the line into **Key**, give it a title like "Fred2", check **Allow write access**, and save. A deploy key only works for this one repo.
 
-Test it on the board with `ssh -T git@github.com`. Type `yes` if asked. It should greet you, even though it adds that it doesn't provide shell access.
+### 4e. Test the connection
 
-**Create the repo and push:**
+On the board, run:
+
+```
+ssh -T git@github.com
+```
+
+Type `yes` if asked. It should greet you, even though it adds that it doesn't provide shell access.
+
+### 4f. Create the repo and stage your files
 
 ```
 cd ~/ArduinoApps
@@ -125,13 +141,24 @@ git add .
 git status
 ```
 
-Check the `git status` list: no `.cache` folders should appear. Those hold the Python libraries App Lab installs on the board, and they don't belong on GitHub. Then:
+Check the `git status` list: no `.cache` folders should appear. Those hold the Python libraries App Lab installs on the board, and they don't belong on GitHub.
+
+### 4g. Commit
 
 ```
 git commit -m "Initial commit from my UNO Q"
+```
+
+### 4h. Connect to GitHub and push
+
+Replace `YOUR-USERNAME` with your GitHub username:
+
+```
 git remote add origin git@github.com:YOUR-USERNAME/ArduinoApps.git
 git push -u origin main
 ```
+
+### 4i. Check GitHub and log out
 
 Refresh the GitHub page. Your app folders should be there. Type `exit` to leave the board.
 
@@ -146,20 +173,36 @@ Refresh the GitHub page. Your app folders should be there. Type `exit` to leave 
 
 **Add the kit.** Unzip `unoq-vscode-kit.zip` and move its contents into the top level of your `ArduinoApps` folder:
 
-- `.vscode/tasks.json` creates the one-key "Run on UNO Q" command.
-- `deploy.py` copies your app to the board and starts it.
+- `.vscode/tasks.json` creates the Cmd+Shift+B choices (Step 6).
+- `tools/deploy.py` copies your app to the board and starts it.
+- `tools/Tufts_WiFi.py` advertises your board on the campus network (see Step 6).
+- `tools/board_secrets.example.py` is the template for your board's address.
+- `tools/config.py` and `tools/README.md` are support files and notes.
 - `CLAUDE.md` tells Claude Code how to work with your board (Step 7).
 
 On a Mac, Finder hides the `.vscode` folder because its name starts with a dot. Press **Cmd+Shift+.** in Finder to show it.
 
-**Point the script at your board.** Open `deploy.py` and edit the list near the top with your board's IP and name from Step 1:
+**Point the script at your board.** Your settings live in their own file, `tools/board_secrets.py`, so you can re-unzip a newer kit later without losing them. The kit doesn't include that file. Make it by running any command once, in a terminal in your `ArduinoApps` folder:
+
+```
+python3 tools/deploy.py --cmd "hostname"
+```
+
+(On Windows, type `python` instead of `python3`.) It prints "Created board_secrets.py with default values". Open `tools/board_secrets.py` and put in your board's IP and name from Step 1:
 
 ```
 HOSTS = [
-    "10.5.14.200",
-    "Fred2.local",
+    "10.5.14.200",     # your board's IP address
+    "Fred2.local",     # your board's name + .local
 ]
+USER = "arduino"
+BOARD_NAME = "Fred2"
+BOARD_IP = "10.5.14.200"
 ```
+
+`BOARD_NAME` and `BOARD_IP` are only used by `Tufts_WiFi.py`. These settings are for your own board and stay on your laptop.
+
+**Keep your address private (optional).** Add the line `tools/board_secrets.py` to the `.gitignore` file in your `ArduinoApps` folder so your own settings aren't uploaded.
 
 **Save the kit to GitHub.** In VS Code's **Source Control** panel, type a message like "Add deploy kit", click **Commit**, then **Sync Changes**.
 
@@ -167,22 +210,30 @@ HOSTS = [
 
 1. Open any file inside the app you want to run, such as `my-app/python/main.py`. The script uses the open file to decide which app to run.
 2. Press **Cmd+Shift+B** (Mac) or **Ctrl+Shift+B** (Windows).
+3. Pick one of the choices that appears:
+   - **Run on UNO Q**: copies the app to the board and starts it.
+   - **Python in UNO Q container**: opens a Python prompt in the terminal. If an app is running, the prompt is inside that app, so `arduino.app_utils` works. If nothing is running, it is plain Python on the board's Linux side.
+   - **Terminal on UNO Q**: opens a command-line session on the board, over USB or Wi-Fi. Type `exit` to leave.
+   - **Advertise UNO Q on Tufts WiFi**: runs `Tufts_WiFi.py` so your board can be found on the campus network. It needs the `zeroconf` package once (`pip install zeroconf`). Press Ctrl+C in its terminal to stop.
 
 The terminal panel shows each step:
 
 ```
+Trying USB (adb) ... no device
 Trying 10.5.14.200 ... connected
 $ ssh ... arduino-app-cli app stop /home/arduino/ArduinoApps/my-app
 $ scp ... 
 $ ssh ... arduino-app-cli app start /home/arduino/ArduinoApps/my-app
 ```
 
-It stops the app if it's running, copies your files to the board (replacing the old versions), and starts it. Only your own files are copied; the board keeps its installed Python libraries, so apps start quickly.
+It stops the app if it's running, copies your files to the board (replacing the old versions), and starts it. Only your own files are copied; the board keeps its installed Python libraries, so apps start quickly. After starting, it shows the app's first log messages and, if your app has a web page, the address to open it.
+
+**USB works too.** If the board is plugged into your laptop with a USB cable and `adb` is installed, the script uses USB first and doesn't need Wi-Fi at all. Over USB, the web page opens at `http://localhost:7007`. The board runs one app at a time, so starting an app stops whichever one was running.
 
 You can also run any command on the board without remembering its address:
 
 ```
-python3 deploy.py --cmd "arduino-app-cli --help"
+python3 tools/deploy.py --cmd "arduino-app-cli --help"
 ```
 
 On Windows, type `python` instead of `python3`.
@@ -195,7 +246,7 @@ Claude Code runs on your laptop and can edit your app, deploy it to the board, r
 2. Open the Claude Code panel and sign in with your Claude account.
 3. Ask for a change, for example: "In my-app, show the button state on the web page, then deploy and test it."
 
-Claude reads `CLAUDE.md` automatically, so it already knows how to reach your board through `deploy.py`. Review its changes in the Source Control panel before you commit them.
+Claude reads `CLAUDE.md` automatically, so it already knows how to reach your board through `tools/deploy.py`. Review its changes in the Source Control panel before you commit them.
 
 ## Daily workflow
 
@@ -210,7 +261,7 @@ The one rule: **edit in one place at a time. Before switching, push from where y
 **Making the board's Git copy match GitHub** (do this now and then, or before editing on the board):
 
 ```
-python3 deploy.py --cmd "cd ~/ArduinoApps && git fetch && git reset --hard origin/main"
+python3 tools/deploy.py --cmd "cd ~/ArduinoApps && git fetch && git reset --hard origin/main"
 ```
 
 This makes the board an exact copy of GitHub, and it throws away any uncommitted changes on the board. A plain `git pull` would complain, because deploying makes the board's files look modified to Git.
@@ -218,27 +269,29 @@ This makes the board an exact copy of GitHub, and it throws away any uncommitted
 **If you create or edit an app in App Lab:** push it from the board first, then pull on the laptop.
 
 ```
-python3 deploy.py --cmd "cd ~/ArduinoApps && git add . && git commit -m 'Changes from App Lab' && git push"
+python3 tools/deploy.py --cmd "cd ~/ArduinoApps && git add . && git commit -m 'Changes from App Lab' && git push"
 ```
 
 Then click **Sync Changes** in VS Code.
 
 **Things to know:**
 
-- Deploying copies and replaces files but never **deletes** them on the board. If you delete or rename a file, remove the old copy with `python3 deploy.py --cmd "rm /home/arduino/ArduinoApps/my-app/python/old_file.py"`.
+- Deploying copies and replaces files but never **deletes** them on the board. If you delete or rename a file, remove the old copy with `python3 tools/deploy.py --cmd "rm /home/arduino/ArduinoApps/my-app/python/old_file.py"`.
 - Edits made only on the board are overwritten the next time you deploy that app.
 
 ## Troubleshooting
 
 | What you see | What to do |
 | --- | --- |
-| Deploy says "Couldn't reach the board at any address" | The board's IP probably changed. Find the new one (Step 1) and update `HOSTS` in `deploy.py`. Also check the board is on and on the same network. |
+| Deploy says "Couldn't reach the board at any address" | The board's IP probably changed. Find the new one (Step 1) and update `HOSTS` in `tools/board_secrets.py`. If the board is plugged in over USB, it should connect without this. Also check the board is on and on the same network. |
 | `ssh` or `ssh-copy-id` hangs with no output | Your laptop can't reach the board. Press Ctrl+C. Try the IP instead of the `.local` name, or move both to a home network or phone hotspot. |
 | "Could not resolve hostname" | The `.local` name doesn't work on this network. Use the IP address. |
 | Asked for a password after Step 2 | The key copy didn't work. Repeat "Copy the key to the board" in Step 2. |
-| "Host key verification failed" | A different device now has your board's old IP. Find your board's current IP and update `HOSTS`. |
+| "Host key verification failed" | A different device now has your board's old IP. Find your board's current IP and update `HOSTS` in `tools/board_secrets.py`. |
 | Push rejected: "remote contains work that you do not have locally" | The GitHub repo wasn't empty. If it only has a README, run `git push -u --force origin main` on the board. |
 | "Permission denied (publickey)" when pushing from the board | The deploy key is missing or lacks write access. Recheck Step 4 and make sure **Allow write access** is checked. |
-| Thousands of files in `git status` or during a deploy | A `.cache` folder is being included. Make sure `.gitignore` contains `.cache/`, and use the `deploy.py` from the kit. |
+| Thousands of files in `git status` or during a deploy | A `.cache` folder is being included. Make sure `.gitignore` contains `.cache/`, and use the `tools/deploy.py` from the kit. |
 | Can't find `.vscode` after unzipping | Finder hides it. Press Cmd+Shift+. to show hidden files. |
-| "doesn't look like an App (no app.yaml)" | Click into a file inside an app folder before pressing Cmd/Ctrl+Shift+B. |
+| "doesn't look like an App (no app.yaml)" | Click into a file inside an app folder before pressing Cmd/Ctrl+Shift+B. (The Python and Advertise choices don't need this.) |
+| Cmd+Shift+B runs something straight away instead of showing choices | A default build task is set in your own VS Code settings (**Terminal → Configure Default Build Task**). Remove the default so the choices appear. |
+| `Tufts_WiFi.py` says no module named `zeroconf` | Run `pip install zeroconf` once. |

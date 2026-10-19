@@ -1,5 +1,5 @@
 name = "QLearn-Activities"
-packages = [ "legoeducation", "numpy",]
+packages = [ "legoeducation==1.0.6","numpy",]
 
 [files]
 "./qlearn.py" = ""
