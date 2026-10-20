@@ -1,0 +1,84 @@
+body {
+  font-family: -apple-system, system-ui, sans-serif;
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 16px;
+  background: #111;
+  color: #eee;
+}
+
+h1 {
+  text-align: center;
+  font-size: 1.4rem;
+}
+
+label {
+  display: block;
+  margin-top: 16px;
+  margin-bottom: 6px;
+  font-size: 0.9rem;
+  color: #aaa;
+}
+
+input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 14px;
+  font-size: 1.1rem;
+  border-radius: 10px;
+  border: 1px solid #444;
+  background: #222;
+  color: #eee;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+button {
+  padding: 20px 10px;
+  font-size: 1.1rem;
+  border-radius: 12px;
+  border: none;
+  background: #333;
+  color: #eee;
+}
+
+.activity-btn.selected {
+  background: #2d6cdf;
+  color: white;
+}
+
+.go {
+  background: #2e9e4a;
+  color: white;
+}
+
+.stop {
+  background: #c23b3b;
+  color: white;
+}
+
+#status {
+  margin-top: 20px;
+  background: #1c1c1c;
+  border-radius: 12px;
+  padding: 12px 16px;
+}
+
+#status p {
+  margin: 6px 0;
+}
+
+.warning {
+  color: #e0a800;
+}
+
+#download-btn {
+  width: 100%;
+  margin-top: 20px;
+  background: #555;
+}

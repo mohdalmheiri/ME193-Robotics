@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Gait Recorder</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <h1>Gait Recorder</h1>
+
+    <label for="person">Name</label>
+    <input id="person" type="text" placeholder="Your name" />
+
+    <label>Activity</label>
+    <div class="grid">
+      <button class="activity-btn" data-activity="Standing">Standing</button>
+      <button class="activity-btn" data-activity="Walking">Walking</button>
+      <button class="activity-btn" data-activity="Running">Running</button>
+      <button class="activity-btn" data-activity="Biking">Biking</button>
+    </div>
+
+    <div class="grid">
+      <button id="start-btn" class="go">Start</button>
+      <button id="stop-btn" class="stop">Stop</button>
+    </div>
+
+    <div id="status">
+      <p>Activity: <span id="status-activity">-</span></p>
+      <p>Recording time: <span id="status-time">0</span> s</p>
+      <p>Samples saved: <span id="status-samples">0</span></p>
+      <p>Samples / sec: <span id="status-rate">0</span></p>
+      <p id="status-gaps" class="warning"></p>
+    </div>
+
+    <a href="/download"><button id="download-btn">Download all CSVs</button></a>
+
+    <script src="app.js"></script>
+  </body>
+</html>
