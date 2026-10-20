@@ -64,7 +64,3 @@ on top the whole time, purely for style.
   `arm_control_car.py`.
 - If the car's hub fails to connect, the script still runs in
   camera-preview-only mode so you can debug pose detection without hardware.
-
-## Credits
-
-- Answers to the assignment questions are on our group Notion site.

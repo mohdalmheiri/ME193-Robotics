@@ -309,4 +309,3 @@ install pyaudio`.
 - This code comes from
   [nsudofsky/ME193-Robotics](https://github.com/nsudofsky/ME193-Robotics/tree/main/The%20Whistling%20World%20Cup),
   plus a `--no-lego` practice mode added here.
-- Answers to the assignment questions are on our group Notion site.

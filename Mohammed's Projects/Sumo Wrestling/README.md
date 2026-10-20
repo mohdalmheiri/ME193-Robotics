@@ -136,7 +136,3 @@ Based on these, `sumo.py` uses `TAPE_MODE = "hue"` with
 `TAPE_HUE_RANGE = (180, 240)` and `TAPE_MIN_SATURATION = 45`. The threshold was lowered from 55 because
 the new ring tape is less saturated. Both tapes are well inside the hue range and above the saturation
 cutoff. The floor fails the hue check by a wide margin, and its saturation stays below 45 too.
-
-## Credits
-
-- Answers to the assignment questions are on our group Notion site.

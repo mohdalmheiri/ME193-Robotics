@@ -77,7 +77,3 @@ a spring-damper that lets the car overshoot and settle back.
   tag-tower setup does.
 - If the car's hub fails to connect, both scripts still run in
   camera-preview-only mode so you can debug tag detection without hardware.
-
-## Credits
-
-- Answers to the assignment questions are on our group Notion site.

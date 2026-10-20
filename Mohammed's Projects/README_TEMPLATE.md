@@ -12,7 +12,7 @@ A small diagram or table helps. Assignment-specific details go here as `###`
 subsections (for example MQTT topics, match logic, the behavior tree).
 
 Describe the system, not the assignment's reflection questions. Those
-answers go on the group Notion site, not on GitHub.
+answers stay off GitHub.
 
 ## Hardware
 
@@ -46,6 +46,5 @@ answers go on the group Notion site, not on GitHub.
 
 ## Credits
 
-- Who wrote what, with links to any code copied from teammates or classmates
-  (leave this out if it's all your own)
-- Answers to the assignment questions are on our group Notion site.
+Only include this section when some of the code comes from someone else:
+who wrote what, with a link to the original.

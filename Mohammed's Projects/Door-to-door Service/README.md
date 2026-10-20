@@ -98,4 +98,3 @@ folder's README has the details.
 - The Part 2 car and its code (`YOLO-green-car` and
   `ArduinoApps/mqtt-minifig-drive`) are by my teammate Luca, copied from
   [Lucalo44/ME193-Code](https://github.com/Lucalo44/ME193-Code/tree/main/Door2Door).
-- Answers to the assignment questions are on our group Notion site.
