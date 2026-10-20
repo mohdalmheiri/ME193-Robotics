@@ -148,7 +148,7 @@ and song output (MacBook speakers) are deliberately split. Verified on
 this machine: input is `Tasha's AirPods #2`, output resolves to `MacBook
 Air Speakers`.
 
-## Code
+## Files
 
 | File | What it does |
 |---|---|
@@ -304,7 +304,7 @@ install pyaudio`.
   play your 6 notes at it and watch where the bright band lands on the
   frequency axis to confirm they're inside `NOTE_LOW_HZ`-`NOTE_HIGH_HZ`.
 
-## Credits and links
+## Credits
 
 - This code comes from
   [nsudofsky/ME193-Robotics](https://github.com/nsudofsky/ME193-Robotics/tree/main/The%20Whistling%20World%20Cup),

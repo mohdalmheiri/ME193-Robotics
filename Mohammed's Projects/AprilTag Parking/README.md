@@ -30,7 +30,7 @@ a spring-damper that lets the car overshoot and settle back.
   mounted on the car (`PhoneCameraParking.py`)
 - A printed AprilTag: `apriltag_id0.png`
 
-## Code
+## Files
 
 | File | What it does |
 |---|---|
@@ -78,6 +78,6 @@ a spring-damper that lets the car overshoot and settle back.
 - If the car's hub fails to connect, both scripts still run in
   camera-preview-only mode so you can debug tag detection without hardware.
 
-## Credits and links
+## Credits
 
 - Answers to the assignment questions are on our group Notion site.

@@ -53,7 +53,7 @@ Press Enter when you're out (stop + sad song), and Enter again to reset for the 
 | Trig | D2 |
 | Echo | 1 kΩ resistor → D3, and D3 → 2 kΩ resistor → GND (voltage divider, 5 V → 3.3 V) |
 
-## Code
+## Files
 
 | File | What it does |
 |---|---|
@@ -137,6 +137,6 @@ Based on these, `sumo.py` uses `TAPE_MODE = "hue"` with
 the new ring tape is less saturated. Both tapes are well inside the hue range and above the saturation
 cutoff. The floor fails the hue check by a wide margin, and its saturation stays below 45 too.
 
-## Credits and links
+## Credits
 
 - Answers to the assignment questions are on our group Notion site.

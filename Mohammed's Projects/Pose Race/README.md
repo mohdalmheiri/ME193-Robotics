@@ -29,7 +29,7 @@ on top the whole time, purely for style.
 - LEGO Education Single Motor (the propeller)
 - A Connection Card for each hub
 
-## Code
+## Files
 
 | File | What it does |
 |---|---|
@@ -65,8 +65,6 @@ on top the whole time, purely for style.
 - If the car's hub fails to connect, the script still runs in
   camera-preview-only mode so you can debug pose detection without hardware.
 
-## Credits and links
+## Credits
 
-- Full write-up (build photos, demo video): see the [Notion page](#) —
-  *update this link*.
 - Answers to the assignment questions are on our group Notion site.

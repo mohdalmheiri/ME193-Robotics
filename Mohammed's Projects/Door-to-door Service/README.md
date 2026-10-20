@@ -41,7 +41,7 @@ straight to the motors and stops them if messages stop arriving.
   `ArduinoApps/mqtt-minifig-drive/sketch/sketch.ino`.
 - A green and a blue LEGO minifigure
 
-## Code
+## Files
 
 | Folder | What's in it |
 | --- | --- |
@@ -93,7 +93,7 @@ folder's README has the details.
 - [ ] Get two cars running from one computer (green minifig on the left, blue on the right)
 - [x] Put the code, GitHub link and answers to the questions on the group Notion site
 
-## Credits and links
+## Credits
 
 - The Part 2 car and its code (`YOLO-green-car` and
   `ArduinoApps/mqtt-minifig-drive`) are by my teammate Luca, copied from

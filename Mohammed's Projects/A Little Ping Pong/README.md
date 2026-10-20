@@ -53,7 +53,7 @@ The physical scoreboard that shows these is in [unoq_scoreboard/](unoq_scoreboar
 - **Level cards:** AprilTags **1, 2, 3** (print `apriltags/tags_sheet.png` at 100% scale).
 - **Optional:** an Arduino UNO Q for the LED-matrix scoreboard ([unoq_scoreboard/README.md](unoq_scoreboard/README.md)).
 
-## Code
+## Files
 
 ```
 A Little Ping Pong/
@@ -155,6 +155,6 @@ If swings are missed or gentle moves count as swings, record more data and retra
 - **What the collector does:** after each beep, swing like you do in the game. Then move around normally without swinging. Every run appends to `swing_classifier/swing_data.csv`, so you can add data later (for example `--swings 10 --idle 20 --still 5`).
 - **What training reports:** test accuracy and a confusion matrix on swings it never trained on (the split is by event), plus the three most important features.
 
-## Credits and links
+## Credits
 
 - Answers to the assignment questions are on our group Notion site.

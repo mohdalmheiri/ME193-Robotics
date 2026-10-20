@@ -5,8 +5,8 @@ an Arduino UNO Q car) controlled by AI running on the laptop, from pose
 tracking and AprilTags to sound, YOLO object detection and behavior trees.
 Every folder has its own README explaining what the robot does and how to
 run it. They all follow the same sections, from
-[`README_TEMPLATE.md`](./README_TEMPLATE.md): how it works, hardware, code,
-setup and run, tuning and notes, and credits and links.
+[`README_TEMPLATE.md`](./README_TEMPLATE.md): how it works, hardware,
+files, setup and run, tuning and notes, and credits.
 
 ## Assignments
 

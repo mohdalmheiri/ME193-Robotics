@@ -20,12 +20,13 @@ answers go on the group Notion site, not on GitHub.
 - Anything else needed (webcam, phone, printed tags, instruments)
 - Wiring, if there is any
 
-## Code
+## Files
 
 | File | What it does |
 |---|---|
 | `main_script.py` | The program you run |
 | `helpers/` | Supporting code, grouped into folders |
+| `models/`, `data/` | Trained models, datasets, images to print |
 
 ## Setup and run
 
@@ -43,7 +44,8 @@ answers go on the group Notion site, not on GitHub.
 - The constants worth changing and what they do
 - Known limitations and troubleshooting
 
-## Credits and links
+## Credits
 
 - Who wrote what, with links to any code copied from teammates or classmates
+  (leave this out if it's all your own)
 - Answers to the assignment questions are on our group Notion site.
