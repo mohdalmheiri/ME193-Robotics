@@ -6,6 +6,8 @@ close and you're already charging. A behavior tree on the laptop fuses three inp
 levers, a LEGO Color Sensor watching for the tape, and an HC-SR04 ultrasonic sensor on an Arduino UNO Q
 that publishes the opponent's distance over MQTT.
 
+## How it works
+
 ```
 LEGO Controller ─┐
 Color Sensor ────┼─ Bluetooth ─► laptop: behavior_tree.py ─► Double Motor (tank drive + sad song)
@@ -13,19 +15,7 @@ Color Sensor ────┼─ Bluetooth ─► laptop: behavior_tree.py ─►
 HC-SR04 ─► UNO Q ─── MQTT (ME193/Mohammed/sumo/distance)
 ```
 
-## Files
-
-| File | What it does |
-|---|---|
-| `sumo.py` | Main program: connects everything, runs the behavior tree 20×/s |
-| `behavior_tree.py` | The policy (pure logic, no hardware) |
-| `tests/test_behavior_tree.py` | Tests the policy without hardware |
-| `sad_song.py` | The losing tune on the Double Motor's beeper |
-| `tests/connect_test.py` | Hardware check: prints color sensor, IMU, levers and button |
-| `tests/watch_distance.py` | Prints the UNO Q's distance readings from MQTT |
-| `unoq_app/` | UNO Q app: `sketch/sketch.ino` reads the HC-SR04, `python/main.py` publishes it |
-
-## The behavior tree
+### The behavior tree
 
 Checked top to bottom 20 times a second; the first branch that applies wins.
 
@@ -46,7 +36,36 @@ it means pushing them out.
 so `sumo.py` watches its terminal for Enter instead (the button still works if it ever does).
 Press Enter when you're out (stop + sad song), and Enter again to reset for the next round.
 
-## Running on a new laptop
+## Hardware
+
+- LEGO Education Double Motor (tank drive and the sad-song beeper), Color
+  Sensor (watches for the tape edge) and Controller (the driver's levers),
+  all paired with the orange Connection Card
+- Arduino UNO Q with an HC-SR04 ultrasonic sensor facing forward, on Wi-Fi
+- A ring marked with blue tape
+
+**HC-SR04 wiring:**
+
+| HC-SR04 | UNO Q |
+|---|---|
+| VCC | 5V |
+| GND | GND |
+| Trig | D2 |
+| Echo | 1 kΩ resistor → D3, and D3 → 2 kΩ resistor → GND (voltage divider, 5 V → 3.3 V) |
+
+## Code
+
+| File | What it does |
+|---|---|
+| `sumo.py` | Main program: connects everything, runs the behavior tree 20×/s |
+| `behavior_tree.py` | The policy (pure logic, no hardware) |
+| `tests/test_behavior_tree.py` | Tests the policy without hardware |
+| `sad_song.py` | The losing tune on the Double Motor's beeper |
+| `tests/connect_test.py` | Hardware check: prints color sensor, IMU, levers and button |
+| `tests/watch_distance.py` | Prints the UNO Q's distance readings from MQTT |
+| `unoq_app/` | UNO Q app: `sketch/sketch.ino` reads the HC-SR04, `python/main.py` publishes it |
+
+## Setup and run
 
 ```bash
 git clone https://github.com/mohdalmheiri/ME193-Robotics.git
@@ -72,7 +91,7 @@ Before `python sumo.py`:
   reset for the next round.
 - **Sad trombone.** The laptop sound uses macOS `afplay`. On Windows/Linux only the robot beeps.
 
-## Setup
+### Installing on the laptop and UNO Q
 
 **Laptop:** `pip install -r requirements.txt` (pins `legoeducation==1.2.0` and `paho-mqtt==2.1.0`)
 
@@ -81,16 +100,7 @@ Either copy it into your ArduinoApps deploy kit and run `python3 tools/deploy.py
 in App Lab create an app named "Sumo Distance" and replace its files with these. Connect the board to
 Wi-Fi, and click Run.
 
-**HC-SR04 wiring:**
-
-| HC-SR04 | UNO Q |
-|---|---|
-| VCC | 5V |
-| GND | GND |
-| Trig | D2 |
-| Echo | 1 kΩ resistor → D3, and D3 → 2 kΩ resistor → GND (voltage divider, 5 V → 3.3 V) |
-
-## Test order
+### Test order
 
 1. `python tests/test_behavior_tree.py`: policy tests (no hardware)
 2. `python tests/connect_test.py`: read the color numbers over floor vs. tape, check levers and button
@@ -99,7 +109,7 @@ Wi-Fi, and click Run.
 5. Robot on blocks (wheels off the table): `python sumo.py`, check each branch's light
 6. In a taped ring: practice matches
 
-## Tuning
+## Tuning and notes
 
 | Setting | File | What it does |
 |---|---|---|
@@ -126,3 +136,7 @@ Based on these, `sumo.py` uses `TAPE_MODE = "hue"` with
 `TAPE_HUE_RANGE = (180, 240)` and `TAPE_MIN_SATURATION = 45`. The threshold was lowered from 55 because
 the new ring tape is less saturated. Both tapes are well inside the hue range and above the saturation
 cutoff. The floor fails the hue check by a wide margin, and its saturation stays below 45 too.
+
+## Credits and links
+
+- Answers to the assignment questions are on our group Notion site.

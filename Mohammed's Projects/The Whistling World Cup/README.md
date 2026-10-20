@@ -1,9 +1,15 @@
-# The Whistling World Cup
+# The Whistling World Cup (HW3)
 
-A LEGO car driven by a recorder (the instrument) and claps. `whistling.py`
-grabs a live microphone stream with `pyaudio`, listens for one of 6
-calibrated recorder notes, and maps each one to a command via a simple
-per-note lookup table:
+A LEGO car controlled by sound. The laptop mic listens for notes played on
+a recorder (the instrument) and for claps: each calibrated recorder note is a
+driving command and a clap means stop. On match day two cars play ball vs.
+goalie, and they coordinate the start and the result over MQTT.
+
+## How it works
+
+`whistling.py` grabs a live microphone stream with `pyaudio`, listens for
+one of 6 calibrated recorder notes, and maps each one to a command via a
+simple per-note lookup table:
 
 | Sound | Command |
 |---|---|
@@ -30,13 +36,119 @@ mapping lives in one list, `NOTE_COMMANDS`, near the top of
 there. On match day the car is also assigned a role — **ball** or
 **goalie** — and the two cars coordinate the match over MQTT.
 
-This code comes from
-[nsudofsky/ME193-Robotics](https://github.com/nsudofsky/ME193-Robotics/tree/main/The%20Whistling%20World%20Cup),
-plus a `--no-lego` practice mode added here.
+### Match logic (MQTT)
 
-Answers to the assignment questions are on our group Notion site.
+- `ME193/Rogers` — instructor-published `"start"` trigger. Both roles
+  subscribe and hold at STOP until it arrives.
+- `RESULT_TOPIC` (`ME193/Rogers/whistling-world-cup` by default) — used
+  for the two outcome messages, each published as `"<event>:<role>"`:
+  - `"caught:ball"` — the ball's own light sensor saw the goalie get close
+    (`CATCH_REFLECTION`, held for `CATCH_HOLD_FRAMES` readings). The ball
+    stops, publishes this, and plays its death song immediately (it
+    doesn't wait for its own message to echo back). The goalie, on
+    receiving it, plays the success song.
+  - `"goal:ball"` — the ball gave the special scoring command: 3 quick
+    RIGHT turns in a row (`GOAL_TAP_COUNT` within `GOAL_TAP_WINDOW_S`),
+    reusing the same RIGHT-turn signal notes already use, just counted.
+    The ball stops, publishes this, and plays its success song. The
+    goalie, on receiving it, plays the death song.
 
-## Files
+  Each side reacts to the *other* role's message (a client ignores a
+  message carrying its own role, since the broker echoes every publish
+  back to its own subscribers too) — so both songs always come out
+  opposite, as required. Both outcomes are role-gated at the source: only
+  `state.role == "ball"` can trigger either `handle_caught()` (via its own
+  sensor) or the goal-tap counter — the goalie's identical hardware/sound
+  vocabulary never self-triggers either one. Its win comes entirely from
+  *receiving* the ball's `"caught:ball"` message, not from anything it
+  actively signals about itself.
+
+  **You need to agree on `RESULT_TOPIC` (and this payload format) with
+  whoever you're paired against before your match** — this is explicitly
+  called out in the assignment ("you and your opponent need to agree on
+  the messages sent"). The current value is just this team's placeholder;
+  it has to match on both sides, and ideally be specific enough not to
+  collide with another pair of teams also testing on the shared public
+  broker at the same time.
+
+### Calibration only runs once
+
+Both the noise floor and your 6 recorder notes are saved to
+`.calibration.json` (next to `whistling.py`, git-ignored) the first time
+they're measured, and loaded from disk on every run after that — no more
+redoing that setup every single time you start the script. Pass
+`--recalibrate` if you change rooms/mics/instruments and want to redo it
+for real.
+
+### Design history (why a recorder, why claps for stop)
+
+This control scheme went through several iterations, each teaching
+something about what's actually reliable with real hardware and a real
+(imprecise) human:
+
+1. **Continuous whistle pitch → 4 zones.** Abandoned — whistling a wide,
+   precise pitch range by mouth on demand turned out to be genuinely
+   hard to hit reliably.
+2. **Counting whistle taps.** Abandoned — timing several short whistle
+   taps into one tight phrase was also fragile; real gaps between
+   whistles didn't line up with a fixed timing window.
+3. **Whistle duration + snap/clap by sound.** The snap half didn't work —
+   this mic couldn't reliably pick up snaps above the noise floor at all.
+4. **Humming for speed + whistle duration + clap counting.** Clap
+   *counting* worked well (claps are crisp and repeatable, unlike
+   whistle taps), which is why it's kept in every version since. Telling
+   hum from whistle by pitch range, on top of everything else, got
+   complicated to keep untangled.
+5. **Speech recognition for left/right.** Considered, but a full ASR
+   engine (cloud-dependent, or a large local model) for a two-word
+   vocabulary was overkill and added real match-day risk.
+6. **Phone tone generator + 4 zones + claps.** Playing a tone from a
+   phone app sidesteps "can a human hold a precise pitch," which is what
+   doomed version 1 — but coordinating a phone app added its own
+   friction on match day.
+7. **Current version: a recorder (the instrument) + claps.** A recorder
+   gives the same precise-pitch benefit as the phone tone generator, but
+   it's an instrument already in hand rather than a second device to
+   manage — and unlike a slide-based tone, it naturally produces 6
+   *discrete* notes, which maps more directly onto discrete speed levels
+   than a continuous frequency zone did. Notes are calibrated per-
+   instrument rather than hardcoded, the same way the noise floor already
+   was, extended to cover pitch this time too. Claps stay for STOP
+   because clap counting was the one piece that already proved reliable
+   back in version 4.
+
+## Hardware
+
+- LEGO Education Double Motor (the car) and Color Sensor (the ball's catch
+  sensor), both paired with one Connection Card
+- A recorder (the instrument)
+- A laptop mic (or AirPods, see below) and the laptop's own speakers for the
+  success/death songs
+- For a real match: a second laptop and car for the other team
+
+### Using AirPods (or any Bluetooth mic) as the microphone
+
+`whistling.py`'s device picker lists every input device pyaudio can see
+and, when you press Enter, defaults to whichever one has `"airpods"` in
+its name (`PREFERRED_MIC_NAME_CONTAINS` at the top of the file) rather
+than the OS's own default input, which often stays pinned to the built-in
+mic even once a headset is connected. Verified on this machine: once the
+AirPods are connected over Bluetooth they show up as a dedicated input
+device (`Tasha's AirPods #2`, mono, 24 kHz native — but 44.1 kHz also
+opens fine) separate from their stereo output device.
+
+One tradeoff worth knowing: using a Bluetooth headset's mic switches
+macOS to the lower-quality HFP audio profile for that device, which would
+also degrade anything played back through the *same* AirPods for as long
+as the mic is in use. That's why `songs.py` doesn't just use the system
+default output (which follows the AirPods once connected) -- it looks for
+a device with `"macbook"` in its name (`PREFERRED_OUTPUT_NAME_CONTAINS`)
+and plays the success/death songs there instead, so mic input (AirPods)
+and song output (MacBook speakers) are deliberately split. Verified on
+this machine: input is `Tasha's AirPods #2`, output resolves to `MacBook
+Air Speakers`.
+
+## Code
 
 | File | What it does |
 |---|---|
@@ -50,7 +162,7 @@ Answers to the assignment questions are on our group Notion site.
 | [`tools/spectogram.py`](./tools/spectogram.py) | Standalone live scrolling spectrogram (uses `sounddevice`) for checking note pitches |
 | [`TESTING_CHECKLIST.md`](./TESTING_CHECKLIST.md) | Step-by-step checklist for the first run on real LEGO hardware |
 
-## Setup
+## Setup and run
 
 ```
 pip install --upgrade pip
@@ -116,42 +228,7 @@ The light sensor always reads 0 in this mode, so the ball can't get
 `--practice` to also test the real MQTT flow, e.g. with `tools/send_mqtt.py`
 sending `"start"`.
 
-## Match logic (MQTT)
-
-- `ME193/Rogers` — instructor-published `"start"` trigger. Both roles
-  subscribe and hold at STOP until it arrives.
-- `RESULT_TOPIC` (`ME193/Rogers/whistling-world-cup` by default) — used
-  for the two outcome messages, each published as `"<event>:<role>"`:
-  - `"caught:ball"` — the ball's own light sensor saw the goalie get close
-    (`CATCH_REFLECTION`, held for `CATCH_HOLD_FRAMES` readings). The ball
-    stops, publishes this, and plays its death song immediately (it
-    doesn't wait for its own message to echo back). The goalie, on
-    receiving it, plays the success song.
-  - `"goal:ball"` — the ball gave the special scoring command: 3 quick
-    RIGHT turns in a row (`GOAL_TAP_COUNT` within `GOAL_TAP_WINDOW_S`),
-    reusing the same RIGHT-turn signal notes already use, just counted.
-    The ball stops, publishes this, and plays its success song. The
-    goalie, on receiving it, plays the death song.
-
-  Each side reacts to the *other* role's message (a client ignores a
-  message carrying its own role, since the broker echoes every publish
-  back to its own subscribers too) — so both songs always come out
-  opposite, as required. Both outcomes are role-gated at the source: only
-  `state.role == "ball"` can trigger either `handle_caught()` (via its own
-  sensor) or the goal-tap counter — the goalie's identical hardware/sound
-  vocabulary never self-triggers either one. Its win comes entirely from
-  *receiving* the ball's `"caught:ball"` message, not from anything it
-  actively signals about itself.
-
-  **You need to agree on `RESULT_TOPIC` (and this payload format) with
-  whoever you're paired against before your match** — this is explicitly
-  called out in the assignment ("you and your opponent need to agree on
-  the messages sent"). The current value is just this team's placeholder;
-  it has to match on both sides, and ideally be specific enough not to
-  collide with another pair of teams also testing on the shared public
-  broker at the same time.
-
-## Getting `pyaudio` installed without Homebrew
+### Getting `pyaudio` installed without Homebrew
 
 This machine had no Homebrew and no PortAudio headers, so `pip install
 pyaudio` normally fails with `fatal error: 'portaudio.h' file not found`.
@@ -175,75 +252,7 @@ pip install pyaudio
 If you do have Homebrew, it's much simpler: `brew install portaudio && pip
 install pyaudio`.
 
-## Using AirPods (or any Bluetooth mic) as the microphone
-
-`whistling.py`'s device picker lists every input device pyaudio can see
-and, when you press Enter, defaults to whichever one has `"airpods"` in
-its name (`PREFERRED_MIC_NAME_CONTAINS` at the top of the file) rather
-than the OS's own default input, which often stays pinned to the built-in
-mic even once a headset is connected. Verified on this machine: once the
-AirPods are connected over Bluetooth they show up as a dedicated input
-device (`Tasha's AirPods #2`, mono, 24 kHz native — but 44.1 kHz also
-opens fine) separate from their stereo output device.
-
-One tradeoff worth knowing: using a Bluetooth headset's mic switches
-macOS to the lower-quality HFP audio profile for that device, which would
-also degrade anything played back through the *same* AirPods for as long
-as the mic is in use. That's why `songs.py` doesn't just use the system
-default output (which follows the AirPods once connected) -- it looks for
-a device with `"macbook"` in its name (`PREFERRED_OUTPUT_NAME_CONTAINS`)
-and plays the success/death songs there instead, so mic input (AirPods)
-and song output (MacBook speakers) are deliberately split. Verified on
-this machine: input is `Tasha's AirPods #2`, output resolves to `MacBook
-Air Speakers`.
-
-## Calibration only runs once
-
-Both the noise floor and your 6 recorder notes are saved to
-`.calibration.json` (next to `whistling.py`, git-ignored) the first time
-they're measured, and loaded from disk on every run after that — no more
-redoing that setup every single time you start the script. Pass
-`--recalibrate` if you change rooms/mics/instruments and want to redo it
-for real.
-
-## Design history (why a recorder, why claps for stop)
-
-This control scheme went through several iterations, each teaching
-something about what's actually reliable with real hardware and a real
-(imprecise) human:
-
-1. **Continuous whistle pitch → 4 zones.** Abandoned — whistling a wide,
-   precise pitch range by mouth on demand turned out to be genuinely
-   hard to hit reliably.
-2. **Counting whistle taps.** Abandoned — timing several short whistle
-   taps into one tight phrase was also fragile; real gaps between
-   whistles didn't line up with a fixed timing window.
-3. **Whistle duration + snap/clap by sound.** The snap half didn't work —
-   this mic couldn't reliably pick up snaps above the noise floor at all.
-4. **Humming for speed + whistle duration + clap counting.** Clap
-   *counting* worked well (claps are crisp and repeatable, unlike
-   whistle taps), which is why it's kept in every version since. Telling
-   hum from whistle by pitch range, on top of everything else, got
-   complicated to keep untangled.
-5. **Speech recognition for left/right.** Considered, but a full ASR
-   engine (cloud-dependent, or a large local model) for a two-word
-   vocabulary was overkill and added real match-day risk.
-6. **Phone tone generator + 4 zones + claps.** Playing a tone from a
-   phone app sidesteps "can a human hold a precise pitch," which is what
-   doomed version 1 — but coordinating a phone app added its own
-   friction on match day.
-7. **Current version: a recorder (the instrument) + claps.** A recorder
-   gives the same precise-pitch benefit as the phone tone generator, but
-   it's an instrument already in hand rather than a second device to
-   manage — and unlike a slide-based tone, it naturally produces 6
-   *discrete* notes, which maps more directly onto discrete speed levels
-   than a continuous frequency zone did. Notes are calibrated per-
-   instrument rather than hardcoded, the same way the noise floor already
-   was, extended to cover pitch this time too. Claps stay for STOP
-   because clap counting was the one piece that already proved reliable
-   back in version 4.
-
-## Known limitations / TODO
+## Tuning and notes
 
 - **Note-onset transients are an untested edge case.** The very start of
   a note (breath attack before the tone stabilizes) is briefly
@@ -294,3 +303,10 @@ something about what's actually reliable with real hardware and a real
   using `sounddevice` instead of `pyaudio`) is a handy second opinion —
   play your 6 notes at it and watch where the bright band lands on the
   frequency axis to confirm they're inside `NOTE_LOW_HZ`-`NOTE_HIGH_HZ`.
+
+## Credits and links
+
+- This code comes from
+  [nsudofsky/ME193-Robotics](https://github.com/nsudofsky/ME193-Robotics/tree/main/The%20Whistling%20World%20Cup),
+  plus a `--no-lego` practice mode added here.
+- Answers to the assignment questions are on our group Notion site.
