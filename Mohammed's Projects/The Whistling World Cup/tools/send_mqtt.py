@@ -12,12 +12,16 @@ if anyone else's car is listening on the same topic at the same time,
 this will start theirs too.
 
 Run:
-    python send_mqtt.py                                    # publishes "start" to ME193/Rogers
-    python send_mqtt.py --message "caught:ball" --topic ME193/Rogers/whistling-world-cup
+    python tools/send_mqtt.py                                    # publishes "start" to ME193/Rogers
+    python tools/send_mqtt.py --message "caught:ball" --topic ME193/Rogers/whistling-world-cup
 """
 
 import argparse
 
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # mqttlib.py is one folder up
 from mqttlib import MQTTClient
 
 DEFAULT_TOPIC = "ME193/Rogers"

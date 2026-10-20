@@ -21,6 +21,8 @@ on the right.
 The work has to use Python, GitHub and YOLO. Training the model ourselves
 is part of it, so Roboflow can't do everything.
 
+Answers to the assignment questions are on our group Notion site.
+
 ## Plan / TODO
 
 - [x] Collect and label images of the green and blue minifigs
@@ -31,15 +33,6 @@ is part of it, so Roboflow can't do everything.
 - [x] UNO Q: drive the DC motors forward/backward until the minifig is centered, then stop
 - [ ] Get two cars running from one computer (green minifig on the left, blue on the right)
 - [x] Put the code, GitHub link and answers to the questions on the group Notion site
-
-## Questions to answer
-
-- Describe the policy: how does it make decisions?
-- What does the code do if no minifigure is detected?
-- How good is the model? Can you confuse it? If so, how (a different
-  color minifigure, etc.)?
-
-The answers are on the group Notion site.
 
 ## Folders
 

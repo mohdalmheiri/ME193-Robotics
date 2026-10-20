@@ -1,7 +1,12 @@
 """Prints the UNO Q's HC-SR04 readings as they arrive over MQTT (no LEGO needed).
-Run:  python watch_distance.py      (Ctrl+C to stop)"""
+Run:  python tests/watch_distance.py      (Ctrl+C to stop)"""
 import time
 import paho.mqtt.client as mqtt
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # sumo.py is one folder up
+
 from sumo import BROKER, PORT, DISTANCE_TOPIC
 
 last = [time.monotonic()]

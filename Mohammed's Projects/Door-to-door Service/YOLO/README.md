@@ -1,8 +1,10 @@
 # YOLO
 
-Trains a YOLOv8 nano model to detect two classes, `green_minifig` and
-`blue_minifig`. It starts from `yolov8n.pt` (pretrained on COCO) and
-fine-tunes it on our own photos.
+Finds the green and blue LEGO minifigs in the laptop camera feed and
+publishes where each one is over MQTT, for Part 1 of Door-to-door Service.
+The model is a YOLOv8 nano detector with two classes, `green_minifig` and
+`blue_minifig`, fine-tuned from `yolov8n.pt` (pretrained on COCO) on our
+own photos.
 
 ## Dataset
 

@@ -1,10 +1,13 @@
 # YOLO-green-car
 
-Luca's Part 2 code, copied from
-[Lucalo44/ME193-Code](https://github.com/Lucalo44/ME193-Code/tree/main/Door2Door).
+Drives the Part 2 car: a YOLOv8 nano model finds the minifig riding on the
+car in the camera feed, and a PD controller turns how far it is from the
+center of the frame into a motor speed sent to the UNO Q over MQTT. The model
+detects a single class, `Minifig`, and is fine-tuned from `yolov8n.pt`
+(pretrained on COCO) on our own photos.
 
-Trains a YOLOv8 nano model to detect a single class, `Minifig`. It starts
-from `yolov8n.pt` (pretrained on COCO) and fine-tunes it on our own photos.
+This is Luca's Part 2 code, copied from
+[Lucalo44/ME193-Code](https://github.com/Lucalo44/ME193-Code/tree/main/Door2Door).
 
 ## Dataset
 

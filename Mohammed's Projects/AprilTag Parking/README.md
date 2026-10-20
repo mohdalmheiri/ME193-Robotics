@@ -47,49 +47,7 @@ pip install opencv-python opencv-contrib-python numpy legoeducation
    ```
 5. Press `q` in the video window to stop and disconnect cleanly.
 
-## Assignment questions
-
-**Describe the controller (policy) — how does it determine motor speed?**
-Both scripts use a proportional (P) controller: the horizontal pixel offset
-between the tag's centroid and the frame's horizontal center (`error_px`) is
-multiplied by a gain `KP` and clamped to `±MAX_SPEED`, giving
-`motor_speed = clip(KP * error_px, -MAX_SPEED, MAX_SPEED)`. A `DEADBAND_PX`
-zeroes the speed once the tag is close enough to center so the motors fully
-stop instead of jittering around zero error. Since the car only drives
-straight forward/backward (not turning), both wheels get the same speed via
-`movement_move()` rather than per-wheel `motor_run()` calls. `KP` and
-`MAX_SPEED` differ between the two scripts because in `PhoneCameraParking.py`
-the camera itself rides on the car, so driving fast whips the frame around
-and the tag loses tracking — its gains are tuned lower and more conservative.
-
-**What does your code do if no tag is detected?**
-`find_tag_centroid()` returns `None` when `cv2.aruco`'s detector finds no
-markers in the frame. Both scripts hold still for a short grace period
-(`SEARCH_GRACE_S`) in case it's just a single dropped frame, then start
-searching instead of sitting stopped indefinitely:
-- `AprilTagParking.py` sweeps back and forth in place (`movement_move_tank()`
-  with opposite left/right speeds), reversing direction every
-  `SEARCH_SWEEP_S` seconds, covering a bounded arc around where the tag was
-  last seen.
-- `PhoneCameraParking.py` does a step-and-scan full 360° search: short
-  rotation bursts (`SEARCH_BURST_S`) alternated with full stops
-  (`SEARCH_PAUSE_S`), so the detector gets a sharp, non-blurred frame each
-  cycle instead of only ever seeing the tag mid-spin. It also uses
-  angle-tolerant `ArUco` detector parameters (`build_detector_params()`) so a
-  tag viewed at a steep angle from the car's own camera still decodes.
-
-Either way, the video overlay shows a red "No tag detected - holding" or
-"...searching" message, and once the tag reappears the search stops and
-control hands back to the straight-line P/spring controller.
-
-**Can you make it overshoot the center spot and come back (spring loaded)?**
-Yes — set `SPRING_LOADED = True`. Instead of the plain P controller with a
-deadband, `spring_controller()` simulates a mass-spring-damper: the pixel
-error acts as a spring force (`SPRING_K * error_px`) pulling the car's
-"velocity" toward center, with `SPRING_DAMPING` decaying that velocity each
-frame instead of an instantaneous cutoff. With light damping the car
-overshoots past center before the spring pulls it back and it settles,
-instead of stopping dead the instant it crosses center.
+Answers to the assignment questions are on our group Notion site.
 
 ## Notes / limitations
 

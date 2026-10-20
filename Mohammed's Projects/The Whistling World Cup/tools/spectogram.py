@@ -1,6 +1,6 @@
 """Live scrolling spectrogram from the microphone. Whistle at it!
 
-Run:  my_env/bin/python spectogram.py
+Run:  python tools/spectogram.py
 Close the window (or Ctrl+C) to stop.
 """
 import queue

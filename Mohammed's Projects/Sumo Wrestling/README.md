@@ -19,10 +19,10 @@ HC-SR04 ─► UNO Q ─── MQTT (ME193/Mohammed/sumo/distance)
 |---|---|
 | `sumo.py` | Main program: connects everything, runs the behavior tree 20×/s |
 | `behavior_tree.py` | The policy (pure logic, no hardware) |
-| `test_behavior_tree.py` | Tests the policy without hardware |
+| `tests/test_behavior_tree.py` | Tests the policy without hardware |
 | `sad_song.py` | The losing tune on the Double Motor's beeper |
-| `connect_test.py` | Hardware check: prints color sensor, IMU, levers and button |
-| `watch_distance.py` | Prints the UNO Q's distance readings from MQTT |
+| `tests/connect_test.py` | Hardware check: prints color sensor, IMU, levers and button |
+| `tests/watch_distance.py` | Prints the UNO Q's distance readings from MQTT |
 | `unoq_app/` | UNO Q app: `sketch/sketch.ino` reads the HC-SR04, `python/main.py` publishes it |
 
 ## The behavior tree
@@ -55,7 +55,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r "Mohammed's Projects/Sumo Wrestling/requirements.txt"
 cd "Mohammed's Projects/Sumo Wrestling"
-python test_behavior_tree.py     # should say "All tests passed!"
+python tests/test_behavior_tree.py     # should say "All tests passed!"
 python sumo.py
 ```
 
@@ -64,10 +64,10 @@ Before `python sumo.py`:
 - **Bluetooth on.** The LEGO parts (Double Motor, Color Sensor, Controller) connect over Bluetooth
   through the **orange connection card, serial 0994** (`CARD_COLOR` / `CARD_SERIAL` in `sumo.py`).
 - **One laptop at a time.** The LEGO parts can only be connected to one laptop, so close
-  `sumo.py` (or `connect_test.py`) on the other laptop first.
+  `sumo.py` (or `tests/connect_test.py`) on the other laptop first.
 - **UNO Q running.** The "Sumo Distance" app (`unoq_app/`) must be running on the UNO Q, and the
   board must be on Wi-Fi so it can reach `test.mosquitto.org`. Without it, the robot still drives,
-  but BOOST and EDGE_PUSH never trigger. Check it with `python watch_distance.py`.
+  but BOOST and EDGE_PUSH never trigger. Check it with `python tests/watch_distance.py`.
 - **"Out" = Enter.** Press Enter in the `sumo.py` terminal when you're out, and Enter again to
   reset for the next round.
 - **Sad trombone.** The laptop sound uses macOS `afplay`. On Windows/Linux only the robot beeps.
@@ -92,10 +92,10 @@ Wi-Fi, and click Run.
 
 ## Test order
 
-1. `python test_behavior_tree.py`: policy tests (no hardware)
-2. `python connect_test.py`: read the color numbers over floor vs. tape, check levers and button
+1. `python tests/test_behavior_tree.py`: policy tests (no hardware)
+2. `python tests/connect_test.py`: read the color numbers over floor vs. tape, check levers and button
 3. `python sad_song.py`: hear the song
-4. Run the UNO Q app, then `python watch_distance.py`: wave your hand in front of the HC-SR04
+4. Run the UNO Q app, then `python tests/watch_distance.py`: wave your hand in front of the HC-SR04
 5. Robot on blocks (wheels off the table): `python sumo.py`, check each branch's light
 6. In a taped ring: practice matches
 
@@ -114,7 +114,7 @@ Wi-Fi, and click Run.
 
 ### Measured tape settings
 
-Read with `connect_test.py` on our ring:
+Read with `tests/connect_test.py` on our ring:
 
 | Surface | Hue | Saturation |
 |---|---|---|

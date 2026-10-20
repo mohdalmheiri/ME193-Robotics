@@ -1,5 +1,10 @@
-"""Tests the behavior tree without any hardware.  Run:  python test_behavior_tree.py"""
+"""Tests the behavior tree without any hardware.  Run:  python tests/test_behavior_tree.py"""
 import math
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # behavior_tree.py is one folder up
+
 from behavior_tree import Inputs, SumoBrain
 
 

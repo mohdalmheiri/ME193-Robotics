@@ -5,12 +5,16 @@ laptops (or two terminals) with the same --topic and type messages back
 and forth; if they show up on both sides, your MQTT setup is good.
 
 Run:
-    python mqtt_chat.py                                # chat on ME193/Rogers
-    python mqtt_chat.py --topic ME193/Rogers/whistling-world-cup
+    python tools/mqtt_chat.py                                # chat on ME193/Rogers
+    python tools/mqtt_chat.py --topic ME193/Rogers/whistling-world-cup
 """
 
 import argparse
 
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # mqttlib.py is one folder up
 from mqttlib import MQTTClient
 
 DEFAULT_TOPIC = "ME193/tasha"

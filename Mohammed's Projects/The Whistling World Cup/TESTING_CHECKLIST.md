@@ -63,12 +63,12 @@ before checking that the motors follow.
 
 - [ ] Both of you `git pull` the latest from
       `https://github.com/nsudofsky/ME193-Robotics.git` first
-- [ ] Both run `mqtt_chat.py --topic ME193/tasha` once more just to
+- [ ] Both run `python tools/mqtt_chat.py --topic ME193/tasha` once more just to
       reconfirm connectivity is still good this morning
 - [ ] One of you runs `python whistling.py --role ball`, the other
       `python whistling.py --role goalie` (real mode, not `--practice`)
       — confirm both print "Waiting for 'start'..." and neither drives yet
-- [ ] From a third terminal (or either laptop), run `python send_mqtt.py`
+- [ ] From a third terminal (or either laptop), run `python tools/send_mqtt.py`
       to publish `"start"` on `ME193/Rogers` — confirm **both** cars
       start responding to sound within a second or two
 - [ ] Run an actual catch: goalie approaches ball's sensor → confirm
@@ -98,7 +98,6 @@ before checking that the motors follow.
       **not** the archived `mohdalmheiri/ME193-3-AI-in-Mobile-Robots`)
 - [ ] Notion site explains what the code does and directly answers the
       three required questions (policy description, no-sound behavior,
-      noise-masking approach) — all three are already written up in
-      `The Whistling World Cup/README.md` in the repo, so this can mostly
-      be a copy/link job rather than writing from scratch
+      noise-masking approach). The answers go on Notion only, not in
+      the GitHub README
 - [ ] Final `git push` of anything touched during testing above

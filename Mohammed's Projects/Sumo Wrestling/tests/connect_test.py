@@ -1,6 +1,6 @@
 # Step 1 (Sumo): connect the Double Motor, Color Sensor and Controller,
 # then stream the color sensor, IMU and joystick so we can see what everything reports.
-# Run:  python connect_test.py      (Ctrl+C to stop)
+# Run:  python tests/connect_test.py      (Ctrl+C to stop)
 import math
 import time
 import legoeducation as le

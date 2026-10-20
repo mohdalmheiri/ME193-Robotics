@@ -1,6 +1,10 @@
 # ME193-3: AI in Mobile Robots
 
-My ME193-3 (AI in Mobile Robots) coursework and projects.
+Each folder here is one ME193-3 assignment: a robot (LEGO Education hubs or
+an Arduino UNO Q car) controlled by AI running on the laptop, from pose
+tracking and AprilTags to sound, YOLO object detection and behavior trees.
+Every folder has its own README explaining what the robot does and how to
+run it.
 
 ## Assignments
 

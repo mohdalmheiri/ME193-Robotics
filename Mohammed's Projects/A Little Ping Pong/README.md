@@ -1,8 +1,8 @@
 # AR Ping-Pong
 
-*ME193-3 Midterm: "A little ping pong"*
-
 A ping-pong game played in augmented reality: the laptop webcam shows you standing at the end of a virtual table, and you return balls from a virtual opponent, "Chris", using a real paddle: a LEGO Education Double Motor with an AprilTag on it. The motor's IMU detects your swings with a trained classifier and buzzes in your hand when you hit, and the live score is published over MQTT to a scoreboard on an Arduino UNO Q.
+
+*ME193-3 Midterm: "A little ping pong"*
 
 ## How to play
 

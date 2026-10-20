@@ -19,12 +19,16 @@ prompts for that itself once launched, so this script leaves it alone
 rather than duplicating that picker.
 
 Run:
-    python wait_and_launch.py
+    python tools/wait_and_launch.py
 """
 
+import os
 import subprocess
 import sys
 import time
+
+PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # whistling.py and mqttlib.py live here
+sys.path.insert(0, PROJECT_DIR)
 
 from mqttlib import MQTTClient
 
@@ -51,7 +55,7 @@ def main():
         role = input("Role (ball/goalie): ").strip().lower()
 
     print(f"Launching whistling.py --role {role} -- you'll be prompted to pick your microphone next.")
-    subprocess.run([sys.executable, "whistling.py", "--role", role])
+    subprocess.run([sys.executable, os.path.join(PROJECT_DIR, "whistling.py"), "--role", role], cwd=PROJECT_DIR)
 
 
 if __name__ == "__main__":
