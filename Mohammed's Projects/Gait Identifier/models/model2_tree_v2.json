@@ -25,52 +25,52 @@
     },
     "right": {
       "feature": "acc_mag_std",
-      "threshold": 0.3543364703655243,
+      "threshold": 0.709694892168045,
       "left": {
-        "feature": "gyro_mag_dom_freq",
-        "threshold": 1.25,
+        "feature": "acc_mag_std",
+        "threshold": 0.3804200440645218,
         "left": {
-          "feature": "acc_mag_max",
-          "threshold": 2.3984487056732178,
+          "feature": "gyro_mag_dom_freq",
+          "threshold": 1.25,
           "left": {
             "activity": "Walking"
           },
           "right": {
-            "activity": "Walking"
+            "activity": "Running"
           }
         },
         "right": {
-          "feature": "gyro_mag_max",
-          "threshold": 501.02593994140625,
+          "feature": "acc_mag_max",
+          "threshold": 2.507473945617676,
           "left": {
-            "activity": "Running"
+            "activity": "Walking"
           },
           "right": {
-            "activity": "Walking"
+            "activity": "Running"
           }
         }
       },
       "right": {
-        "feature": "acc_mag_std",
-        "threshold": 0.709694892168045,
+        "feature": "gyro_mag_std",
+        "threshold": 109.63421630859375,
         "left": {
           "feature": "gyro_mag_dom_freq",
           "threshold": 0.75,
           "left": {
-            "activity": "Walking"
+            "activity": "Running"
           },
           "right": {
-            "activity": "Running"
+            "activity": "Biking"
           }
         },
         "right": {
-          "feature": "gyro_mag_std",
-          "threshold": 109.63421630859375,
+          "feature": "acc_mag_max",
+          "threshold": 15.47234296798706,
           "left": {
-            "activity": "Biking"
+            "activity": "Running"
           },
           "right": {
-            "activity": "Running"
+            "activity": "Walking"
           }
         }
       }

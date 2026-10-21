@@ -3,8 +3,8 @@
   "feature": "peak |ay| over the window",
   "axis": "ay",
   "thresholds": [
-    0.308837890625,
-    2.00048828125
+    0.31982421875,
+    1.99267578125
   ],
   "classes": [
     "Standing",

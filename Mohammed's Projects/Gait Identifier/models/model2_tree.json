@@ -39,20 +39,17 @@
   "step_samples": 50,
   "units": "accel in g, gyro in deg/s",
   "tree": {
-    "feature": "ay_std",
-    "threshold": 0.08076214604079723,
+    "feature": "gy_min",
+    "threshold": -8.445121765136719,
     "left": {
-      "activity": "Standing"
-    },
-    "right": {
       "feature": "ay_mean",
-      "threshold": 0.44871702790260315,
+      "threshold": 0.47246459126472473,
       "left": {
         "feature": "ay_min",
         "threshold": -1.818359375,
         "left": {
-          "feature": "gz_min",
-          "threshold": -636.2804870605469,
+          "feature": "ax_max",
+          "threshold": 0.35888671875,
           "left": {
             "activity": "Walking"
           },
@@ -72,7 +69,24 @@
         }
       },
       "right": {
-        "activity": "Biking"
+        "feature": "gy_min",
+        "threshold": -356.4024429321289,
+        "left": {
+          "activity": "Biking"
+        },
+        "right": {
+          "activity": "Biking"
+        }
+      }
+    },
+    "right": {
+      "feature": "gy_dom_freq",
+      "threshold": 0.75,
+      "left": {
+        "activity": "Standing"
+      },
+      "right": {
+        "activity": "Standing"
       }
     }
   }
