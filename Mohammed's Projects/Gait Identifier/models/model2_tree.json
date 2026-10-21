@@ -1,0 +1,78 @@
+{
+  "model": "tree",
+  "features": [
+    "ax_mean",
+    "ax_std",
+    "ax_min",
+    "ax_max",
+    "ax_dom_freq",
+    "ay_mean",
+    "ay_std",
+    "ay_min",
+    "ay_max",
+    "ay_dom_freq",
+    "az_mean",
+    "az_std",
+    "az_min",
+    "az_max",
+    "az_dom_freq",
+    "gx_mean",
+    "gx_std",
+    "gx_min",
+    "gx_max",
+    "gx_dom_freq",
+    "gy_mean",
+    "gy_std",
+    "gy_min",
+    "gy_max",
+    "gy_dom_freq",
+    "gz_mean",
+    "gz_std",
+    "gz_min",
+    "gz_max",
+    "gz_dom_freq"
+  ],
+  "rule": "at each node: feature <= threshold -> left, else right",
+  "sample_rate_hz": 100,
+  "window_samples": 200,
+  "step_samples": 50,
+  "units": "accel in g, gyro in deg/s",
+  "tree": {
+    "feature": "ay_std",
+    "threshold": 0.08076214604079723,
+    "left": {
+      "activity": "Standing"
+    },
+    "right": {
+      "feature": "ay_mean",
+      "threshold": 0.44871702790260315,
+      "left": {
+        "feature": "ay_min",
+        "threshold": -1.818359375,
+        "left": {
+          "feature": "gz_min",
+          "threshold": -636.2804870605469,
+          "left": {
+            "activity": "Walking"
+          },
+          "right": {
+            "activity": "Running"
+          }
+        },
+        "right": {
+          "feature": "ay_mean",
+          "threshold": -0.31636717915534973,
+          "left": {
+            "activity": "Running"
+          },
+          "right": {
+            "activity": "Walking"
+          }
+        }
+      },
+      "right": {
+        "activity": "Biking"
+      }
+    }
+  }
+}

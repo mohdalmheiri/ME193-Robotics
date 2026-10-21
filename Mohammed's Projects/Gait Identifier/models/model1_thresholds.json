@@ -1,0 +1,19 @@
+{
+  "model": "threshold",
+  "feature": "peak |ay| over the window",
+  "axis": "ay",
+  "thresholds": [
+    0.308837890625,
+    2.00048828125
+  ],
+  "classes": [
+    "Standing",
+    "Walking",
+    "Biking"
+  ],
+  "rule": "peak <= thresholds[i] -> classes[i]; above every threshold -> classes[-1]",
+  "sample_rate_hz": 100,
+  "window_samples": 200,
+  "step_samples": 50,
+  "units": "accel in g, gyro in deg/s"
+}
