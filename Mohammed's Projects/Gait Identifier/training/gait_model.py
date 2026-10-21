@@ -20,7 +20,8 @@ WINDOW_SAMPLES = 200     # one window = 2 seconds of data
 STEP_SAMPLES = 50        # slide the window forward 0.5 s at a time (windows overlap)
 
 CHANNELS = ["ax", "ay", "az", "gx", "gy", "gz"]   # the 6 IMU outputs, in CSV order
-STATS = ["mean", "std", "min", "max", "dom_freq"]  # Model 2's 5 numbers per channel
+STATS = ["mean", "std", "min", "max", "dom_freq"]  # Model 2 v1's 5 numbers per channel
+MAGNITUDE_STATS = ["mean", "std", "max", "dom_freq"]  # Model 2 v2's 4 numbers per magnitude
 ACTIVITIES = ["Standing", "Walking", "Running", "Biking"]  # fixed order for tables/plots
 
 
@@ -60,12 +61,12 @@ def dominant_frequency(signal):
 
 
 def feature_names():
-    """Names of Model 2's 30 features, e.g. "ax_mean", "gz_dom_freq"."""
+    """Names of Model 2 v1's 30 features, e.g. "ax_mean", "gz_dom_freq"."""
     return [f"{c}_{s}" for c in CHANNELS for s in STATS]
 
 
 def all_features(window):
-    """Model 2's features: mean, std, min, max and dominant frequency for each
+    """Model 2 v1's features: mean, std, min, max and dominant frequency for each
     of the 6 channels (30 numbers), in the same order as feature_names()."""
     values = []
     for i in range(len(CHANNELS)):
@@ -74,6 +75,40 @@ def all_features(window):
                    float(np.min(signal)), float(np.max(signal)),
                    dominant_frequency(signal)]
     return values
+
+
+def feature_names_v2():
+    """Names of Model 2 v2's 9 features, e.g. "acc_mag_std", "gyro_top_axis_dom_freq"."""
+    return ([f"acc_mag_{s}" for s in MAGNITUDE_STATS]
+            + [f"gyro_mag_{s}" for s in MAGNITUDE_STATS]
+            + ["gyro_top_axis_dom_freq"])
+
+
+def magnitude_features(window):
+    """Model 2 v2's features, which don't care how the board is tilted.
+
+    Magnitude = the length of the (x, y, z) arrow: sqrt(x^2 + y^2 + z^2).
+    Turning the board changes how that arrow splits across x, y and z, but
+    not its length. Standing still, the acceleration magnitude is about 1 g
+    (just gravity) whichever way the board faces.
+
+    For both magnitudes: mean, std, max and dominant frequency (8 numbers).
+    Plus one more: the rhythm of whichever gyro axis swings the most in this
+    window (a magnitude can repeat at double the real rhythm, because swinging
+    forward and swinging back both make it big)."""
+    acc_mag = np.linalg.norm(window[:, 0:3], axis=1)   # ax, ay, az -> one number per sample
+    gyro_mag = np.linalg.norm(window[:, 3:6], axis=1)  # gx, gy, gz -> one number per sample
+    values = []
+    for signal in (acc_mag, gyro_mag):
+        values += [float(np.mean(signal)), float(np.std(signal)),
+                   float(np.max(signal)), dominant_frequency(signal)]
+    busiest = np.argmax(np.std(window[:, 3:6], axis=0))  # 0 = gx, 1 = gy, 2 = gz
+    values.append(dominant_frequency(window[:, 3 + busiest]))
+    return values
+
+
+# Which feature function goes with which saved tree ("feature_set" in its JSON)
+FEATURE_SETS = {"v1": all_features, "v2": magnitude_features}
 
 
 # ---- Running a saved model ---------------------------------------------
@@ -94,9 +129,10 @@ def predict_threshold_model(model, window):
 
 
 def predict_tree_model(model, window):
-    """Model 2: start at the top of the tree and follow the questions down
-    ("is feature <= threshold?" yes -> left, no -> right) until a leaf."""
-    features = dict(zip(model["features"], all_features(window)))
+    """Model 2 (v1 or v2): start at the top of the tree and follow the questions
+    down ("is feature <= threshold?" yes -> left, no -> right) until a leaf."""
+    compute = FEATURE_SETS[model.get("feature_set", "v1")]
+    features = dict(zip(model["features"], compute(window)))
     node = model["tree"]
     while "activity" not in node:
         node = node["left"] if features[node["feature"]] <= node["threshold"] else node["right"]

@@ -1,5 +1,6 @@
 {
   "model": "tree",
+  "feature_set": "v1",
   "features": [
     "ax_mean",
     "ax_std",

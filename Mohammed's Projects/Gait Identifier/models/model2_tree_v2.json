@@ -1,0 +1,79 @@
+{
+  "model": "tree",
+  "feature_set": "v2",
+  "features": [
+    "acc_mag_mean",
+    "acc_mag_std",
+    "acc_mag_max",
+    "acc_mag_dom_freq",
+    "gyro_mag_mean",
+    "gyro_mag_std",
+    "gyro_mag_max",
+    "gyro_mag_dom_freq",
+    "gyro_top_axis_dom_freq"
+  ],
+  "rule": "at each node: feature <= threshold -> left, else right",
+  "sample_rate_hz": 100,
+  "window_samples": 200,
+  "step_samples": 50,
+  "units": "accel in g, gyro in deg/s",
+  "tree": {
+    "feature": "gyro_mag_mean",
+    "threshold": 21.283308506011963,
+    "left": {
+      "activity": "Standing"
+    },
+    "right": {
+      "feature": "acc_mag_std",
+      "threshold": 0.3543364703655243,
+      "left": {
+        "feature": "gyro_mag_dom_freq",
+        "threshold": 1.25,
+        "left": {
+          "feature": "acc_mag_max",
+          "threshold": 2.3984487056732178,
+          "left": {
+            "activity": "Walking"
+          },
+          "right": {
+            "activity": "Walking"
+          }
+        },
+        "right": {
+          "feature": "gyro_mag_max",
+          "threshold": 501.02593994140625,
+          "left": {
+            "activity": "Running"
+          },
+          "right": {
+            "activity": "Walking"
+          }
+        }
+      },
+      "right": {
+        "feature": "acc_mag_std",
+        "threshold": 0.709694892168045,
+        "left": {
+          "feature": "gyro_mag_dom_freq",
+          "threshold": 0.75,
+          "left": {
+            "activity": "Walking"
+          },
+          "right": {
+            "activity": "Running"
+          }
+        },
+        "right": {
+          "feature": "gyro_mag_std",
+          "threshold": 109.63421630859375,
+          "left": {
+            "activity": "Biking"
+          },
+          "right": {
+            "activity": "Running"
+          }
+        }
+      }
+    }
+  }
+}
