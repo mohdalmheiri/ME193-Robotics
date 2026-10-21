@@ -1,6 +1,12 @@
+#include "Arduino_LED_Matrix.h"
 #include "Arduino_RouterBridge.h"
 #include <Wire.h>
 #include <vector>
+
+const int MATRIX_ROWS = 8;
+const int MATRIX_COLS = 13;
+Arduino_LED_Matrix matrix;
+uint8_t frame[MATRIX_ROWS * MATRIX_COLS];
 
 const uint8_t MPU_ADDR = 0x68;
 TwoWire *mpuWire = &Wire;
@@ -47,9 +53,27 @@ std::vector<float> get_batch() {
   return out;
 }
 
+// Exposed to Python: draws Model 2's live guess. bits is a string of '0'/'1',
+// one per pixel, row-major (row * MATRIX_COLS + col).
+void draw_frame(String bits) {
+  int count = MATRIX_ROWS * MATRIX_COLS;
+  for (int i = 0; i < count; i++) {
+    frame[i] = (i < bits.length() && bits.charAt(i) == '1') ? 7 : 0;
+  }
+  matrix.draw(frame);
+}
+
 void setup() {
+  matrix.begin();
+  matrix.clear();
+
   Bridge.begin();
-  Bridge.provide("get_batch", get_batch);
+  // provide_safe (not provide) runs these between loop() calls. With plain
+  // provide they run on the Bridge's own thread, so get_batch could copy the
+  // buffer while loop() was halfway through pushing a sample's 7 values,
+  // handing Python a partial sample (that crashed the app once).
+  Bridge.provide_safe("get_batch", get_batch);
+  Bridge.provide_safe("draw_frame", draw_frame);
   delay(500);
 
   bool onWire = probe(Wire);

@@ -9,31 +9,67 @@
   <body>
     <h1>Gait Recorder</h1>
 
-    <label for="person">Name</label>
-    <input id="person" type="text" placeholder="Your name" />
-
-    <label>Activity</label>
-    <div class="grid">
-      <button class="activity-btn" data-activity="Standing">Standing</button>
-      <button class="activity-btn" data-activity="Walking">Walking</button>
-      <button class="activity-btn" data-activity="Running">Running</button>
-      <button class="activity-btn" data-activity="Biking">Biking</button>
+    <div class="tabs">
+      <button class="tab" data-view="record">Record</button>
+      <button class="tab" data-view="live">Live</button>
     </div>
 
-    <div class="grid">
-      <button id="start-btn" class="go">Start</button>
-      <button id="stop-btn" class="stop">Stop</button>
-    </div>
+    <section id="record-view" class="view">
+      <label for="person">Name</label>
+      <input id="person" type="text" placeholder="Your name" />
 
-    <div id="status">
-      <p>Activity: <span id="status-activity">-</span></p>
-      <p>Recording time: <span id="status-time">0</span> s</p>
-      <p>Samples saved: <span id="status-samples">0</span></p>
-      <p>Samples / sec: <span id="status-rate">0</span></p>
-      <p id="status-gaps" class="warning"></p>
-    </div>
+      <label>Activity</label>
+      <div class="grid">
+        <button class="activity-btn" data-activity="Standing">Standing</button>
+        <button class="activity-btn" data-activity="Walking">Walking</button>
+        <button class="activity-btn" data-activity="Running">Running</button>
+        <button class="activity-btn" data-activity="Biking">Biking</button>
+      </div>
 
-    <a href="/download"><button id="download-btn">Download all CSVs</button></a>
+      <div class="grid">
+        <button id="start-btn" class="go">Start</button>
+        <button id="stop-btn" class="stop">Stop</button>
+      </div>
+
+      <div id="status">
+        <p>Activity: <span id="status-activity">-</span></p>
+        <p>Recording time: <span id="status-time">0</span> s</p>
+        <p>Samples saved: <span id="status-samples">0</span></p>
+        <p>Samples / sec: <span id="status-rate">0</span></p>
+        <p id="status-gaps" class="warning"></p>
+      </div>
+
+      <a href="/download"><button id="download-btn">Download all CSVs</button></a>
+    </section>
+
+    <section id="live-view" class="view">
+      <p id="live-waiting" class="hint">Collecting the first 2 seconds of data…</p>
+      <div class="grid live-grid">
+        <div class="card">
+          <h2>Model 1</h2>
+          <p class="card-sub">peak |<span id="m1-axis">ay</span>| thresholds</p>
+          <p id="m1-guess" class="guess">-</p>
+          <p class="number"><span id="m1-peak">-</span> g</p>
+          <p class="number-label">peak |<span id="m1-axis2">ay</span>|</p>
+          <p id="m1-bands" class="bands"></p>
+          <p class="recent">last 3: <span id="m1-recent">-</span></p>
+        </div>
+        <div class="card">
+          <h2>Model 2</h2>
+          <p class="card-sub">v2 decision tree</p>
+          <p id="m2-guess" class="guess">-</p>
+          <p class="number"><span id="m2-rotation">-</span> °/s</p>
+          <p class="number-label">rotation</p>
+          <p class="number"><span id="m2-bumpiness">-</span> g</p>
+          <p class="number-label">bumpiness</p>
+          <p class="number"><span id="m2-smoothness">-</span> °/s</p>
+          <p class="number-label">smoothness (lower = smoother)</p>
+          <p class="recent">last 3: <span id="m2-recent">-</span></p>
+        </div>
+      </div>
+      <p class="hint">Updates every 0.5 s from the last 2 s of movement. The big guess is the
+        most common of the last 3. The LED matrix shows Model 2's letter.</p>
+    </section>
 
     <script src="app.js"></script>
   </body>

@@ -82,3 +82,90 @@ button {
   margin-top: 20px;
   background: #555;
 }
+
+/* ---- Record / Live tabs ---- */
+.tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  background: #1c1c1c;
+  border-radius: 12px;
+  padding: 4px;
+}
+
+.tab {
+  padding: 12px 10px;
+  background: transparent;
+}
+
+.tab.selected {
+  background: #2d6cdf;
+  color: white;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+/* ---- Live view ---- */
+.live-grid {
+  margin-top: 16px;
+}
+
+.card {
+  background: #1c1c1c;
+  border-radius: 12px;
+  padding: 12px 10px;
+  text-align: center;
+  min-width: 0;
+}
+
+.card h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.card p {
+  margin: 0;
+}
+
+.card-sub,
+.number-label,
+.recent,
+.bands {
+  font-size: 0.8rem;
+  color: #aaa;
+}
+
+.guess {
+  margin: 14px 0 !important;
+  padding: 14px 4px;
+  border-radius: 10px;
+  font-size: 1.6rem;
+  font-weight: 700;
+  background: #333;
+  overflow-wrap: anywhere;
+}
+
+.guess.standing { background: #4c78a8; color: white; }
+.guess.walking  { background: #2e9e4a; color: white; }
+.guess.running  { background: #d64545; color: white; }
+.guess.biking   { background: #e08a1e; color: white; }
+
+.number {
+  margin-top: 10px !important;
+  font-size: 1.4rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.bands,
+.recent {
+  margin-top: 10px !important;
+}
+
+.hint {
+  font-size: 0.85rem;
+  color: #aaa;
+  margin-top: 14px;
+}
