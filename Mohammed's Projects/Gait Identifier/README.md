@@ -80,6 +80,10 @@ The trained v2 tree mostly asks three questions:
 3. **Smooth or jerky rotation?** (`gyro_mag_std`) This separates biking (a steady pedalling
    circle) from running (a stop-start swing).
 
+This is a simplified view of the deployed v2 tree, with the full tree shown below it:
+
+![Model 2 in plain words: three questions, asked every half second](figures/model2_tree_simple.png)
+
 ![Model 2 v2 decision tree](figures/model2_decision_tree_v2.png)
 
 These are the "rotation", "bumpiness" and "smoothness" numbers shown in the phone's Live view.
@@ -168,6 +172,7 @@ Gait Identifier/
 ├── training/
 │   ├── train.py             trains and tests all models, saves figures and JSON
 │   ├── gait_model.py        windows, features, running a JSON model (shared with the board)
+│   ├── plot_simple_tree.py  draws the plain-English view of the deployed v2 tree
 │   ├── requirements.txt
 │   └── results_v1.md, results_v2.md, results_v3.md
 ├── data/raw/              19 recordings: Mohammed_<Activity>_<date>_<time>.csv
@@ -190,7 +195,8 @@ python train.py
 
 This loads every CSV in `data/raw/` and prints accuracy, confusion matrices and a comparison
 table. It rewrites `models/` and `figures/`, and checks that each JSON model gives exactly
-the same predictions as scikit-learn.
+the same predictions as scikit-learn. Then run `python plot_simple_tree.py` to redraw
+`figures/model2_tree_simple.png` from the new v2 tree.
 
 ### Deploy to the UNO Q
 
