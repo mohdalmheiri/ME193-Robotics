@@ -1,3 +1,21 @@
+// Names shown on this page only. The board, the CSVs and the models keep the
+// short labels ("Running", "Biking"), so recordings and models still match.
+const DISPLAY_NAME = { Running: 'Running (Jogging)', Biking: 'Biking (Air Biking)' };
+const displayName = (activity) => DISPLAY_NAME[activity] || activity;
+
+// For big labels: put the part in brackets on its own, smaller line so the
+// longer names still fit on a phone.
+function showName(el, activity) {
+  const [main, extra] = displayName(activity).split(' (');
+  el.textContent = main;
+  if (extra) {
+    const small = document.createElement('span');
+    small.className = 'name-extra';
+    small.textContent = `(${extra}`;
+    el.append(small);
+  }
+}
+
 const personInput = document.querySelector('#person');
 const activityButtons = document.querySelectorAll('.activity-btn');
 const startBtn = document.querySelector('#start-btn');
@@ -6,6 +24,7 @@ const stopBtn = document.querySelector('#stop-btn');
 let selectedActivity = 'Standing';
 
 activityButtons.forEach((btn) => {
+  showName(btn, btn.dataset.activity);  // data-activity keeps the internal label
   if (btn.dataset.activity === selectedActivity) btn.classList.add('selected');
   btn.addEventListener('click', () => {
     selectedActivity = btn.dataset.activity;
@@ -27,7 +46,7 @@ async function refreshStatus() {
   try {
     const response = await fetch('/status');
     const s = await response.json();
-    document.querySelector('#status-activity').textContent = s.recording ? s.activity : '-';
+    document.querySelector('#status-activity').textContent = s.recording ? displayName(s.activity) : '-';
     document.querySelector('#status-time').textContent = s.elapsed;
     document.querySelector('#status-samples').textContent = s.samples_saved;
     document.querySelector('#status-rate').textContent = s.samples_per_sec;
@@ -70,8 +89,8 @@ showView(currentView);
 const LETTER = { Standing: 'S', Walking: 'W', Running: 'R', Biking: 'B' };
 
 function setGuess(el, activity) {
-  el.textContent = activity;
-  el.className = `guess ${activity.toLowerCase()}`;
+  showName(el, activity);
+  el.className = `guess ${activity.toLowerCase()}`;  // color comes from the internal label
 }
 
 async function refreshLive() {
@@ -87,8 +106,9 @@ async function refreshLive() {
     document.querySelector('#m1-axis').textContent = m1.axis;
     document.querySelector('#m1-axis2').textContent = m1.axis;
     document.querySelector('#m1-peak').textContent = m1.peak.toFixed(2);
-    // e.g. "Standing ≤ 0.31 < Walking ≤ 2.00 < Biking"
+    // e.g. "Standing ≤ 0.32 < Walking ≤ 1.99 < Biking (Air Biking)"
     document.querySelector('#m1-bands').textContent = m1.classes
+      .map(displayName)
       .map((c, i) => (i < m1.thresholds.length ? `${c} ≤ ${m1.thresholds[i].toFixed(2)} <` : c))
       .join(' ');
     document.querySelector('#m1-recent').textContent = m1.recent.map((a) => LETTER[a]).join(' ');

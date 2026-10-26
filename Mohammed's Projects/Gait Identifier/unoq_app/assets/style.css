@@ -141,10 +141,33 @@ button {
   margin: 14px 0 !important;
   padding: 14px 4px;
   border-radius: 10px;
-  font-size: 1.6rem;
+  /* shrinks a little on narrow phones so "Standing" fits on one line */
+  font-size: clamp(1.15rem, 6vw, 1.6rem);
   font-weight: 700;
+  line-height: 1.2;
   background: #333;
-  overflow-wrap: anywhere;
+  /* room for two lines, so both cards stay the same height */
+  min-height: 2.6em;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+/* On narrow phones "peak |ay| thresholds" wraps to two lines; give both cards'
+   subtitles two lines so the two guesses stay side by side at the same height */
+@media (max-width: 360px) {
+  .card-sub {
+    min-height: 2.4em;
+  }
+}
+
+/* The "(Jogging)" / "(Air Biking)" part of a name, on its own smaller line */
+.name-extra {
+  display: block;
+  font-size: 0.6em;
+  font-weight: 500;
+  opacity: 0.9;
+  margin-top: 2px;
 }
 
 .guess.standing { background: #4c78a8; color: white; }
