@@ -1,0 +1,3 @@
+torch==2.14.1         # the neural net
+numpy==2.5.3          # clips and features
+matplotlib==3.11.2    # loss plot
