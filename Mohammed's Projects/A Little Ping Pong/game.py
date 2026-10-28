@@ -14,6 +14,7 @@
 #       python game.py --no-motor   (S = swing, for testing without the motor)
 # SPACE pauses a match (and resumes it).
 import argparse
+import asyncio
 import collections
 import json
 import math
@@ -53,6 +54,7 @@ ACC_THRESHOLD = 500       # ...OR acceleration this far from gravity (1000 milli
                           # or acc < 500 (pushing the paddle toward the screen)
 COOLDOWN = 0.6            # seconds before another swing can count
 IMU_POLL = 0.02           # seconds between IMU reads in the background thread
+MOTOR_SCAN_S = 4.0        # seconds to scan for Double Motors before picking the closest one
 HAPTIC_SETTLE = 0.15      # ignore swings this long after a haptic finishes (motor shake)
 
 # Haptics
@@ -185,8 +187,9 @@ FONT = cv2.FONT_HERSHEY_SIMPLEX
 class Paddle:
     """Double Motor wrapper. Swing times arrive on self.swings (a queue)."""
 
-    def __init__(self, use_motor, model=None):
+    def __init__(self, use_motor, model=None, motor_filter=None):
         self.model = model         # trained classifier, or None = threshold detection
+        self.motor_filter = motor_filter   # part of the motor's name to look for, or None = closest
         self.swings = queue.Queue()
         self.connected = False
         self.dm = None
@@ -206,7 +209,11 @@ class Paddle:
         try:
             self.dm = le.DoubleMotor()
             print("Searching for the Double Motor...")
-            self.dm.connect(device_notification_delay=20)
+            address = find_motor(self.motor_filter)
+            if address:
+                self.dm.connect(device_mac=address, device_notification_delay=20)
+            else:   # scan found nothing to choose from: let the library take the first one it finds
+                self.dm.connect(device_notification_delay=20)
             self.connected = self.dm.connected
         except Exception as exc:
             print(f"Motor connection error: {exc}")
@@ -360,6 +367,37 @@ class Paddle:
             print("Motor disconnected.")
         except Exception as exc:
             print(f"Error while stopping/disconnecting the motor: {exc}")
+
+
+def find_motor(name_filter=None, scan_s=MOTOR_SCAN_S):
+    """Bluetooth address of the Double Motor to use: the one whose name contains name_filter,
+    or else the one with the strongest signal (the paddle in your hand is the closest one).
+    With several motors in the room (classmates'), connect() alone takes whichever answers first."""
+    from bleak import BleakScanner
+    try:
+        found = asyncio.run(BleakScanner.discover(timeout=scan_s, return_adv=True))
+    except Exception as exc:
+        print(f"Motor scan failed ({exc})")
+        return None
+    motors = []
+    for device, adv in found.values():
+        name = device.name or adv.local_name or ""
+        if "Double Motor" in name:
+            motors.append((adv.rssi, name, device.address))
+    if not motors:
+        print("No Double Motor found in the scan - is it on and blinking?")
+        return None
+    motors.sort(reverse=True)   # strongest signal first
+    for rssi, name, _ in motors:
+        print(f"  found {name.strip()!r}, signal {rssi} dBm")
+    if name_filter:
+        motors = [m for m in motors if name_filter.lower() in m[1].lower()]
+        if not motors:
+            print(f"No Double Motor with {name_filter!r} in its name.")
+            return None
+    rssi, name, address = motors[0]
+    print(f"Using {name.strip()!r} (signal {rssi} dBm)")
+    return address
 
 
 def load_swing_model():
@@ -646,6 +684,9 @@ def text_right(frame, msg, y, scale, color, thick=2):
 def main():
     parser = argparse.ArgumentParser(description="Virtual ping-pong with the LEGO Double Motor paddle.")
     parser.add_argument("--no-motor", action="store_true", help="don't connect the motor; S key = swing")
+    parser.add_argument("--motor", metavar="TEXT",
+                        help="use the Double Motor whose name contains TEXT (e.g. its card number); "
+                             "default: the closest one")
     parser.add_argument("--threshold", action="store_true",
                         help="use the old gyro/acc thresholds instead of the trained swing model")
     args = parser.parse_args()
@@ -658,7 +699,7 @@ def main():
             print("Swing detection: thresholds (--threshold)")
         else:
             model = load_swing_model()
-    paddle = Paddle(use_motor=not args.no_motor, model=model)
+    paddle = Paddle(use_motor=not args.no_motor, model=model, motor_filter=args.motor)
     score = Scoreboard()
     sound = sounds.Sounds()
     fxv = effects.Effects()
