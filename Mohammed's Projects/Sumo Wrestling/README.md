@@ -62,6 +62,7 @@ Press Enter when you're out (stop + sad song), and Enter again to reset for the 
 | `tests/test_behavior_tree.py` | Tests the policy without hardware |
 | `sad_song.py` | The losing tune on the Double Motor's beeper |
 | `tests/connect_test.py` | Hardware check: prints color sensor, IMU, levers and button |
+| `tests/calibrate_tape.py` | Measures the floor and the tape with the Color Sensor, suggests `TAPE_HUE_RANGE` and `TAPE_MIN_SATURATION`, and can write them into `sumo.py`. Not yet tested on the real sensor |
 | `tests/watch_distance.py` | Prints the UNO Q's distance readings from MQTT |
 | `unoq_app/` | UNO Q app: `sketch/sketch.ino` reads the HC-SR04, `python/main.py` publishes it |
 
