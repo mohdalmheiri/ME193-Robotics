@@ -1,0 +1,470 @@
+<!doctype html>
+<!--
+  How many steps? - live dashboard
+
+  Open this file in a browser (no server needed). It connects to the public
+  HiveMQ broker over a secure WebSocket, subscribes to ME193/Mohammed/steps,
+  and redraws every time a message arrives (twice a second). The message
+  format is written down in README.md.
+
+  Layout, top to bottom:
+    1. Title + connection status (dot and "last message x s ago")
+    2. Four number tiles: steps, distance (each with +/-), cadence, speed
+    3. A scrolling line chart of cadence over the last 60 s
+    4. The neural net's two hidden layers: 16 circles each, brighter = higher value
+
+  Everything is in this one file: CSS, then HTML, then JavaScript. The only
+  thing loaded from the internet is mqtt.js, the library that speaks MQTT
+  over WebSockets (browsers can't open plain MQTT connections).
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How Many Steps</title>
+<script src="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js"></script>
+<style>
+  /* ---- Colors ------------------------------------------------------------
+     Every color is a named token here, so light and dark mode only differ in
+     this block. One blue (--accent) carries all the data: the cadence line
+     and the neuron glow. Text always stays in the gray text colors. */
+  :root {
+    color-scheme: light;
+    --bg: #f4f4f2;
+    --card: #fcfcfb;
+    --border: #e4e3df;
+    --grid: #ebeae6;
+    --text: #0b0b0b;
+    --text-2: #52514e;
+    --text-3: #7a7974;
+    --accent: #2a78d6;
+    --neuron-off: #e6e5e1;
+    --good: #1a8a3a;
+    --bad: #c4372f;
+  }
+  /* Dark mode follows the phone/laptop setting... */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --bg: #111110;
+      --card: #1a1a19;
+      --border: #2c2c2a;
+      --grid: #262624;
+      --text: #f0efec;
+      --text-2: #c3c2b7;
+      --text-3: #8f8e86;
+      --accent: #3987e5;
+      --neuron-off: #2a2a28;
+      --good: #3fb760;
+      --bad: #e66767;
+    }
+  }
+  /* ...unless a data-theme attribute forces it */
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #111110;
+    --card: #1a1a19;
+    --border: #2c2c2a;
+    --grid: #262624;
+    --text: #f0efec;
+    --text-2: #c3c2b7;
+    --text-3: #8f8e86;
+    --accent: #3987e5;
+    --neuron-off: #2a2a28;
+    --good: #3fb760;
+    --bad: #e66767;
+  }
+
+  /* ---- Page layout ------------------------------------------------------- */
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 20px 16px 32px;   /* 16px sides so nothing touches a phone's edge */
+    display: grid;
+    gap: 14px;
+  }
+  header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 6px 16px;
+  }
+  h1 { margin: 0; font-size: 1.5rem; letter-spacing: -0.01em; }
+  h2 { margin: 0 0 10px; font-size: 0.95rem; font-weight: 600; color: var(--text-2); }
+
+  /* Connection status: a colored dot plus words, so it never relies on color alone */
+  .status { display: flex; align-items: center; gap: 8px; color: var(--text-2); font-size: 0.9rem; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--text-3); }
+  .status[data-state="live"] .dot { background: var(--good); }
+  .status[data-state="error"] .dot { background: var(--bad); }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 16px;
+  }
+
+  /* ---- Number tiles -------------------------------------------------------
+     4 across on a laptop, 2 x 2 on a phone. Steps and distance are the
+     headline numbers, so their values are bigger. */
+  .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  .tile .label { color: var(--text-2); font-size: 0.85rem; }
+  .tile .value {
+    font-size: 2rem;
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;   /* digits all the same width, so numbers don't jiggle */
+    line-height: 1.15;
+    margin-top: 2px;
+  }
+  .tile.big .value { font-size: 2.6rem; }
+  .tile .unit { font-size: 0.95rem; font-weight: 500; color: var(--text-2); margin-left: 3px; }
+  .tile .sub { color: var(--text-3); font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+  @media (max-width: 640px) {
+    .tiles { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .tile .value { font-size: 1.6rem; }
+    .tile.big .value { font-size: 2rem; }
+  }
+
+  /* ---- Cadence chart ----------------------------------------------------- */
+  .chart-wrap { position: relative; height: 220px; }
+  #chart { width: 100%; height: 100%; display: block; touch-action: none; }
+  /* The hover box that shows the exact value under your finger / mouse */
+  #tooltip {
+    position: absolute;
+    pointer-events: none;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 0.8rem;
+    color: var(--text);
+    white-space: nowrap;
+    box-shadow: 0 2px 8px rgb(0 0 0 / 0.12);
+    display: none;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---- Neurons -------------------------------------------------------------
+     Each layer is one row of 16 circles; on a phone, 2 rows of 8. JavaScript
+     sets --v (0 to 1) on each circle, and the CSS turns it into brightness:
+     the fill mixes from "off" gray to full blue, and the glow grows. */
+  .layer + .layer { margin-top: 14px; }
+  .layer-name { color: var(--text-2); font-size: 0.85rem; margin-bottom: 6px; }
+  .neurons { display: grid; grid-template-columns: repeat(16, 1fr); gap: 8px; }
+  @media (max-width: 640px) { .neurons { grid-template-columns: repeat(8, 1fr); gap: 10px; } }
+  .neuron {
+    --v: 0;
+    aspect-ratio: 1;
+    max-width: 40px;
+    width: 100%;
+    justify-self: center;
+    border-radius: 50%;
+    background: color-mix(in oklab, var(--accent) calc(var(--v) * 100%), var(--neuron-off));
+    box-shadow: 0 0 calc(var(--v) * 16px) calc(var(--v) * 3px)
+                color-mix(in srgb, var(--accent) calc(var(--v) * 70%), transparent);
+    transition: background 0.35s, box-shadow 0.35s;   /* fade smoothly between messages */
+  }
+  .scale-note { color: var(--text-3); font-size: 0.8rem; margin-top: 12px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>How many steps?</h1>
+    <div class="status" id="status" data-state="connecting" role="status">
+      <span class="dot"></span><span id="status-text">Connecting to broker…</span>
+    </div>
+  </header>
+
+  <section class="tiles">
+    <div class="card tile big">
+      <div class="label">Steps</div>
+      <div class="value"><span id="steps">–</span></div>
+      <div class="sub" id="steps-unc">± –</div>
+    </div>
+    <div class="card tile big">
+      <div class="label">Distance</div>
+      <div class="value"><span id="distance">–</span><span class="unit" id="distance-unit">m</span></div>
+      <div class="sub" id="distance-unc">± –</div>
+    </div>
+    <div class="card tile">
+      <div class="label">Cadence</div>
+      <div class="value"><span id="cadence">–</span><span class="unit">steps/s</span></div>
+      <div class="sub" id="cadence-min">– steps/min</div>
+    </div>
+    <div class="card tile">
+      <div class="label">Speed</div>
+      <div class="value"><span id="speed">–</span><span class="unit">m/s</span></div>
+      <div class="sub" id="speed-kmh">– km/h</div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Cadence, last 60 s (steps per second)</h2>
+    <div class="chart-wrap">
+      <canvas id="chart" aria-label="Line chart of cadence over the last 60 seconds"></canvas>
+      <div id="tooltip"></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Neural net, hidden layers (brighter = higher value)</h2>
+    <div class="layer">
+      <div class="layer-name">Layer 1 · 16 neurons</div>
+      <div class="neurons" id="layer1"></div>
+    </div>
+    <div class="layer">
+      <div class="layer-name">Layer 2 · 16 neurons</div>
+      <div class="neurons" id="layer2"></div>
+    </div>
+    <div class="scale-note">Each layer is scaled to its largest value over the last 10 s (at least 1). Hover or tap a circle for its value.</div>
+  </section>
+</main>
+
+<script>
+// ---- Settings ---------------------------------------------------------------
+// Browsers can only speak MQTT over WebSockets. HiveMQ's public broker takes
+// secure WebSockets on port 8884; "wss" also works when the page itself is on
+// https (e.g. GitHub Pages), where plain "ws" would be blocked.
+const BROKER_URL = "wss://broker.hivemq.com:8884/mqtt";
+const TOPIC = "ME193/Mohammed/steps";
+const CHART_SECONDS = 60;     // how much history the cadence chart shows
+const SCALE_SECONDS = 10;     // neuron brightness is relative to the max over this long
+const STALE_SECONDS = 3;      // no message for this long = show "waiting for data"
+const NEURONS = 16;
+
+// ---- State --------------------------------------------------------------------
+const history = [];           // cadence points for the chart: {t, cadence}
+const layerHistory = { layer1: [], layer2: [] };  // recent {t, max} per layer, for scaling
+let lastMessageAt = null;     // browser time (ms) of the last message
+let lastT = null;             // the sender's "t" of the last message
+let hoverX = null;            // where the pointer is on the chart (CSS px), or null
+
+const $ = (id) => document.getElementById(id);
+
+// ---- Neuron circles -----------------------------------------------------------
+// Build the 16 circles of each layer once; later messages only change --v.
+for (const id of ["layer1", "layer2"]) {
+  for (let i = 0; i < NEURONS; i++) {
+    const circle = document.createElement("div");
+    circle.className = "neuron";
+    circle.title = `Neuron ${i + 1}`;
+    $(id).appendChild(circle);
+  }
+}
+
+function showLayer(id, values, t) {
+  // Scale by the largest value seen in the last 10 s, so the brightest neuron
+  // is near full brightness whatever range the net's values are in. The floor
+  // of 1 keeps a quiet layer (all small values) looking quiet instead of
+  // blowing it up to full brightness.
+  const recent = layerHistory[id];
+  recent.push({ t, max: Math.max(...values) });
+  while (recent.length && recent[0].t < t - SCALE_SECONDS) recent.shift();
+  const scale = Math.max(1, ...recent.map((r) => r.max));
+
+  $(id).querySelectorAll(".neuron").forEach((circle, i) => {
+    const v = values[i] ?? 0;
+    circle.style.setProperty("--v", Math.min(1, v / scale).toFixed(3));
+    circle.title = `Neuron ${i + 1}: ${v.toFixed(2)}`;
+  });
+}
+
+// ---- Number tiles -------------------------------------------------------------
+function showNumbers(m) {
+  $("steps").textContent = m.steps.toLocaleString();
+  $("steps-unc").textContent = `± ${m.steps_unc.toLocaleString()} steps`;
+
+  // Meters until 1 km, then kilometers, so the number stays short
+  const km = m.distance_m >= 1000;
+  $("distance").textContent = km ? (m.distance_m / 1000).toFixed(2) : m.distance_m.toFixed(1);
+  $("distance-unit").textContent = km ? "km" : "m";
+  $("distance-unc").textContent = km
+    ? `± ${(m.distance_unc / 1000).toFixed(2)} km`
+    : `± ${m.distance_unc.toFixed(1)} m`;
+
+  $("cadence").textContent = m.cadence.toFixed(2);
+  $("cadence-min").textContent = `${Math.round(m.cadence * 60)} steps/min`;
+  $("speed").textContent = m.speed.toFixed(2);
+  $("speed-kmh").textContent = `${(m.speed * 3.6).toFixed(1)} km/h`;
+}
+
+// ---- Cadence chart --------------------------------------------------------------
+// Drawn by hand on a <canvas>: gridlines, the line, the latest value at its
+// end, and (while hovering) a vertical crosshair with the value under it.
+const canvas = $("chart");
+const ctx = canvas.getContext("2d");
+const PAD = { left: 34, right: 44, top: 10, bottom: 24 };  // room for axis labels
+
+function css(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+function resizeCanvas() {
+  // A canvas has its own pixel size. Match it to the screen's real pixels
+  // (devicePixelRatio is 2-3 on phones/Retina) so the chart stays sharp.
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = Math.round(canvas.clientWidth * dpr);
+  canvas.height = Math.round(canvas.clientHeight * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);   // from here on, draw in CSS pixels
+  drawChart();
+}
+
+function drawChart() {
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  const plotW = w - PAD.left - PAD.right, plotH = h - PAD.top - PAD.bottom;
+  ctx.clearRect(0, 0, w, h);
+  ctx.font = "12px system-ui, -apple-system, sans-serif";
+
+  // The x axis is "seconds ago": the newest point sits at the right edge and
+  // older ones slide left. The y axis goes up to 3 steps/s (or higher if
+  // the data does), so walking and running sit at stable heights.
+  const now = history.length ? history[history.length - 1].t : 0;
+  const yMax = Math.max(3, Math.ceil(Math.max(0, ...history.map((p) => p.cadence))));
+  const x = (t) => PAD.left + plotW * (1 - (now - t) / CHART_SECONDS);
+  const y = (c) => PAD.top + plotH * (1 - c / yMax);
+
+  // Gridlines and labels: thin and gray so the data line stands out
+  ctx.strokeStyle = css("--grid");
+  ctx.fillStyle = css("--text-3");
+  ctx.lineWidth = 1;
+  ctx.textAlign = "right";
+  ctx.textBaseline = "middle";
+  for (let c = 0; c <= yMax; c++) {
+    const yy = Math.round(y(c)) + 0.5;     // +0.5 keeps a 1px line crisp
+    ctx.beginPath(); ctx.moveTo(PAD.left, yy); ctx.lineTo(PAD.left + plotW, yy); ctx.stroke();
+    ctx.fillText(c, PAD.left - 8, yy);
+  }
+  ctx.textAlign = "center";
+  ctx.textBaseline = "top";
+  for (let ago = 0; ago <= CHART_SECONDS; ago += 15) {
+    ctx.fillText(ago === 0 ? "now" : `−${ago} s`, x(now - ago), PAD.top + plotH + 8);
+  }
+
+  if (!history.length) {
+    ctx.textBaseline = "middle";
+    ctx.fillText("Waiting for data…", PAD.left + plotW / 2, PAD.top + plotH / 2);
+    return;
+  }
+
+  // The cadence line: 2px, rounded joins
+  ctx.strokeStyle = css("--accent");
+  ctx.lineWidth = 2;
+  ctx.lineJoin = ctx.lineCap = "round";
+  ctx.beginPath();
+  history.forEach((p, i) => (i ? ctx.lineTo(x(p.t), y(p.cadence)) : ctx.moveTo(x(p.t), y(p.cadence))));
+  ctx.stroke();
+
+  // The latest value, labelled at the end of the line (text in text color,
+  // the dot in the line's color)
+  const last = history[history.length - 1];
+  drawDot(x(last.t), y(last.cadence));
+  ctx.fillStyle = css("--text");
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  ctx.fillText(last.cadence.toFixed(2), x(last.t) + 8, y(last.cadence));
+
+  // Hover: snap to the nearest point and show its value in the tooltip
+  const tip = $("tooltip");
+  if (hoverX === null) { tip.style.display = "none"; return; }
+  const tHover = now - (1 - (hoverX - PAD.left) / plotW) * CHART_SECONDS;
+  const p = history.reduce((a, b) => (Math.abs(b.t - tHover) < Math.abs(a.t - tHover) ? b : a));
+  const px = x(p.t);
+  ctx.strokeStyle = css("--text-3");
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(Math.round(px) + 0.5, PAD.top); ctx.lineTo(Math.round(px) + 0.5, PAD.top + plotH); ctx.stroke();
+  drawDot(px, y(p.cadence));
+  tip.textContent = `${(now - p.t).toFixed(1)} s ago · ${p.cadence.toFixed(2)} steps/s`;
+  tip.style.display = "block";
+  // Keep the tooltip inside the chart: flip it to the left near the right edge
+  const left = px + 12 + tip.offsetWidth > w ? px - 12 - tip.offsetWidth : px + 12;
+  tip.style.left = `${left}px`;
+  tip.style.top = `${Math.max(0, y(p.cadence) - 34)}px`;
+}
+
+function drawDot(cx, cy) {
+  // A dot with a ring in the card color, so it stands out where it sits on the line
+  ctx.beginPath();
+  ctx.arc(cx, cy, 4.5, 0, 2 * Math.PI);
+  ctx.fillStyle = css("--accent");
+  ctx.strokeStyle = css("--card");
+  ctx.lineWidth = 2;
+  ctx.fill();
+  ctx.stroke();
+}
+
+// Pointer events cover mouse, touch and pen with the same code
+canvas.addEventListener("pointermove", (e) => { hoverX = e.offsetX; drawChart(); });
+canvas.addEventListener("pointerdown", (e) => { hoverX = e.offsetX; drawChart(); });
+canvas.addEventListener("pointerleave", () => { hoverX = null; drawChart(); });
+new ResizeObserver(resizeCanvas).observe(canvas);
+// Redraw in the new colors when the phone/laptop switches light <-> dark
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", drawChart);
+
+// ---- Connection status ----------------------------------------------------------
+function setStatus(state, text) {
+  $("status").dataset.state = state;
+  $("status-text").textContent = text;
+}
+
+// Once a second, say how old the last message is (and if it's gone quiet)
+setInterval(() => {
+  if (lastMessageAt === null) return;
+  const age = (Date.now() - lastMessageAt) / 1000;
+  if (age > STALE_SECONDS) setStatus("connecting", `Connected · no data for ${Math.round(age)} s`);
+  else setStatus("live", `Live · last message ${age.toFixed(1)} s ago`);
+}, 1000);
+
+// ---- MQTT ---------------------------------------------------------------------
+// mqtt.js keeps the connection alive and reconnects by itself if the Wi-Fi
+// drops. A random client id stops two open tabs from kicking each other off.
+const client = mqtt.connect(BROKER_URL, {
+  clientId: `howmanysteps-page-${Math.random().toString(16).slice(2, 10)}`,
+  reconnectPeriod: 2000,
+});
+
+client.on("connect", () => {
+  setStatus("connecting", "Connected · waiting for data…");
+  client.subscribe(TOPIC);
+});
+client.on("reconnect", () => setStatus("connecting", "Reconnecting…"));
+client.on("offline", () => setStatus("error", "Offline · check the internet connection"));
+client.on("error", (err) => setStatus("error", `Error: ${err.message}`));
+
+client.on("message", (topic, payload) => {
+  let m;
+  try {
+    m = JSON.parse(payload.toString());
+  } catch {
+    return;   // ignore anything on the topic that isn't valid JSON
+  }
+
+  // If "t" jumped backwards, the sender restarted: start the chart fresh
+  if (lastT !== null && m.t < lastT) {
+    history.length = 0;
+    layerHistory.layer1.length = layerHistory.layer2.length = 0;
+  }
+  lastT = m.t;
+  lastMessageAt = Date.now();
+  setStatus("live", "Live · last message 0.0 s ago");
+
+  history.push({ t: m.t, cadence: m.cadence });
+  while (history.length && history[0].t < m.t - CHART_SECONDS) history.shift();
+
+  showNumbers(m);
+  showLayer("layer1", m.layer1, m.t);
+  showLayer("layer2", m.layer2, m.t);
+  drawChart();
+});
+</script>
+</body>
+</html>
