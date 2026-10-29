@@ -33,3 +33,6 @@ Public stuff/virtualTesting/test/
 # Midterm opponent photo and its cached cutout: kept on this laptop only, not pushed
 Mohammed's Projects/A Little Ping Pong/opponent/chris_photo.png
 Mohammed's Projects/A Little Ping Pong/opponent/chris_cutout.png
+
+# HW7 Outdoor walk phone recordings contain GPS positions: kept on this laptop only
+Mohammed's Projects/How Many Steps/data/phone_raw/*_Outdoor_*

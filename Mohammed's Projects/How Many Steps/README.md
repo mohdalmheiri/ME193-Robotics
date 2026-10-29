@@ -8,8 +8,20 @@ count and a distance, shown live on a dashboard.
 ## How it works
 
 The project is just starting, so this section will grow as the parts are built. So far
-there is a practice run on the HW6 data and a live dashboard running on fake data (no new
-hardware yet).
+there is a practice run on the HW6 data, a live dashboard running on fake data, and the
+recorder for counted trials.
+
+### Recording counted trials
+
+The board runs the **Step Recorder** app (`uno_q/`), controlled from a phone. For each
+trial you pick a name and activity, press Start, stomp once, do the trial and press Stop.
+The board saves the ankle IMU at 100 Hz as `Person_Activity_Tnn.csv`, then waits for the
+real step count and distance typed in on the phone and adds a row to `trials.csv`. At the
+same time the phone records its own accelerometer and gyroscope in a pocket with phyphox
+(plus GPS on the outdoor walk). The stomp at the start of every trial shows up in both,
+so the two recordings can be lined up later. `data/sync_from_board.py` copies the trials
+to the laptop. Naming, columns and phyphox setup are in
+[`data/README.md`](data/README.md).
 
 ### Practice: activity classifier on HW6 data
 
@@ -39,18 +51,28 @@ in [`dashboard/README.md`](dashboard/README.md).
 
 ## Hardware
 
-Not built yet. The plan is the HW6 setup worn at the ankle: an IMU and an Arduino UNO Q
-with a power bank.
+- Arduino UNO Q with an MPU-6050 IMU on I2C, wired as in
+  [HW6](../Gait%20Identifier/README.md), strapped to the right lower leg near the ankle
+- USB power bank, so the board runs without the laptop
+- A phone: controls the recorder (port 7000) and records its own sensors with
+  [phyphox](https://phyphox.org)
+- A measured 20 m course
 
 ## Files
 
 ```
 How Many Steps/
-├── data/          new HW7 recordings (empty for now)
+├── data/
+│   ├── raw/                     ankle recordings, one CSV per trial
+│   ├── phone_raw/               phyphox exports, one zip per trial
+│   ├── trials.csv               real step count and distance for each trial
+│   ├── sync_from_board.py       copies the trials from the board
+│   ├── RECORDING_CHECKLIST.md   step by step, for the phone during recording
+│   └── README.md                naming, columns, phyphox setup, the stomp
 ├── training/
 │   ├── practice_classifier.py   practice net on the HW6 data
 │   └── requirements.txt         laptop packages for training
-├── uno_q/         the UNO Q app (empty for now)
+├── uno_q/                       Step Recorder app for the UNO Q (see its README)
 ├── dashboard/
 │   ├── index.html               live dashboard page (open in a browser)
 │   ├── fake_publisher.py        fake data until the hardware exists
@@ -77,7 +99,20 @@ python "Mohammed's Projects/How Many Steps/dashboard/fake_publisher.py"
 open "Mohammed's Projects/How Many Steps/dashboard/index.html"
 ```
 
+Step Recorder: from the ArduinoApps kit, `python3 tools/deploy.py step-recorder` (its
+`step-recorder` folder is a symlink to `uno_q/`). It is the board's default app, so it
+starts on power-up. After recording, from the repo root:
+
+```
+python "Mohammed's Projects/How Many Steps/data/sync_from_board.py"
+```
+
 ## Tuning and notes
+
+- Recordings take about 0.9 MB per minute on the board, which has about 15 GB free.
+- Leave the recordings on the board after syncing: trial numbers come from the files
+  there, so deleting them would reuse numbers.
+- `Outdoor` phone zips contain GPS positions, so they are kept off GitHub.
 
 - The settings (clip length, hidden layer size, epochs, learning rate, random seed) are
   constants at the top of `practice_classifier.py`.

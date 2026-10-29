@@ -15,4 +15,5 @@ activity (standing, walking, running, biking) live.
   Deploying copies the real files.
 
 Deploy from the ArduinoApps kit (its `mpu6050-check` folder is a symlink to this folder):
-`python3 tools/deploy.py mpu6050-check`. It's the board's default app, so it starts on power-up.
+`python3 tools/deploy.py mpu6050-check`. It was the board's power-up app during HW6; HW7's Step Recorder is now. To switch back:
+`arduino-app-cli properties set default /home/arduino/ArduinoApps/mpu6050-check` on the board.

@@ -1,0 +1,83 @@
+<!doctype html>
+<!--
+  Step Recorder phone page. Served by python/main.py on port 7000.
+  Pick a name and activity, Start, stomp, do the trial, Stop, then type in the
+  real step count and distance and Save. app.js does the talking to the board.
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Step Recorder</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <h1>Step Recorder</h1>
+
+    <!-- 1. Before a trial: who and what -->
+    <section id="setup">
+      <label for="person">Name</label>
+      <input id="person" type="text" autocomplete="off" placeholder="Your name" />
+      <div id="name-buttons" class="chips"></div>
+
+      <label>Activity</label>
+      <div id="activities" class="grid three"></div>
+
+      <p class="next">Next file: <b id="next-file">-</b></p>
+    </section>
+
+    <!-- 2. Start / Stop (always visible so Stop is one tap away) -->
+    <div class="grid">
+      <button id="start-btn" class="go">Start</button>
+      <button id="stop-btn" class="stop">Stop</button>
+    </div>
+
+    <!-- Shown for the first seconds of a recording -->
+    <p id="stomp" class="banner" hidden>Stomp once, hard. Then go.</p>
+
+    <!-- 3. After Stop: enter the real count -->
+    <section id="count" class="panel" hidden>
+      <h2>Enter the count</h2>
+      <p class="small">for <b id="count-file">-</b> (<span id="count-duration">0</span> s)</p>
+      <div class="grid">
+        <div>
+          <label for="steps">Steps</label>
+          <input id="steps" type="number" inputmode="numeric" min="0" step="1" />
+        </div>
+        <div>
+          <label for="distance">Distance (m)</label>
+          <input id="distance" type="number" inputmode="decimal" min="0" step="0.1" />
+        </div>
+      </div>
+      <p id="count-error" class="warning"></p>
+      <div class="grid">
+        <button id="save-btn" class="go">Save</button>
+        <button id="discard-btn">Discard</button>
+      </div>
+      <p class="small">Save the phyphox export as <b id="phyphox-name">-</b> (in data/phone_raw/).</p>
+    </section>
+
+    <!-- 4. Live status -->
+    <div id="status" class="panel">
+      <p>State: <b id="status-mode">-</b></p>
+      <p>Recording time: <span id="status-time">0</span> s</p>
+      <p>Samples saved: <span id="status-samples">0</span> (<span id="status-rate">0</span>/s)</p>
+      <p id="status-gaps" class="warning"></p>
+    </div>
+
+    <!-- 5. Saved trials -->
+    <section class="panel">
+      <h2>Saved trials (<span id="trial-count">0</span>)</h2>
+      <table>
+        <thead><tr><th>File</th><th>Steps</th><th>m</th><th>s</th></tr></thead>
+        <tbody id="recent"></tbody>
+      </table>
+      <div class="grid">
+        <button id="delete-btn">Delete last trial</button>
+        <a href="/download"><button>Download all</button></a>
+      </div>
+    </section>
+
+    <script src="app.js"></script>
+  </body>
+</html>

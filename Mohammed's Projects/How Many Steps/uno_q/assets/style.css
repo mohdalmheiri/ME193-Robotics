@@ -1,0 +1,95 @@
+/* Step Recorder phone page. Dark, big buttons, one column: made to be used
+   standing on a sidewalk with one hand. Based on HW6's Gait Recorder page. */
+body {
+  font-family: -apple-system, system-ui, sans-serif;
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 16px;
+  background: #111;
+  color: #eee;
+}
+
+h1 { text-align: center; font-size: 1.4rem; }
+h2 { font-size: 1.05rem; margin: 4px 0 8px; }
+
+label {
+  display: block;
+  margin-top: 14px;
+  margin-bottom: 6px;
+  font-size: 0.9rem;
+  color: #aaa;
+}
+
+input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 14px;
+  font-size: 1.2rem;
+  border-radius: 10px;
+  border: 1px solid #444;
+  background: #222;
+  color: #eee;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 10px;
+}
+.grid.three { grid-template-columns: 1fr 1fr 1fr; }
+
+button {
+  width: 100%;
+  padding: 18px 8px;
+  font-size: 1.05rem;
+  border-radius: 12px;
+  border: none;
+  background: #333;
+  color: #eee;
+}
+button:disabled { opacity: 0.35; }
+button small { display: block; font-size: 0.72rem; color: #bbb; margin-top: 2px; }
+
+.activity-btn { padding: 14px 6px; font-size: 0.95rem; }
+.activity-btn.selected { background: #2d6cdf; color: white; }
+.activity-btn.selected small { color: #dde6fb; }
+
+/* Quick-pick name buttons under the name box */
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.chip { width: auto; padding: 8px 14px; font-size: 0.95rem; border-radius: 999px; }
+
+.go { background: #2e9e4a; color: white; }
+.stop { background: #c23b3b; color: white; }
+
+.next { color: #aaa; margin: 14px 0 0; word-break: break-all; }
+.next b { color: #eee; }
+
+.banner {
+  margin: 12px 0 0;
+  padding: 16px;
+  border-radius: 12px;
+  background: #e0a800;
+  color: #111;
+  font-size: 1.2rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.panel {
+  margin-top: 16px;
+  background: #1c1c1c;
+  border-radius: 12px;
+  padding: 12px 16px;
+}
+.panel p { margin: 6px 0; }
+.small { font-size: 0.85rem; color: #aaa; word-break: break-all; }
+.small b { color: #eee; }
+.warning { color: #e0a800; }
+
+table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+th { text-align: left; color: #aaa; font-weight: 500; padding: 4px 4px 4px 0; }
+td { padding: 4px 4px 4px 0; border-top: 1px solid #2a2a2a; word-break: break-all; }
+th:not(:first-child), td:not(:first-child) { text-align: right; white-space: nowrap; }
+
+a { text-decoration: none; }
