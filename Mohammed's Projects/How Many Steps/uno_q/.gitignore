@@ -1,2 +1,4 @@
 # ignore app cache folder
 .cache/
+# written on the board by board_setup/address_watcher.sh
+board_address.txt

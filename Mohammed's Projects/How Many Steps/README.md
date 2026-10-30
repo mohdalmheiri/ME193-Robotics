@@ -101,7 +101,9 @@ open "Mohammed's Projects/How Many Steps/dashboard/index.html"
 
 Step Recorder: from the ArduinoApps kit, `python3 tools/deploy.py step-recorder` (its
 `step-recorder` folder is a symlink to `uno_q/`). It is the board's default app, so it
-starts on power-up. After recording, from the repo root:
+starts on power-up and scrolls its address on the LED matrix. The board joins home Wi-Fi
+or Phone 2's hotspot, whichever it finds; the one-time board setup (address service,
+hotspot, default app) is in [`uno_q/README.md`](uno_q/README.md). After recording, from the repo root:
 
 ```
 python "Mohammed's Projects/How Many Steps/data/sync_from_board.py"

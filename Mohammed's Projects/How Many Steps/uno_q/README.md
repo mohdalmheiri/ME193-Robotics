@@ -15,6 +15,38 @@ from a phone on port 7000.
   saved trials, with buttons to delete the last trial or download everything as a zip.
 - The LED matrix shows the state when the phone is in a pocket: a dot = ready,
   **R** = recording, **?** = stopped, waiting for the step count.
+- While idle, the matrix scrolls the board's address (e.g. `172.20.10.2:7000`, or
+  `NO WIFI`) until a phone opens the page, and again whenever the address changes. The
+  address comes from `board_setup/address_watcher.sh`, a small service on the board
+  itself that writes it to `board_address.txt` every time it changes. The app can't look
+  it up alone: it runs in a container that only gets the address once, at start-up.
+
+## Wi-Fi: home or phone hotspot
+
+The board has two saved networks and joins whichever it finds, at boot or when it loses
+its connection: home Wi-Fi (`Mohammed`, priority 10) and Phone 2's Personal Hotspot
+(`iPhone hotspot`, priority 5), so home wins when both are around. The hotspot's real name
+is `Mohammed’s iPhone` with a curly apostrophe (’), as iPhones name it; a straight `'`
+would never match. The password is only in the board's network settings (a root-only
+file), not in this repo.
+
+On the hotspot, keep Phone 2's Settings → Personal Hotspot screen open while the board
+starts: iPhones hide the hotspot from Wi-Fi scans otherwise. The board gets a
+`172.20.10.x` address, and Phone 2 opens the page at the address on the matrix.
+
+## Setting up a board (once)
+
+From the ArduinoApps kit, after deploying:
+
+```
+python3 tools/deploy.py --cmd "systemctl --user enable --now /home/arduino/ArduinoApps/step-recorder/board_setup/board-address.service"
+python3 tools/deploy.py --cmd 'nmcli connection add type wifi con-name "iPhone hotspot" ifname wlan0 ssid "Mohammed’s iPhone" wifi-sec.key-mgmt wpa-psk wifi-sec.psk "<password>" connection.autoconnect-priority 5'
+python3 tools/deploy.py --cmd "nmcli connection modify Mohammed connection.autoconnect-priority 10"
+python3 tools/deploy.py --cmd "arduino-app-cli properties set default /home/arduino/ArduinoApps/step-recorder"
+```
+
+Check the hotspot's exact name first with
+`nmcli -t -f SSID device wifi list` while it is on.
 
 Deploy from the ArduinoApps kit (its `step-recorder` folder is a symlink to this folder):
 `python3 tools/deploy.py step-recorder`. It's the board's default app, so it starts on

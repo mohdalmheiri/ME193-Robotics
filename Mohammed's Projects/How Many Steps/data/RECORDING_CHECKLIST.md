@@ -2,8 +2,11 @@
 
 ## Once, before the first trial
 
-- [ ] Board strapped to the right lower leg, near the ankle, power bank on. LED matrix shows a dot.
-- [ ] Phone on the same Wi-Fi; open `http://<board IP>:7000`. The page title is **Step Recorder**.
+- [ ] Away from home: turn on Phone 2's Personal Hotspot and keep that settings screen open.
+- [ ] Board strapped to the right lower leg, near the ankle, then plug in the power bank.
+- [ ] Wait for the LED matrix to scroll the address (`172.20.10.x:7000` on the hotspot).
+- [ ] Phone 2: open `http://<that address>`. The page title is **Step Recorder**, and the
+      matrix switches to a dot.
 - [ ] phyphox: **+** → simple experiment **Ankle trial**: Accelerometer + Gyroscope, 100 Hz.
 - [ ] phyphox: a second one, **Ankle trial GPS**: the same plus Location (Outdoor only).
 - [ ] Course marked: 20 m, start and finish lines.

@@ -22,7 +22,6 @@ import csv
 import io
 import os
 import re
-import socket
 import time
 import traceback
 import zipfile
@@ -243,18 +242,104 @@ LETTERS = {
 }
 
 
-def show_on_matrix(key):
+def draw(bits, key):
+    """Send one frame (104 '0'/'1' characters, row by row) to the sketch."""
     global shown_on_matrix
+    try:
+        Bridge.call("draw_frame", bits)
+        shown_on_matrix = key
+    except Exception as e:  # the display is a nice-to-have; never crash over it
+        logger.warning(f"Couldn't draw on the LED matrix: {e}")
+
+
+def show_on_matrix(key):
+    """Draw a letter from LETTERS (only when it changes)."""
     if key == shown_on_matrix:
         return
     rows = ["0" * 13 for _ in range(8)]
     for r, pattern in enumerate(LETTERS[key]):
         rows[r] = "0000" + pattern.replace("#", "1").replace(".", "0") + "0000"
+    draw("".join(rows), key)
+
+
+# ---- LED matrix: scrolling the board's address ----------------------------------------
+# On a phone hotspot nobody knows the board's address in advance, so while the
+# board is idle it scrolls e.g. "172.20.10.3:7000" until a phone opens the page
+# (then it shows the ready dot). It scrolls again whenever the address changes.
+#
+# The address comes from board_address.txt in the app folder, written by
+# board_setup/address_watcher.sh running on the board itself. The app can't
+# look it up on its own: it runs in a container, and App Lab's HOST_IP is
+# only set once, when the app starts. HOST_IP is the fallback if the watcher
+# isn't installed.
+ADDRESS_FILE = os.path.join(os.path.dirname(BASE_DIR), "board_address.txt")
+PORT = 7000
+
+# 3x5 pixel font (from the ip-and-temp-scroller app), plus ":" and the
+# letters of "NO WIFI"
+FONT = {
+    "0": ["###", "#.#", "#.#", "#.#", "###"], "1": [".#.", "##.", ".#.", ".#.", "###"],
+    "2": ["###", "..#", "###", "#..", "###"], "3": ["###", "..#", "###", "..#", "###"],
+    "4": ["#.#", "#.#", "###", "..#", "..#"], "5": ["###", "#..", "###", "..#", "###"],
+    "6": ["###", "#..", "###", "#.#", "###"], "7": ["###", "..#", "..#", "..#", "..#"],
+    "8": ["###", "#.#", "###", "#.#", "###"], "9": ["###", "#.#", "###", "..#", "###"],
+    ".": ["...", "...", "...", "...", ".#."], ":": ["...", ".#.", "...", ".#.", "..."],
+    " ": ["...", "...", "...", "...", "..."], "N": ["#.#", "###", "###", "###", "#.#"],
+    "O": ["###", "#.#", "#.#", "#.#", "###"], "W": ["#.#", "#.#", "###", "###", "#.#"],
+    "I": ["###", ".#.", ".#.", ".#.", "###"], "F": ["###", "#..", "###", "#..", "#.."],
+}
+TOP_ROW = 1              # the 5-row letters sit in rows 1-5 of the 8
+scroll = {"columns": [], "position": 0}
+address = None           # last address read (None = not read yet)
+page_opened = False      # set by /status: a phone has the page open
+
+
+def read_address():
+    """The board's Wi-Fi address, or "" when it has none."""
     try:
-        Bridge.call("draw_frame", "".join(rows))
-        shown_on_matrix = key
-    except Exception as e:  # the display is a nice-to-have; never crash over it
-        logger.warning(f"Couldn't draw on the LED matrix: {e}")
+        with open(ADDRESS_FILE) as f:
+            return f.read().strip()
+    except OSError:
+        return os.environ.get("HOST_IP", "")
+
+
+def text_columns(text):
+    """Turn text into matrix columns (lists of 8 pixels, top to bottom), with
+    one blank column between letters and a screen's width of space after,
+    so each pass starts on an empty matrix."""
+    columns = []
+    for ch in text:
+        glyph = FONT.get(ch, FONT[" "])
+        for c in range(3):
+            column = [0] * 8
+            for r in range(5):
+                column[TOP_ROW + r] = 1 if glyph[r][c] == "#" else 0
+            columns.append(column)
+        columns.append([0] * 8)
+    return columns + [[0] * 8] * 13
+
+
+def check_address():
+    """Notice a new address: log it and start scrolling it."""
+    global address, page_opened
+    new = read_address()
+    if new == address:
+        return
+    address = new
+    page_opened = False
+    text = f"{address}:{PORT}" if address else "NO WIFI"
+    scroll["columns"] = text_columns(text)
+    scroll["position"] = 0
+    logger.info(f"Board address: open http://{address}:{PORT}" if address else "No Wi-Fi address yet")
+
+
+def scroll_step():
+    """Move the scrolling text one column left (called 10 times a second)."""
+    columns, start = scroll["columns"], scroll["position"]
+    window = [columns[(start + c) % len(columns)] for c in range(13)]
+    bits = "".join(str(window[c][r]) for r in range(8) for c in range(13))
+    draw(bits, "scrolling")
+    scroll["position"] = (start + 1) % len(columns)
 
 
 # ---- Web API for the phone page ----------------------------------------------------
@@ -287,10 +372,15 @@ def http_next(person: str, activity: str):
 
 
 def http_status():
+    global page_opened
+    if not page_opened:
+        page_opened = True   # a phone found the board: stop scrolling the address
+        logger.info("A phone opened the page")
     elapsed = time.time() - trial["start_time"] if mode == "recording" else 0
     rows = read_trials()
     return {
         "app": "Step Recorder",      # lets scripts check they reached this app
+        "address": address,
         "mode": mode,
         "trial": {k: trial[k] for k in ("file", "person", "activity")} if trial else None,
         "elapsed": round(elapsed, 1),
@@ -327,24 +417,15 @@ ui.expose_api("GET", "/status", http_status)
 ui.expose_api("GET", "/download", http_download)
 
 
-def get_ip():
-    # The app runs in a container, so ask App Lab for the board's real address
-    host_ip = os.environ.get("HOST_IP")
-    if host_ip:
-        return host_ip
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    try:
-        s.connect(("8.8.8.8", 80))
-        return s.getsockname()[0]
-    except OSError:
-        return "0.0.0.0"
-    finally:
-        s.close()
-
-
 def loop():
     try:
-        show_on_matrix(mode)
+        check_address()
+        # Idle and no phone connected yet: scroll the address. Otherwise show
+        # the state letter (a trial always wins over the address).
+        if mode == "idle" and not page_opened:
+            scroll_step()
+        else:
+            show_on_matrix(mode)
         poll_sensor()
     except Exception:
         # On a power bank nobody would restart a crashed app, so log and carry on.
@@ -352,5 +433,4 @@ def loop():
     time.sleep(0.1)  # 10 polls a second -> about 10 samples per batch
 
 
-logger.info(f"Open http://{get_ip()}:7000 on your phone")
 App.run(user_loop=loop)

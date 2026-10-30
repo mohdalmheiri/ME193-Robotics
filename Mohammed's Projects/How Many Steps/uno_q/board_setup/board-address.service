@@ -1,0 +1,12 @@
+# systemd user service that runs address_watcher.sh from boot to shutdown.
+# Installed once with:  systemctl --user enable --now <path to this file>
+# (the arduino user has "linger" on, so user services start at boot without a login)
+[Unit]
+Description=Write the board's Wi-Fi address for the Step Recorder app
+
+[Service]
+ExecStart=/bin/sh /home/arduino/ArduinoApps/step-recorder/board_setup/address_watcher.sh
+Restart=always
+
+[Install]
+WantedBy=default.target
