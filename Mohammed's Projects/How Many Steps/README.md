@@ -64,9 +64,11 @@ in [`dashboard/README.md`](dashboard/README.md).
 How Many Steps/
 ├── data/
 │   ├── raw/                     ankle recordings, one CSV per trial
-│   ├── phone_raw/               phyphox exports, one zip per trial
+│   ├── phone_raw/               phyphox exports (zips, unzipped, and copies named by trial)
 │   ├── trials.csv               real step count and distance for each trial
+│   ├── real_durations.csv       real length and sample rate of each ankle recording
 │   ├── sync_from_board.py       copies the trials from the board
+│   ├── check_recordings.py      damage checks, stomp alignment, one plot per trial
 │   ├── RECORDING_CHECKLIST.md   step by step, for the phone during recording
 │   └── README.md                naming, columns, phyphox setup, the stomp
 ├── training/
@@ -78,7 +80,8 @@ How Many Steps/
 │   ├── fake_publisher.py        fake data until the hardware exists
 │   └── README.md                the MQTT message format
 └── media/
-    └── practice_loss.png        loss curve from the practice run
+    ├── practice_loss.png        loss curve from the practice run
+    └── recording_checks/        one plot per trial: ankle and phone, lined up on the stomp
 ```
 
 ## Setup and run

@@ -1,1 +1,11 @@
 file,person,activity,steps,distance_m,duration_s
+Mohammed_Stand_T01.csv,Mohammed,Stand,0,0.0,63.01
+Mohammed_Fidget_T01.csv,Mohammed,Fidget,0,0.0,62.98
+Mohammed_LegSwing_T01.csv,Mohammed,LegSwing,0,0.0,63.16
+Mohammed_Walk_slow_T01.csv,Mohammed,Walk_slow,38,20.0,34.59
+Mohammed_Walk_slow_T02.csv,Mohammed,Walk_slow,36,20.0,29.88
+Mohammed_Walk_slow_T03.csv,Mohammed,Walk_slow,37,20.0,30.02
+Mohammed_Walk_slow_T04.csv,Mohammed,Walk_slow,39,20.0,31.46
+Mohammed_Walk_slow_T05.csv,Mohammed,Walk_slow,39,20.0,32.58
+Mohammed_Walk_slow_T06.csv,Mohammed,Walk_slow,37,20.0,30.05
+Mohammed_Walk_slow_T07.csv,Mohammed,Walk_slow,40,20.0,33.19

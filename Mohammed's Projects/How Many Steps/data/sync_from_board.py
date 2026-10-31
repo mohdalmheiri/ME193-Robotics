@@ -5,7 +5,7 @@
 - Every Person_Activity_Tnn.csv on the board goes to raw/.
 - The board's trials.csv replaces trials.csv here (the board is the master copy).
 - Prints anything that doesn't match up: a recording without a row in
-  trials.csv, a row without its recording, or a phyphox zip that's missing.
+  trials.csv, a row without its recording, or a missing phyphox recording.
 
 It finds the board with the ArduinoApps kit's deploy.py (USB first, then the
 addresses in board_secrets.py). That connection checks the board's ssh key,
@@ -75,9 +75,12 @@ def main():
         print(f"  in trials.csv but not on the board: {name}")
     for name in sorted(p.name for p in RAW_DIR.glob("*_T*.csv") if p.name not in board_files):
         print(f"  in raw/ but deleted on the board: {name}")
-    missing = [r["file"] for r in rows if not (PHONE_DIR / r["file"].replace(".csv", ".zip")).exists()]
+    # A phone recording counts as there if phone_raw/ has the trial's zip or
+    # its unzipped folder (e.g. phone_raw/Mohammed_Walk_slow_T02/)
+    missing = [r["file"] for r in rows
+               if not any((PHONE_DIR / r["file"].replace(".csv", ext)).exists() for ext in (".zip", ""))]
     if missing:
-        print(f"  {len(missing)} trials have no phyphox zip in phone_raw/ yet, e.g. {missing[0]}")
+        print(f"  {len(missing)} trials have no phyphox recording in phone_raw/ yet, e.g. {missing[0]}")
     print(f"{len(rows)} trials in trials.csv")
 
 

@@ -63,6 +63,9 @@ Same steps as above, with Phone 2 also filming:
 - [ ] **Phone 2:** turn off Personal Hotspot.
 - [ ] Laptop: `python "Mohammed's Projects/How Many Steps/data/sync_from_board.py"`
       (the board must be back on home Wi-Fi).
-- [ ] Copy the phyphox zips into `data/phone_raw/`.
-- [ ] Run the sync again: it lists any trial missing a count or a phone zip.
+- [ ] Copy the phyphox zips into `data/phone_raw/`, unzip each into its own folder, and copy
+      each folder to its trial's name.
+- [ ] Run the sync again: it lists any trial missing a count or a phone recording.
+- [ ] `python check_recordings.py` in `data/`: checks every trial, saves the real lengths,
+      makes the plots.
 - [ ] Watch the filmed trials and compare with `trials.csv`.

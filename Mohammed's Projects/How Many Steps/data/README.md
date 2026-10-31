@@ -28,16 +28,18 @@ off GitHub.
 | Path | What it holds |
 |---|---|
 | `raw/` | Ankle recordings, one CSV per trial, copied from the board by `sync_from_board.py` |
-| `phone_raw/` | phyphox exports, one zip per trial, named to match the ankle file |
+| `phone_raw/` | phyphox recordings: the exported zips, each unzipped into its own folder, plus a copy of each folder under the trial's name |
 | `trials.csv` | One row per trial with the real counts (copied from the board) |
+| `real_durations.csv` | The real length of each ankle recording (see below) |
 | `sync_from_board.py` | Copies `raw/` and `trials.csv` from the board, then lists anything missing |
+| `check_recordings.py` | Matches ankle and phone recordings, checks them for damage, finds the stomps, plots each trial to `../media/recording_checks/` |
 
 ## File names
 
 Every trial is `Person_Activity_Tnn`, for example `Mohammed_Walk_normal_T03`:
 
 - `raw/Mohammed_Walk_normal_T03.csv` from the ankle
-- `phone_raw/Mohammed_Walk_normal_T03.zip` from the phone
+- `phone_raw/Mohammed_Walk_normal_T03/` from the phone (or `.zip`)
 
 The person comes first and never contains `_` (the board turns other characters into
 `-`), and the trial number comes last, so a name splits cleanly even though some
@@ -57,6 +59,15 @@ activities contain `_`. Trial numbers count up separately for each person and ac
 100 rows per second, same columns as HW6: `time` (UTC, ISO format), `ax ay az` (g),
 `gx gy gz` (°/s), `activity`, `person`. The IMU is on the right lower leg, near the
 ankle, as in HW6.
+
+The `time` column assumes exactly 100 samples per second (start + n × 10 ms). The sketch
+really samples a little slower, about 99.0-99.7 per second, because it waits at least
+10 ms between readings and sometimes a bit more. All recordings use the same sketch, so
+they stay consistent with each other. For exact timing, `real_durations.csv` has each
+recording's real length: from its first row's time to the moment the board last wrote
+the file (Stop), with the actual samples per second. `check_recordings.py` adds new
+trials to it from the board, since the board would lose that time if a file there were
+ever changed.
 
 ## trials.csv
 
@@ -81,7 +92,12 @@ phyphox's main screen:
 - **Ankle trial GPS**: the same, plus Location, for the `Outdoor` walk only
 
 After a trial, export with **⋮ → Export Data → CSV (Comma, decimal point)**, and only then
-clear the data for the next trial (pressing ▶ again would add to the old recording). phyphox makes
+clear the data for the next trial (pressing ▶ again would add to the old recording).
+
+phyphox names the zips itself (`Steps - Motion 2026-10-31 16-59-36.zip`, the export
+time). Each zip is kept as exported and unzipped into a folder of the same name; the
+folder is then copied under the trial's name (`Mohammed_Walk_slow_T02/`), matched by start
+time. `check_recordings.py` confirms every trial-named folder starts when its trial does. phyphox makes
 a zip with one CSV per sensor (time in s from the start, then the x, y, z values;
 acceleration in m/s², rotation in rad/s) and a `meta/` folder whose `time.csv` holds the
 phone's clock time at Start. Save the zip with the trial's name. The exact menu labels
