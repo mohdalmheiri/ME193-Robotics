@@ -75,12 +75,12 @@ def main():
         print(f"  in trials.csv but not on the board: {name}")
     for name in sorted(p.name for p in RAW_DIR.glob("*_T*.csv") if p.name not in board_files):
         print(f"  in raw/ but deleted on the board: {name}")
-    # A phone recording counts as there if phone_raw/ has the trial's zip or
-    # its unzipped folder (e.g. phone_raw/Mohammed_Walk_slow_T02/)
-    missing = [r["file"] for r in rows
-               if not any((PHONE_DIR / r["file"].replace(".csv", ext)).exists() for ext in (".zip", ""))]
+    # Each trial's phone recording lives in phone_raw/<trial name>/ (the phyphox
+    # zip, unzipped); the zips themselves are kept in phone_raw/original_zips/
+    missing = [r["file"][:-4] for r in rows if not (PHONE_DIR / r["file"][:-4]).is_dir()]
     if missing:
-        print(f"  {len(missing)} trials have no phyphox recording in phone_raw/ yet, e.g. {missing[0]}")
+        print(f"  {len(missing)} trials have no phone_raw/<trial>/ folder yet, e.g. {missing[0]}/ "
+              f"(check_recordings.py says which zip goes where)")
     print(f"{len(rows)} trials in trials.csv")
 
 

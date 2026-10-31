@@ -134,7 +134,7 @@ function fillCountForm(s) {
   $('#steps').value = noSteps ? 0 : '';
   $('#distance').value = noSteps ? 0 : (s.trial.activity === 'Outdoor' ? '' : s.default_distance_m);
   $('#count-file').textContent = s.trial.file;
-  $('#phyphox-name').textContent = s.trial.file.replace(/\.csv$/, '.zip');
+  $('#phyphox-name').textContent = s.trial.file.replace(/\.csv$/, '');
   $('#count-error').textContent = '';
   if (!noSteps) $('#steps').focus();
 }

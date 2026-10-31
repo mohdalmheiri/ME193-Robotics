@@ -4,11 +4,14 @@
 
 For every trial in trials.csv:
 
-1. Finds its phone recording: each phyphox export unzipped into its own folder
-   in phone_raw/. They are matched by start time (meta/time.csv on the phone,
-   the first row's time on the ankle), and the order must agree. A folder
-   named after the trial (a copy, e.g. Mohammed_Walk_slow_T02/) counts as the
-   same recording as the original it was copied from, and must match it.
+1. Finds its phone recording. phone_raw/ holds one folder per trial, named
+   after it (e.g. Mohammed_Walk_slow_T02/, the phyphox export unzipped), and
+   the exports as phyphox named them in phone_raw/original_zips/. Recordings
+   are matched to trials by start time (meta/time.csv on the phone, the first
+   row's time on the ankle), and the order must agree. A zip that hasn't been
+   unzipped into its trial's folder yet is read straight from the zip, and
+   the script says which folder to unzip it into. It also warns if a
+   recording with GPS data (Location.csv) isn't kept off GitHub.
 2. Checks the ankle recording for signs of a bad connection (see check_ankle):
    missing samples, frozen or zero readings, readings stuck at the sensor's
    maximum, and one-sample glitches.
@@ -25,7 +28,10 @@ is checked, its real length is saved to real_durations.csv and read from
 there afterwards (the only file this script writes, besides the plots).
 """
 import csv
+import io
+import subprocess
 import sys
+import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -37,6 +43,7 @@ import numpy as np
 DATA = Path(__file__).resolve().parent
 RAW = DATA / "raw"
 PHONE = DATA / "phone_raw"
+ZIPS = PHONE / "original_zips"
 PLOTS = DATA.parent / "media" / "recording_checks"
 REAL_LENGTHS = DATA / "real_durations.csv"
 REAL_COLUMNS = ["file", "samples", "start_utc", "end_utc", "real_s", "samples_per_s"]
@@ -74,18 +81,50 @@ def load_ankle(name):
     return data, start
 
 
-def load_phone(folder):
-    """Returns the phone's start (Unix time), the accelerometer and gyroscope
-    arrays (time s, x, y, z) and the pause times, from one unzipped export."""
-    def read(path):
-        with open(path, newline="") as f:
+def load_phone(path):
+    """One phyphox export, from its unzipped folder or straight from the zip.
+    Returns the phone's start (Unix time), the accelerometer and gyroscope
+    arrays (time s, x, y, z), the pause times, and whether it has GPS data."""
+    if path.suffix == ".zip":
+        archive = zipfile.ZipFile(path)
+        names = set(archive.namelist())
+        def text(name):
+            return io.StringIO(archive.read(name).decode())
+    else:
+        names = {str(f.relative_to(path)) for f in path.rglob("*") if f.is_file()}
+        def text(name):
+            return open(path / name, newline="")
+
+    def read(name):
+        with text(name) as f:
             return np.array([[float(v) for v in row] for row in list(csv.reader(f))[1:]])
-    with open(folder / "meta" / "time.csv", newline="") as f:
+    with text("meta/time.csv") as f:
         events = list(csv.DictReader(f))
     start = float(next(e for e in events if e["event"] == "START")["system time"])
     pauses = [float(e["experiment time"]) for e in events if e["event"] == "PAUSE"]
-    return {"start": start, "acc": read(folder / "Accelerometer.csv"),
-            "gyro": read(folder / "Gyroscope.csv"), "pauses": pauses, "folder": folder.name}
+    return {"start": start, "acc": read("Accelerometer.csv"), "gyro": read("Gyroscope.csv"),
+            "pauses": pauses, "folder": path.name, "path": path, "is_zip": path.suffix == ".zip",
+            "has_gps": "Location.csv" in names}
+
+
+def all_phone_recordings():
+    """Every trial folder in phone_raw/ and every zip in original_zips/."""
+    folders = [d for d in PHONE.iterdir() if (d / "meta" / "time.csv").exists()]
+    zips = sorted(ZIPS.glob("*.zip")) if ZIPS.exists() else []
+    recordings = []
+    for p in folders + zips:
+        try:
+            recordings.append(load_phone(p))
+        except (KeyError, OSError, StopIteration, ValueError, zipfile.BadZipFile) as e:
+            # A stray or broken file shouldn't stop the check of everything else
+            print(f"  skipping {p.relative_to(DATA)}: not a readable phyphox export ({e})")
+    return recordings
+
+
+def kept_off_github(path):
+    """True if .gitignore keeps this file or folder out of git."""
+    r = subprocess.run(["git", "check-ignore", "-q", str(path)], cwd=DATA, capture_output=True)
+    return r.returncode == 0
 
 
 def board_end_times():
@@ -138,18 +177,18 @@ def real_end_times(ankles):
     return ends
 
 
-def unique_phone_recordings(folders, trial_names):
-    """One entry per phone recording. A trial-named copy and its original have
-    the same start time; keep the trial-named one (it's what the checklist
-    asks for) and remember the other folder names for the printout."""
+def unique_phone_recordings(recordings, trial_names):
+    """One entry per phone recording. A trial folder and the zip it was
+    unzipped from have the same start time: keep the trial folder (then any
+    other folder, then the zip) and remember the zip for the printout."""
     by_start = {}
-    for phone in folders:
+    for phone in recordings:
         by_start.setdefault(round(phone["start"], 3), []).append(phone)
     unique = []
     for group in by_start.values():
-        group.sort(key=lambda p: p["folder"] not in trial_names)   # trial-named first
+        group.sort(key=lambda p: (p["folder"] not in trial_names, p["is_zip"]))
         keep = group[0]
-        keep["copies"] = [p["folder"] for p in group[1:]]
+        keep["zips"] = [p["folder"] for p in group if p["is_zip"]]
         unique.append(keep)
     return sorted(unique, key=lambda p: p["start"])
 
@@ -285,8 +324,8 @@ def main():
     with open(DATA / "trials.csv", newline="") as f:
         trials = list(csv.DictReader(f))
     trial_names = {t["file"][:-4] for t in trials}
-    phones = unique_phone_recordings(
-        [load_phone(d) for d in PHONE.iterdir() if (d / "meta" / "time.csv").exists()], trial_names)
+    recordings = all_phone_recordings()
+    phones = unique_phone_recordings(recordings, trial_names)
 
     # 1. Match by start time: each ankle recording gets the phone recording that
     # started closest before it (phyphox is started first, then Start on the board)
@@ -314,11 +353,20 @@ def main():
     for p in phones:
         if p["folder"] not in used:
             print(f"  phone recording with no ankle trial: {p['folder']}")
-    # A trial-named folder must be that trial's recording (not a mislabelled copy)
     for trial, _, _, phone in matches:
         name = trial["file"][:-4]
+        # A trial folder must hold that trial's recording (not another one's)
         if name in {p["folder"] for p in phones} and (phone is None or phone["folder"] != name):
-            print(f"  phone_raw/{name}/ starts at a different time than trial {name}: wrong copy?")
+            print(f"  phone_raw/{name}/ starts at a different time than trial {name}: wrong folder?")
+        # Matched only through its zip: say where to unzip it
+        elif phone is not None and phone["is_zip"]:
+            print(f"  not unzipped yet: unzip original_zips/{phone['folder']} into phone_raw/{name}/")
+        elif phone is None:
+            print(f"  no phone recording for {name}")
+    # GPS positions must never reach GitHub, whatever the files are called
+    for p in recordings:
+        if p["has_gps"] and not kept_off_github(p["path"]):
+            print(f"  WARNING: {p['path'].relative_to(DATA)} has GPS data but isn't in .gitignore")
 
     rows = []
     for trial, data, start, phone in matches:
@@ -373,8 +421,8 @@ def main():
             print(f"  stomp ankle: at {sa['t']:.2f} s, {sa['height']:+.1f} g above 1 g, "
                   f"{sa['vs_steps']:.1f}x the biggest step after it")
         if phone:
-            copies = f" (= {', '.join(phone['copies'])})" if phone["copies"] else ""
-            print(f"  phone: {phone['folder']}{copies}, started {start - phone['start']:.1f} s before the ankle, "
+            zips = f" (from {', '.join(phone['zips'])})" if phone["zips"] else ""
+            print(f"  phone: {phone['folder']}{zips}, started {start - phone['start']:.1f} s before the ankle, "
                   f"{phone['acc'][-1, 0]:.1f} s long")
         if sp:
             print(f"  stomp phone: at {sp['t']:.2f} s, {sp['height']:+.1f} g above 1 g, "

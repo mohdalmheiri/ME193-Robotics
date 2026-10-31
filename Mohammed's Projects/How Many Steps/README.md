@@ -64,7 +64,7 @@ in [`dashboard/README.md`](dashboard/README.md).
 How Many Steps/
 ├── data/
 │   ├── raw/                     ankle recordings, one CSV per trial
-│   ├── phone_raw/               phyphox exports (zips, unzipped, and copies named by trial)
+│   ├── phone_raw/               phone recordings: one folder per trial, zips in original_zips/
 │   ├── trials.csv               real step count and distance for each trial
 │   ├── real_durations.csv       real length and sample rate of each ankle recording
 │   ├── sync_from_board.py       copies the trials from the board

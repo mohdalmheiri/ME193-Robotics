@@ -28,7 +28,7 @@ off GitHub.
 | Path | What it holds |
 |---|---|
 | `raw/` | Ankle recordings, one CSV per trial, copied from the board by `sync_from_board.py` |
-| `phone_raw/` | phyphox recordings: the exported zips, each unzipped into its own folder, plus a copy of each folder under the trial's name |
+| `phone_raw/` | phyphox recordings: one folder per trial (e.g. `Mohammed_Walk_slow_T02/`), and the exports as phyphox named them in `original_zips/` |
 | `trials.csv` | One row per trial with the real counts (copied from the board) |
 | `real_durations.csv` | The real length of each ankle recording (see below) |
 | `sync_from_board.py` | Copies `raw/` and `trials.csv` from the board, then lists anything missing |
@@ -39,7 +39,7 @@ off GitHub.
 Every trial is `Person_Activity_Tnn`, for example `Mohammed_Walk_normal_T03`:
 
 - `raw/Mohammed_Walk_normal_T03.csv` from the ankle
-- `phone_raw/Mohammed_Walk_normal_T03/` from the phone (or `.zip`)
+- `phone_raw/Mohammed_Walk_normal_T03/` from the phone (its zip, unzipped)
 
 The person comes first and never contains `_` (the board turns other characters into
 `-`), and the trial number comes last, so a name splits cleanly even though some
@@ -87,23 +87,38 @@ phyphox's built-in experiments use one sensor at a time. To get the acceleromete
 gyroscope together, make your own **simple experiment** with the **+** button on
 phyphox's main screen:
 
-- **Ankle trial**: Accelerometer (with g) and Gyroscope, rate 100 Hz (to match the ankle;
-  phyphox averages faster readings down to it, 0 would mean as fast as possible)
-- **Ankle trial GPS**: the same, plus Location, for the `Outdoor` walk only
+- **Steps - Motion**: Accelerometer (with g) and Gyroscope, rate 100 Hz (to match the
+  ankle; phyphox averages faster readings down to it, 0 would mean as fast as possible)
+- **Steps - GPS**: the same, plus Location, for the `Outdoor` walk only
 
 After a trial, export with **⋮ → Export Data → CSV (Comma, decimal point)**, and only then
-clear the data for the next trial (pressing ▶ again would add to the old recording).
+clear the data for the next trial (pressing ▶ again would add to the old recording). The
+exact menu labels can differ a little between phyphox versions and iPhone/Android.
 
-phyphox names the zips itself (`Steps - Motion 2026-10-31 16-59-36.zip`, the export
-time). Each zip is kept as exported and unzipped into a folder of the same name; the
-folder is then copied under the trial's name (`Mohammed_Walk_slow_T02/`), matched by start
-time. `check_recordings.py` confirms every trial-named folder starts when its trial does. phyphox makes
-a zip with one CSV per sensor (time in s from the start, then the x, y, z values;
-acceleration in m/s², rotation in rad/s) and a `meta/` folder whose `time.csv` holds the
-phone's clock time at Start. Save the zip with the trial's name. The exact menu labels
-can differ a little between phyphox versions and iPhone/Android.
+phyphox names each zip after the experiment and the export time
+(`Steps - Motion 2026-10-31 16-59-36.zip`). Inside are one CSV per sensor (time in s from
+the start, then x, y, z; acceleration in m/s², rotation in rad/s) and a `meta/` folder
+whose `time.csv` holds the phone's clock time at Start. The layout of `phone_raw/`:
 
-`Outdoor` zips contain GPS positions of the walk, so `.gitignore` keeps them off GitHub.
+```
+phone_raw/
+├── original_zips/             the exports exactly as phyphox named them, kept untouched
+│   └── Steps - Motion 2026-10-31 16-59-36.zip
+└── Mohammed_Walk_slow_T02/    that zip, unzipped, named after its trial
+    ├── Accelerometer.csv
+    ├── Gyroscope.csv
+    └── meta/                  device.csv, time.csv
+```
+
+Each zip is unzipped once, straight into its trial's folder; there are no other copies.
+Which zip belongs to which trial comes from the start times: `check_recordings.py` works
+it out, says where to unzip any zip that isn't unzipped yet, and confirms that every trial
+folder starts when its trial does.
+
+`Outdoor` recordings contain GPS positions of the walk, so `.gitignore` keeps them off
+GitHub: trial folders named `..._Outdoor_Tnn`, and zips whose name contains "GPS" (the
+title of the GPS experiment). `check_recordings.py` warns if any recording with GPS data
+isn't covered.
 
 ## Lining up ankle and phone: the stomp
 

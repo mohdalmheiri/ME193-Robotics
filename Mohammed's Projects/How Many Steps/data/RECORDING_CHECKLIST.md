@@ -8,8 +8,9 @@ trials.
 
 - [ ] **Phone 1:** Settings → Display & Brightness → **Auto-Lock → Never** (phyphox stops
       recording when the screen locks).
-- [ ] **Phone 1:** phyphox has the simple experiments **Ankle trial** (Accelerometer +
-      Gyroscope, 100 Hz) and **Ankle trial GPS** (the same plus Location, Outdoor only).
+- [ ] **Phone 1:** phyphox has the simple experiments **Steps - Motion** (Accelerometer +
+      Gyroscope, 100 Hz) and **Steps - GPS** (the same plus Location, Outdoor only). Keep
+      "GPS" in that title: `.gitignore` uses it to keep GPS zips off GitHub.
 - [ ] **Phone 1:** always the same phone, the same pocket and the same direction (e.g.
       right front pocket, screen facing the leg, top up). Don't change it between trials.
 - [ ] **Phone 2:** turn on Personal Hotspot and keep that settings screen open.
@@ -23,7 +24,7 @@ trials.
 
 1. **Phone 2:** pick the name and activity on the Step Recorder page. Note the
    **Next file** name.
-2. **Phone 1:** phyphox **Ankle trial**, check it's empty, press ▶. Into the pocket.
+2. **Phone 1:** phyphox **Steps - Motion**, check it's empty, press ▶. Into the pocket.
 3. **Phone 2: Start.** LED shows **R**.
 4. Stand at the start line, still for 2 s. **Stomp once, hard**, with the ankle leg. Still 1 s.
 5. Walk (or run) **one way** to the finish line, 20 m. Count your steps **silently**: every
@@ -35,7 +36,7 @@ trials.
 9. **Phone 2:** type in **Steps** and **Distance** (20, or 0 for Stand / Fidget / LegSwing),
    then **Save**. LED back to a dot. Messed up? **Discard** and redo the trial.
 10. **Phone 1: export first:** **⋮ → Export Data → CSV (Comma, decimal point)**, save to
-    Files as the name under the Save button (e.g. `Mohammed_Walk_normal_T03.zip`).
+    Files. Keep phyphox's own name; the laptop matches it by time.
 11. **Phone 1: then clear** the data (trash icon), ready for the next trial.
 
 Wrong count saved? **Delete last trial** on the page, then redo it.
@@ -53,7 +54,7 @@ Same steps as above, with Phone 2 also filming:
 
 ## Outdoor walk
 
-- **Phone 1:** use **Ankle trial GPS** and let it find a GPS fix before the stomp.
+- **Phone 1:** use **Steps - GPS** and let it find a GPS fix before the stomp.
 - Note Phone 1's step count (Health) just before Start and just after Stop.
 - Steps = the difference. Distance = Phone 1's distance (or the GPS track).
 
@@ -63,9 +64,10 @@ Same steps as above, with Phone 2 also filming:
 - [ ] **Phone 2:** turn off Personal Hotspot.
 - [ ] Laptop: `python "Mohammed's Projects/How Many Steps/data/sync_from_board.py"`
       (the board must be back on home Wi-Fi).
-- [ ] Copy the phyphox zips into `data/phone_raw/`, unzip each into its own folder, and copy
-      each folder to its trial's name.
-- [ ] Run the sync again: it lists any trial missing a count or a phone recording.
-- [ ] `python check_recordings.py` in `data/`: checks every trial, saves the real lengths,
-      makes the plots.
+- [ ] Copy the phyphox zips, as named, into `data/phone_raw/original_zips/`.
+- [ ] `python check_recordings.py` in `data/`: for each new zip it says which trial folder to
+      unzip it into (e.g. `phone_raw/Mohammed_Walk_normal_T03/`). Unzip them there.
+- [ ] Run `check_recordings.py` again: every trial should say OK. It also saves the real
+      lengths and makes the plots.
+- [ ] Run the sync again: it lists any trial still missing a count or a phone folder.
 - [ ] Watch the filmed trials and compare with `trials.csv`.
