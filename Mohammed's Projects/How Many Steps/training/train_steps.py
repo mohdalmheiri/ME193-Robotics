@@ -1,0 +1,478 @@
+"""Train and fairly test the HW7 step counter: steps per second and meters per second
+from 2-second clips of the ankle IMU (and, for comparison, the pocket phone).
+
+    python train_steps.py          (from this folder, or anywhere; takes a few minutes)
+
+What it does:
+
+1. Loads every good trial: each row of data/trials.csv that isn't listed in
+   data/excluded_trials.csv. The ankle and phone recordings are lined up on
+   the stomp, found the same way data/check_recordings.py finds it.
+2. Keeps only the moving stretch: from the ankle's first swing after the
+   stomp to its last swing at the finish (standing at the finish line would
+   otherwise be labelled with the walking rate). Zero-step trials (Stand,
+   Fidget, LegSwing) use everything after the stomp.
+3. Cuts it into 2 s clips, a new one every 0.5 s. Each clip is labelled with
+   its trial's step rate (steps / moving time) and speed (distance / moving
+   time); zero-step trials get 0 for both.
+4. Features per clip: the spread (standard deviation) and peak (largest
+   absolute value) of each channel. No averages: those mostly measure how the
+   sensor is tilted, not how you move.
+5. A small net, features -> 16 -> 16 -> 2 (steps/s, m/s), trained with mean
+   squared error until the loss flattens.
+6. Leave-one-trial-out testing: for every trial, a committee of 5 nets
+   (different random starts) is trained without it and estimates its total
+   steps and distance. The +/- is the spread between the 5 nets. Done twice:
+   ankle only, and ankle + phone. A plain peak counter is the non-neural
+   comparison.
+7. Saves the plots and tables, and step_model.npz: the ankle-only committee
+   trained on every good trial, runnable on the UNO Q with plain numpy
+   (see numpy_predict below).
+
+Outputs: ../media/train_loss.png, ../media/steps_est_vs_true.png,
+results.md (errors per pace) and results_per_trial.csv in this folder.
+"""
+import csv
+import io
+import sys
+import time
+from pathlib import Path
+
+import matplotlib
+matplotlib.use("Agg")  # save figures to files, don't open windows
+import matplotlib.pyplot as plt
+import numpy as np
+import torch
+from torch import nn
+
+HERE = Path(__file__).resolve().parent
+PROJECT = HERE.parent
+sys.path.insert(0, str(PROJECT / "data"))
+import check_recordings as cr  # noqa: E402  (the same loading and stomp finding as the checks)
+
+# ---- Settings --------------------------------------------------------------------
+RATE = cr.RATE                   # ankle samples per second (100)
+CLIP = 2 * RATE                  # 2 s clips...
+HOP = RATE // 2                  # ...a new one every 0.5 s
+MOVING_DPS = cr.MOVING_DPS       # the leg is swinging when the ankle rotates faster than this (60 deg/s)
+NO_STEP = ["Stand", "Fidget", "LegSwing"]
+PACES = ["Walk_slow", "Walk_normal", "Walk_fast", "Run"]
+CHANNELS = ["ax", "ay", "az", "gx", "gy", "gz"]
+
+N_NETS = 5                       # committee size
+HIDDEN = 16
+LEARNING_RATE = 0.01
+MAX_EPOCHS = 4000                # a full pass over the training clips per epoch
+PLATEAU_EPOCHS = 100             # "flattened" = less than PLATEAU_GAIN better than
+PLATEAU_GAIN = 0.01              # PLATEAU_EPOCHS ago (1%)
+
+# Peak counter (the non-neural comparison). Fixed in advance, not tuned on the data.
+PEAK_SMOOTH = RATE // 10         # smooth the rotation over 0.1 s first
+PEAK_DPS = 100                   # a leg swing reaches at least 100 deg/s...
+PEAK_GAP = int(0.4 * RATE)       # ...and swings of the same leg are at least 0.4 s apart
+
+# Plot colors: the first three slots of the reference categorical palette, in order
+BLUE, ORANGE, AQUA = "#2a78d6", "#eb6834", "#1baf7a"
+INK, INK_2, MUTED, GRID, AXIS = "#0b0b0b", "#52514e", "#898781", "#e1e0d9", "#c3c2b7"
+MEDIA = PROJECT / "media"
+
+
+# ---- 1-3. Loading, lining up, moving stretch -----------------------------------------
+def good_trials():
+    """The rows of trials.csv not in excluded_trials.csv. A power cut once left
+    NUL bytes in trials.csv; they're dropped as in check_recordings.py."""
+    with open(cr.DATA / "trials.csv", newline="") as f:
+        trials = list(csv.DictReader(io.StringIO(f.read().replace("\0", ""))))
+    excluded = cr.load_excluded()
+    return [t for t in trials if t["file"] not in excluded]
+
+
+def phone_on_ankle_time(phone, offset, n):
+    """The phone's 6 channels resampled onto the ankle's sample times, so a clip
+    takes the same rows from both. phone time = ankle time + offset."""
+    t = np.arange(n) / RATE + offset
+    acc, gyro = phone["acc"], phone["gyro"]
+    columns = [np.interp(t, acc[:, 0], acc[:, i]) / cr.G for i in (1, 2, 3)]          # m/s^2 -> g
+    columns += [np.interp(t, gyro[:, 0], gyro[:, i]) * 180 / np.pi for i in (1, 2, 3)]  # rad/s -> deg/s
+    return np.column_stack(columns)
+
+
+def load_trial(trial):
+    """One trial, lined up and labelled. Returns a dict with the ankle and
+    phone samples (same rows), the moving stretch [lo, hi) and the labels."""
+    name = trial["file"][:-4]
+    ankle, start = cr.load_ankle(trial["file"])
+    t = np.arange(len(ankle)) / RATE
+    stomp = cr.find_ankle_stomp(t, np.linalg.norm(ankle[:, :3], axis=1))
+
+    # The phone's stomp, looked for near where the clocks put it (as in the checks)
+    phone = cr.load_phone(cr.PHONE / name)
+    expected = start + stomp["t"] - phone["start"]
+    phone_mag = np.linalg.norm(phone["acc"][:, 1:], axis=1) / cr.G
+    phone_stomp = cr.find_stomp(phone["acc"][:, 0], phone_mag,
+                                expected - cr.PHONE_SEARCH_S, expected + cr.PHONE_SEARCH_S)
+    offset = phone_stomp["t"] - stomp["t"]
+
+    # The moving stretch
+    if trial["activity"] in NO_STEP:
+        lo, hi = stomp["i"] + RATE, len(ankle)              # 1 s after the stomp to the end
+    else:
+        after = stomp["i"] + RATE // 2                       # past the stomp's own wobble
+        swinging = np.flatnonzero(np.linalg.norm(ankle[after:, 3:], axis=1) > MOVING_DPS) + after
+        lo, hi = swinging[0], swinging[-1] + 1
+    moving_s = (hi - lo) / RATE
+    steps, distance = int(trial["steps"]), float(trial["distance_m"])
+    return {
+        "name": name, "activity": trial["activity"], "steps": steps, "distance": distance,
+        "ankle": ankle, "phone": phone_on_ankle_time(phone, offset, len(ankle)),
+        "stomp_i": stomp["i"], "lo": lo, "hi": hi, "moving_s": moving_s,
+        # step rate and speed over the moving stretch (0 for the zero-step trials)
+        "rate": 0.0 if trial["activity"] in NO_STEP else steps / moving_s,
+        "speed": 0.0 if trial["activity"] in NO_STEP else distance / moving_s,
+    }
+
+
+# ---- 3-4. Clips and features --------------------------------------------------------------
+def clip_starts(tr):
+    """Where each 2 s clip starts (sample index), every 0.5 s along the moving stretch."""
+    return list(range(tr["lo"], tr["hi"] - CLIP + 1, HOP))
+
+
+def clip_features(x):
+    """Spread and peak of each channel of one clip (rows = samples, 6 columns)."""
+    return np.concatenate([x.std(axis=0), np.abs(x).max(axis=0)])
+
+
+def feature_names(with_phone):
+    names = [f"ankle_{c}_spread" for c in CHANNELS] + [f"ankle_{c}_peak" for c in CHANNELS]
+    if with_phone:
+        names += [f"phone_{c}_spread" for c in CHANNELS] + [f"phone_{c}_peak" for c in CHANNELS]
+    return names
+
+
+def trial_clips(tr, with_phone):
+    """Features X (one row per clip) and labels y (steps/s, m/s) for one trial."""
+    rows = []
+    for s in clip_starts(tr):
+        f = clip_features(tr["ankle"][s:s + CLIP])
+        if with_phone:
+            f = np.concatenate([f, clip_features(tr["phone"][s:s + CLIP])])
+        rows.append(f)
+    X = np.array(rows)
+    y = np.tile([tr["rate"], tr["speed"]], (len(rows), 1))
+    return X, y
+
+
+def clip_seconds(tr):
+    """How many seconds of the moving stretch each clip stands for, so that
+    rate x seconds, added up, gives the trial's total. Each clip stands for the
+    0.5 s around its centre; the centres don't reach the first and last second
+    of the stretch, so the first and last clip also cover those ends."""
+    starts = np.array(clip_starts(tr))
+    centres = (starts + CLIP / 2) / RATE
+    seconds = np.full(len(starts), HOP / RATE)
+    seconds[0] += centres[0] - HOP / RATE / 2 - tr["lo"] / RATE
+    seconds[-1] += tr["hi"] / RATE - (centres[-1] + HOP / RATE / 2)
+    return seconds
+
+
+# ---- 5. The net -------------------------------------------------------------------------------
+class StepNet(nn.Module):
+    """features -> 16 -> 16 -> 2 (steps per second, meters per second)."""
+
+    def __init__(self, n_inputs):
+        super().__init__()
+        self.layers = nn.Sequential(
+            nn.Linear(n_inputs, HIDDEN), nn.ReLU(),
+            nn.Linear(HIDDEN, HIDDEN), nn.ReLU(),
+            nn.Linear(HIDDEN, 2),
+        )
+
+    def forward(self, x):
+        return self.layers(x)
+
+
+def train_net(X, y, seed, X_test=None, y_test=None):
+    """Train one net on all the clips at once (they're few) until the loss
+    flattens. The inputs are rescaled with the training clips' mean and spread
+    only. The held-out loss, if given, is only recorded for the loss plot:
+    it never decides anything. Returns the net, the rescaling, and the losses."""
+    torch.manual_seed(seed)
+    mean, std = X.mean(axis=0), X.std(axis=0) + 1e-6
+    Xt = torch.tensor((X - mean) / std, dtype=torch.float32)
+    yt = torch.tensor(y, dtype=torch.float32)
+    test = None
+    if X_test is not None:
+        test = (torch.tensor((X_test - mean) / std, dtype=torch.float32), torch.tensor(y_test, dtype=torch.float32))
+
+    net = StepNet(X.shape[1])
+    optimizer = torch.optim.Adam(net.parameters(), lr=LEARNING_RATE)
+    loss_fn = nn.MSELoss()
+    train_losses, test_losses = [], []
+    for epoch in range(MAX_EPOCHS):
+        optimizer.zero_grad()
+        loss = loss_fn(net(Xt), yt)
+        loss.backward()
+        optimizer.step()
+        train_losses.append(loss.item())
+        if test is not None:
+            with torch.no_grad():
+                test_losses.append(loss_fn(net(test[0]), test[1]).item())
+        # Flattened: barely better than PLATEAU_EPOCHS ago
+        if epoch >= PLATEAU_EPOCHS:
+            before = train_losses[-PLATEAU_EPOCHS - 1]
+            if before - train_losses[-1] < PLATEAU_GAIN * before:
+                break
+    return net, mean, std, train_losses, test_losses
+
+
+def predict(net, mean, std, X):
+    """Steps/s and m/s for each clip. Neither can be negative, so below 0 -> 0."""
+    with torch.no_grad():
+        out = net(torch.tensor((X - mean) / std, dtype=torch.float32)).numpy()
+    return np.maximum(out, 0)
+
+
+# ---- 6. Fair testing ------------------------------------------------------------------------
+def leave_one_trial_out(trials, with_phone):
+    """For each trial: train a committee without it, then estimate its totals.
+    Returns one result per trial, and the loss curves for the plot."""
+    clips = [trial_clips(tr, with_phone) for tr in trials]
+    results, curves = [], []
+    for i, tr in enumerate(trials):
+        X = np.vstack([c[0] for j, c in enumerate(clips) if j != i])
+        y = np.vstack([c[1] for j, c in enumerate(clips) if j != i])
+        seconds = clip_seconds(tr)
+        totals = []
+        for k in range(N_NETS):
+            net, mean, std, train_l, test_l = train_net(X, y, seed=1000 * i + k, X_test=clips[i][0], y_test=clips[i][1])
+            out = predict(net, mean, std, clips[i][0])
+            totals.append((out * seconds[:, None]).sum(axis=0))   # rate x seconds, added up
+            curves.append((train_l, test_l))
+        totals = np.array(totals)                                  # rows: nets; columns: steps, meters
+        results.append({
+            "steps_est": totals[:, 0].mean(), "steps_pm": totals[:, 0].std(),
+            "dist_est": totals[:, 1].mean(), "dist_pm": totals[:, 1].std(),
+        })
+        print(f"  {'ankle + phone' if with_phone else 'ankle only'}: {i + 1}/{len(trials)} {tr['name']}: "
+              f"{results[-1]['steps_est']:.1f} +/- {results[-1]['steps_pm']:.1f} steps (true {tr['steps']})", flush=True)
+    return results, curves
+
+
+def peak_count(tr):
+    """The non-neural step counter. Each swing of the right leg (the one with
+    the sensor) makes one big rotation peak around the leg's main swing axis,
+    so steps = 2 x the peaks. Runs on everything after the stomp; it doesn't
+    need the moving stretch or any training."""
+    g = tr["ankle"][tr["stomp_i"] + RATE // 2:, 3:]
+    # The main swing axis: the direction with the most rotation (no labels used)
+    values, vectors = np.linalg.eigh(np.cov(g.T))
+    swing = g @ vectors[:, -1]
+    if swing.max() < -swing.min():
+        swing = -swing                       # make the big mid-swing peaks positive
+    swing = np.convolve(swing, np.ones(PEAK_SMOOTH) / PEAK_SMOOTH, mode="same")
+    peaks = [i for i in range(1, len(swing) - 1)
+             if swing[i] > PEAK_DPS and swing[i] >= swing[i - 1] and swing[i] > swing[i + 1]]
+    kept = []                                # the highest peak within each 0.4 s
+    for p in peaks:
+        if kept and p - kept[-1] < PEAK_GAP:
+            if swing[p] > swing[kept[-1]]:
+                kept[-1] = p
+        else:
+            kept.append(p)
+    return 2 * len(kept)
+
+
+# ---- 7. The model for the UNO Q -----------------------------------------------------------------
+def save_for_board(nets, path):
+    """The committee's weights, rescaling and settings as plain numpy arrays.
+    Each net was trained with its own rescaling, so mean/std are per net too."""
+    arrays = {"feature_names": np.array(feature_names(False)), "clip_samples": CLIP,
+              "hop_samples": HOP, "rate_hz": RATE, "outputs": np.array(["steps_per_s", "meters_per_s"])}
+    for key, index in [("W1", 0), ("W2", 2), ("W3", 4)]:
+        arrays[key] = np.stack([n.layers[index].weight.detach().numpy() for n, _, _ in nets])
+        arrays["b" + key[1]] = np.stack([n.layers[index].bias.detach().numpy() for n, _, _ in nets])
+    arrays["mean"] = np.stack([m for _, m, _ in nets])
+    arrays["std"] = np.stack([s for _, _, s in nets])
+    np.savez(path, **arrays)
+
+
+def numpy_predict(model, features):
+    """What the UNO Q runs: plain numpy, no PyTorch. model = np.load("step_model.npz");
+    features = one row per clip (clip_features of the 6 ankle channels). Returns
+    the committee average and spread of (steps/s, m/s) for each clip."""
+    outputs = []
+    for k in range(len(model["W1"])):
+        h = (features - model["mean"][k]) / model["std"][k]
+        h = np.maximum(h @ model["W1"][k].T + model["b1"][k], 0)    # ReLU
+        h = np.maximum(h @ model["W2"][k].T + model["b2"][k], 0)
+        outputs.append(np.maximum(h @ model["W3"][k].T + model["b3"][k], 0))
+    outputs = np.array(outputs)
+    return outputs.mean(axis=0), outputs.std(axis=0)
+
+
+# ---- Plots and tables -----------------------------------------------------------------------------
+def style(ax):
+    ax.set_facecolor("#fcfcfb")
+    ax.grid(color=GRID, lw=0.8)
+    ax.tick_params(colors=MUTED, labelcolor=INK_2)
+    for side in ("top", "right"):
+        ax.spines[side].set_visible(False)
+    for side in ("left", "bottom"):
+        ax.spines[side].set_color(AXIS)
+
+
+def plot_losses(curves_by_version, path):
+    """Median training and held-out loss across all leave-one-out nets, per
+    version. Each net stops at its own epoch; the curves end where half the
+    nets have stopped, since past that a few nets would decide the median."""
+    fig, axes = plt.subplots(1, 2, figsize=(11, 4), sharey=True, facecolor="#fcfcfb")
+    for ax, (label, curves) in zip(axes, curves_by_version.items()):
+        stops = np.array([len(c[0]) for c in curves])
+        end = int(np.median(stops))
+        def median(which):
+            padded = np.full((len(curves), end), np.nan)
+            for r, c in enumerate(curves):
+                padded[r, :min(end, len(c[which]))] = c[which][:end]
+            return np.nanmedian(padded, axis=0)
+        ax.plot(median(0), color=BLUE, lw=2, label="training trials")
+        ax.plot(median(1), color=ORANGE, lw=2, label="held-out trial (not used to stop)")
+        ax.set_yscale("log")
+        ax.set_title(f"{label}: nets stop at epoch {stops.min()}-{stops.max()} (median {end})",
+                     loc="left", color=INK, fontsize=11)
+        ax.set_xlabel("Epoch", color=INK_2)
+        style(ax)
+    axes[0].set_ylabel("Mean squared error (log scale)", color=INK_2)
+    axes[0].legend(frameon=False, labelcolor=INK_2)
+    fig.suptitle("Loss while training, leave-one-trial-out (median over all nets, up to the median stop)",
+                 x=0.01, ha="left", color=INK)
+    fig.tight_layout()
+    fig.savefig(path, dpi=120, facecolor=fig.get_facecolor())
+    plt.close(fig)
+
+
+def plot_estimates(trials, res_ankle, res_both, peaks, path):
+    """Left: estimated vs true total steps for every held-out trial. Right: the
+    estimated distance per trial, grouped by pace (every walk and run is 20 m)."""
+    true_steps = np.array([tr["steps"] for tr in trials])
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5.4), facecolor="#fcfcfb", gridspec_kw={"width_ratios": [1.15, 1]})
+    top = 70                                           # zoomed on the trials; anything above is labelled
+    ax = axes[0]
+    series = [("ankle only (net)", res_ankle, BLUE, "o", -0.6), ("ankle + phone (net)", res_both, ORANGE, "s", 0.6)]
+    for label, res, color, marker, dx in series:       # side by side, so the markers don't hide each other
+        ax.errorbar(true_steps + dx, [r["steps_est"] for r in res], yerr=[r["steps_pm"] for r in res],
+                    fmt=marker, ms=7, color=color, mec="#fcfcfb", mew=1, elinewidth=1.2, capsize=2, label=label)
+    shown = np.minimum(peaks, top - 2)
+    ax.plot(true_steps, shown, "^", ms=7, color=AQUA, mec="#fcfcfb", mew=1, label="peak counter (no net)")
+    for x, p in zip(true_steps, peaks):
+        if p > top - 2:
+            ax.annotate(f"peak counter: {p} (off the chart)", (x, top - 2), xytext=(8, -4),
+                        textcoords="offset points", color=INK_2, fontsize=9)
+    ax.plot([0, top], [0, top], color=MUTED, lw=1, ls="--", zorder=0)
+    ax.text(44, 41, "perfect", color=MUTED, fontsize=9, ha="right")
+    ax.set_xlim(-3, 45)
+    ax.set_ylim(-3, top)
+    ax.set_xlabel("True steps", color=INK_2)
+    ax.set_ylabel("Estimated steps", color=INK_2)
+    ax.set_title("Total steps per held-out trial", loc="left", color=INK, fontsize=11)
+    ax.legend(frameon=False, labelcolor=INK_2, loc="lower right")
+    style(ax)
+
+    ax = axes[1]
+    groups = PACES + ["Zero-step"]
+    for gi, g in enumerate(groups):
+        idx = [i for i, tr in enumerate(trials) if tr["activity"] == g or (g == "Zero-step" and tr["activity"] in NO_STEP)]
+        truth = 0 if g == "Zero-step" else 20
+        ax.plot([gi - 0.35, gi + 0.35], [truth, truth], color=MUTED, lw=1, ls="--", zorder=0)
+        for label, res, color, marker, dx in series:
+            ax.errorbar(np.full(len(idx), gi + dx / 4), [res[i]["dist_est"] for i in idx],
+                        yerr=[res[i]["dist_pm"] for i in idx], fmt=marker, ms=6, color=color, mec="#fcfcfb",
+                        mew=1, elinewidth=1, capsize=2, alpha=0.9)
+    ax.set_xticks(range(len(groups)), [g.replace("_", "\n").replace("-", "-\n") for g in groups], color=INK_2)
+    ax.set_ylabel("Estimated distance (m)", color=INK_2)
+    ax.set_title("Distance per held-out trial (dashed: the truth)", loc="left", color=INK, fontsize=11)
+    style(ax)
+    fig.text(0.01, 0.01, "Error bars: spread between the 5 nets of each committee. The peak counter only counts steps. "
+             "Zero-step trials (Stand, Fidget, LegSwing) have 0 true steps.", color=MUTED, fontsize=9)
+    fig.tight_layout(rect=(0, 0.04, 1, 1))
+    fig.savefig(path, dpi=120, facecolor=fig.get_facecolor())
+    plt.close(fig)
+
+
+def error_table(trials, res_ankle, res_both, peaks):
+    """Errors per pace, as a markdown table: mean absolute error, and as a % of the truth."""
+    groups = PACES + ["Zero-step"]
+    lines = ["| Pace | Trials | Steps error: ankle only | Steps error: ankle + phone | Steps error: peak counter "
+             "| Distance error: ankle only | Distance error: ankle + phone | Typical +/- (ankle only) |",
+             "|---|---|---|---|---|---|---|---|"]
+    for g in groups + ["All"]:
+        idx = [i for i, tr in enumerate(trials)
+               if g == "All" or tr["activity"] == g or (g == "Zero-step" and tr["activity"] in NO_STEP)]
+        steps = np.array([trials[i]["steps"] for i in idx], float)
+        dist = np.array([trials[i]["distance"] for i in idx], float)
+
+        def err(est, truth):
+            e = np.abs(np.array(est) - truth)
+            pct = f" ({100 * e.sum() / truth.sum():.1f}%)" if truth.sum() > 0 else ""
+            return f"{e.mean():.1f}{pct}"
+        lines.append(f"| {g} | {len(idx)} "
+                     f"| {err([res_ankle[i]['steps_est'] for i in idx], steps)} "
+                     f"| {err([res_both[i]['steps_est'] for i in idx], steps)} "
+                     f"| {err([peaks[i] for i in idx], steps)} "
+                     f"| {err([res_ankle[i]['dist_est'] for i in idx], dist)} m "
+                     f"| {err([res_both[i]['dist_est'] for i in idx], dist)} m "
+                     f"| {np.mean([res_ankle[i]['steps_pm'] for i in idx]):.1f} steps, "
+                     f"{np.mean([res_ankle[i]['dist_pm'] for i in idx]):.1f} m |")
+    return "\n".join(lines)
+
+
+# ---- Main -------------------------------------------------------------------------------------------
+def main():
+    begin = time.time()
+    trials = [load_trial(t) for t in good_trials()]
+    n_clips = sum(len(clip_starts(tr)) for tr in trials)
+    print(f"{len(trials)} good trials, {n_clips} clips")
+
+    res_ankle, curves_ankle = leave_one_trial_out(trials, with_phone=False)
+    res_both, curves_both = leave_one_trial_out(trials, with_phone=True)
+    peaks = [peak_count(tr) for tr in trials]
+
+    # Per-trial results
+    with open(HERE / "results_per_trial.csv", "w", newline="") as f:
+        w = csv.writer(f)
+        w.writerow(["trial", "activity", "true_steps", "ankle_steps", "ankle_steps_pm", "both_steps", "both_steps_pm",
+                    "peak_steps", "true_m", "ankle_m", "ankle_m_pm", "both_m", "both_m_pm"])
+        for tr, a, b, p in zip(trials, res_ankle, res_both, peaks):
+            w.writerow([tr["name"], tr["activity"], tr["steps"], f"{a['steps_est']:.1f}", f"{a['steps_pm']:.1f}",
+                        f"{b['steps_est']:.1f}", f"{b['steps_pm']:.1f}", p, tr["distance"],
+                        f"{a['dist_est']:.1f}", f"{a['dist_pm']:.1f}", f"{b['dist_est']:.1f}", f"{b['dist_pm']:.1f}"])
+
+    table = error_table(trials, res_ankle, res_both, peaks)
+    with open(HERE / "results.md", "w") as f:
+        f.write("# Step counter: leave-one-trial-out results\n\n"
+                f"Written by `train_steps.py`. {len(trials)} good trials, {n_clips} clips of 2 s. Each trial's "
+                f"totals come from a committee of {N_NETS} nets trained without it. Errors are the mean absolute "
+                "error per trial, and in brackets the total error as a % of the true total. The +/- is the spread "
+                "between the committee's nets.\n\n" + table + "\n")
+    print("\n" + table)
+
+    plot_losses({"Ankle only": curves_ankle, "Ankle + phone": curves_both}, MEDIA / "train_loss.png")
+    plot_estimates(trials, res_ankle, res_both, peaks, MEDIA / "steps_est_vs_true.png")
+
+    # The model for the UNO Q: the ankle-only committee, trained on every good trial
+    X = np.vstack([trial_clips(tr, False)[0] for tr in trials])
+    y = np.vstack([trial_clips(tr, False)[1] for tr in trials])
+    nets = []
+    for k in range(N_NETS):
+        net, mean, std, _, _ = train_net(X, y, seed=k)
+        nets.append((net, mean, std))
+    save_for_board(nets, HERE / "step_model.npz")
+    # Check the numpy version gives the same answers as PyTorch
+    torch_avg = np.mean([predict(n, m, s, X) for n, m, s in nets], axis=0)
+    numpy_avg, _ = numpy_predict(np.load(HERE / "step_model.npz"), X)
+    print(f"\nSaved step_model.npz; numpy vs PyTorch, largest difference: {np.abs(torch_avg - numpy_avg).max():.2e}")
+    print(f"Done in {(time.time() - begin) / 60:.1f} min")
+
+
+if __name__ == "__main__":
+    main()

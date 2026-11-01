@@ -7,9 +7,9 @@ count and a distance, shown live on a dashboard.
 
 ## How it works
 
-The project is just starting, so this section will grow as the parts are built. So far
-there is a practice run on the HW6 data, a live dashboard running on fake data, and the
-recorder for counted trials.
+This section grows as the parts are built. So far there is a practice run on the HW6
+data, a live dashboard running on fake data, the recorder for counted trials, and the
+step counter trained on them.
 
 ### Recording counted trials
 
@@ -22,6 +22,29 @@ same time the phone records its own accelerometer and gyroscope in a pocket with
 so the two recordings can be lined up later. `data/sync_from_board.py` copies the trials
 to the laptop. Naming, columns and phyphox setup are in
 [`data/README.md`](data/README.md).
+
+### The step counter
+
+`training/train_steps.py` trains the step counter on every good trial (each row of
+`data/trials.csv` not listed in `data/excluded_trials.csv`) and tests it fairly:
+
+1. Line up each ankle and phone recording on the stomp, and keep the moving stretch: from
+   the ankle's first swing after the stomp to its last swing at the finish. Stand, Fidget
+   and LegSwing keep everything after the stomp.
+2. Cut it into 2 s clips, a new one every 0.5 s. Each clip's labels are its trial's step
+   rate (steps ÷ moving time) and speed (distance ÷ moving time), 0 for the zero-step
+   trials.
+3. Describe each clip by the spread and peak of each channel: 12 numbers for the ankle,
+   24 with the phone. No averages, since they mostly measure how the sensor is tilted.
+4. Train a net, features → 16 → 16 → 2 (steps/s, m/s), with mean squared error, inputs
+   rescaled on the training trials only, until the loss flattens.
+5. Leave one trial out at a time: a committee of 5 nets trained without it estimates the
+   trial's total steps and distance (rate × 0.5 s, added up over its clips), with the
+   spread between the 5 as the ±. Done for ankle only and for ankle + phone, next to a
+   plain peak counter (2 × the right leg's swings).
+6. Save the plots, the error table (`training/results.md`) and `training/step_model.npz`:
+   the ankle-only committee trained on all good trials, which runs with plain numpy
+   (`numpy_predict` in the script), so the UNO Q doesn't need PyTorch.
 
 ### Practice: activity classifier on HW6 data
 
@@ -66,12 +89,17 @@ How Many Steps/
 │   ├── raw/                     ankle recordings, one CSV per trial
 │   ├── phone_raw/               phone recordings: one folder per trial, zips in original_zips/
 │   ├── trials.csv               real step count and distance for each trial
+│   ├── excluded_trials.csv      damaged trials left out of training, with the reason
 │   ├── real_durations.csv       real length and sample rate of each ankle recording
 │   ├── sync_from_board.py       copies the trials from the board
 │   ├── check_recordings.py      damage checks, stomp alignment, one plot per trial
 │   ├── RECORDING_CHECKLIST.md   step by step, for the phone during recording
 │   └── README.md                naming, columns, phyphox setup, the stomp
 ├── training/
+│   ├── train_steps.py           the step counter: training and leave-one-trial-out test
+│   ├── step_model.npz           trained ankle-only committee, for plain numpy on the UNO Q
+│   ├── results.md               errors per pace
+│   ├── results_per_trial.csv    every held-out trial's estimates
 │   ├── practice_classifier.py   practice net on the HW6 data
 │   └── requirements.txt         laptop packages for training
 ├── uno_q/                       Step Recorder app for the UNO Q (see its README)
@@ -80,6 +108,8 @@ How Many Steps/
 │   ├── fake_publisher.py        fake data until the hardware exists
 │   └── README.md                the MQTT message format
 └── media/
+    ├── train_loss.png           step counter's loss while training
+    ├── steps_est_vs_true.png    estimated vs true steps and distance, per held-out trial
     ├── practice_loss.png        loss curve from the practice run
     └── recording_checks/        one plot per trial: ankle and phone, lined up on the stomp
 ```
@@ -91,7 +121,8 @@ From the repo root, with `.venv` active:
 ```
 pip install -r "Mohammed's Projects/How Many Steps/training/requirements.txt"
 cd "Mohammed's Projects/How Many Steps/training"
-python practice_classifier.py
+python train_steps.py            # step counter, about 1.5 min
+python practice_classifier.py    # practice run on the HW6 data
 ```
 
 Dashboard on fake data (from the repo root; `paho-mqtt` is in
@@ -119,8 +150,17 @@ python "Mohammed's Projects/How Many Steps/data/sync_from_board.py"
   there, so deleting them would reuse numbers.
 - `Outdoor` phone zips contain GPS positions, so they are kept off GitHub.
 
-- The settings (clip length, hidden layer size, epochs, learning rate, random seed) are
-  constants at the top of `practice_classifier.py`.
+- Step counter, leave-one-trial-out (`training/results.md` has the full table): on walks
+  and runs the ankle-only net is off by about 0.6 steps per trial (1.5-4%) and 0.4-1.1 m
+  of 20 m. The peak counter does well on most walks but double-counts some fast walks and
+  overcounts runs (41% and 13% off). The phone barely changes walks and runs. The weak
+  spot is LegSwing: with only two LegSwing trials, the net trained on one calls the other
+  61 steps. The committee's ± is smaller than the real errors, so it understates the
+  uncertainty. More LegSwing trials would help most.
+- The step counter's settings (clip length, layer size, learning rate, when to stop, the
+  peak counter's thresholds) are constants at the top of `train_steps.py`.
+- The practice run's settings (clip length, hidden layer size, epochs, learning rate,
+  random seed) are constants at the top of `practice_classifier.py`.
 - With only 4 test recordings, the accuracy depends a lot on which recordings are held
   out. The default seed scores 100%, but other seeds range from 58% to 98%. Testing on
   every recording in turn (leave-one-recording-out) gives 88.5% with all 18 features and
