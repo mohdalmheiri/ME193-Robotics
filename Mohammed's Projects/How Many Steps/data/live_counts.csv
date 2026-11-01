@@ -2,3 +2,5 @@ file,live_steps,live_steps_unc,live_distance_m,live_distance_unc
 Mohammed_Test_T01.csv,48.5,2.4,30.17,1.53
 Mohammed_Test_T02.csv,34.6,1.4,22.68,0.97
 Mohammed_Test_T03.csv,61.5,2.1,37.27,1.44
+Mohammed_Test_T04.csv,0.1,4.5,0.19,2.59
+Mohammed_Test_T05.csv,0.2,4.5,0.35,2.59
