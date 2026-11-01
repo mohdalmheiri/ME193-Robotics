@@ -17,6 +17,9 @@ For every trial in trials.csv:
    maximum, and one-sample glitches.
 3. Finds the stomp at the start, in the ankle and in the phone recording.
 4. Saves one plot per trial to ../media/recording_checks/.
+5. Marks the trials listed in excluded_trials.csv (left out of training, with
+   the reason), then counts the trials left for training per activity and
+   lists any trial with problems that isn't excluded yet.
 
 The ankle CSV's time column can't show missing samples: the board writes
 start + n x 10 ms, whatever really happened. So the real length of each
@@ -47,6 +50,7 @@ ZIPS = PHONE / "original_zips"
 PLOTS = DATA.parent / "media" / "recording_checks"
 REAL_LENGTHS = DATA / "real_durations.csv"
 REAL_COLUMNS = ["file", "samples", "start_utc", "end_utc", "real_s", "samples_per_s"]
+EXCLUDED = DATA / "excluded_trials.csv"   # trials left out of training: file, reason
 KIT_TOOLS = Path.home() / "Documents" / "GitHub" / "ArduinoApps" / "tools"
 REMOTE_DIR = "/home/arduino/ArduinoApps/step-recorder/python/recordings"
 
@@ -66,16 +70,23 @@ GLITCH_ACC = 2.0                 # g: a lone sample this far from both neighbour
 GLITCH_GYRO = 300.0              # deg/s: ...while the neighbours agree = a glitch, not movement
 STOMP_SEARCH_S = 15              # look for the stomp in the first 15 s of the ankle recording
 STOMP_MIN_G = 2.0                # the stomp must reach |a| >= 1 g + this...
-STOMP_DOMINANCE = 2.0            # ...and be this many times bigger than any step that follows
+STOMP_DOMINANCE = 2.0            # ...and be this many times bigger than anything in the second before it
+STOMP_AFTER_FIRST_S = 1.0        # ankle: the stomp is the biggest spike this soon after the first one over the minimum
+PHONE_SEARCH_S = 1.0             # phone: look this far either side of where the clocks put the stomp
 STOMP_CLOCK_S = 0.5              # the phone's stomp must be within this of where the clocks put it
 NEAR_STOMP_S = 0.1               # glitches/at-max readings this close to the stomp are the impact itself
 SLOWEST_RATE = 98.5              # samples/s; the sketch normally runs at ~99.3 (it waits >= 10 ms per sample)
+SHORTEST_S = 5                   # even a 20 m run (stand, stomp, run, stand) takes longer than this
 
 
 # ---- Loading ------------------------------------------------------------------
 def load_ankle(name):
+    """The samples and the start (Unix time). A recording with no samples
+    (only the header: the sensor sent nothing) has no start: None."""
     with open(RAW / name, newline="") as f:
         rows = list(csv.DictReader(f))
+    if not rows:
+        return None, None
     data = np.array([[float(r[c]) for c in CHANNELS] for r in rows])
     start = datetime.fromisoformat(rows[0]["time"]).timestamp()
     return data, start
@@ -119,6 +130,14 @@ def all_phone_recordings():
             # A stray or broken file shouldn't stop the check of everything else
             print(f"  skipping {p.relative_to(DATA)}: not a readable phyphox export ({e})")
     return recordings
+
+
+def load_excluded():
+    """{file: reason} for the trials left out of training ({} if no list yet)."""
+    if not EXCLUDED.exists():
+        return {}
+    with open(EXCLUDED, newline="") as f:
+        return {r["file"]: r["reason"] for r in csv.DictReader(f)}
 
 
 def kept_off_github(path):
@@ -259,27 +278,39 @@ def check_ankle(data, start, end_time, stomp_index):
 
 
 # ---- 3. The stomp -------------------------------------------------------------------
-def find_stomp(t, mag, t_from, t_to, compare_to):
+def find_stomp(t, mag, t_from, t_to):
     """The stomp = the biggest |a| between t_from and t_to (s). Returns its
-    index, time, height above 1 g, and how many times bigger it is than the
-    biggest peak in the compare_to time range (the trial itself, after the
-    stomp). For the phone that range leaves out putting it into and taking it
-    out of the pocket, which shake it more than walking does."""
+    index, time, height above 1 g, and how many times bigger it is than
+    anything in the second before it (standing still at the start line)."""
     window = (t >= t_from) & (t <= t_to)
     if not window.any():
         return None
     i = np.flatnonzero(window)[np.argmax(mag[window])]
-    later = mag[(t > t[i] + 0.5) & (t >= compare_to[0]) & (t <= compare_to[1])]
-    biggest_later = later.max() - 1 if len(later) else 0
+    # Up to 0.1 s before the stomp is the leg coming down for it, not standing
+    before = mag[(t >= t[i] - 1) & (t < t[i] - 0.1)]
+    biggest_before = before.max() - 1 if len(before) else 0
     return {"i": int(i), "t": float(t[i]), "height": float(mag[i] - 1),
-            # floor of 0.1 g: when nothing moves after the stomp (Stand), the
-            # ratio would otherwise divide by almost nothing
-            "vs_steps": float((mag[i] - 1) / max(biggest_later, 0.1))}
+            # floor of 0.1 g: standing perfectly still, the ratio would
+            # otherwise divide by almost nothing
+            "vs_before": float((mag[i] - 1) / max(biggest_before, 0.1))}
+
+
+def find_ankle_stomp(t, mag):
+    """The stomp is the first big thing the ankle does, but a fast step or a
+    running stride can be just as big, so it can't simply be the biggest
+    spike. Take the first spike over the minimum, then the biggest one within
+    STOMP_AFTER_FIRST_S of it (lifting the leg for the stomp can make a smaller
+    spike just before it)."""
+    over = np.flatnonzero((mag >= 1 + STOMP_MIN_G) & (t <= STOMP_SEARCH_S))
+    if not len(over):
+        return None
+    first = t[over[0]]
+    return find_stomp(t, mag, first, first + STOMP_AFTER_FIRST_S)
 
 
 def stomp_is_clear(s):
-    """Clear = a big spike that stands well above every step after it."""
-    return s is not None and s["height"] >= STOMP_MIN_G and s["vs_steps"] >= STOMP_DOMINANCE
+    """Clear = a big spike that stands well above the standing still before it."""
+    return s is not None and s["height"] >= STOMP_MIN_G and s["vs_before"] >= STOMP_DOMINANCE
 
 
 # ---- 4. Plot ---------------------------------------------------------------------------
@@ -329,10 +360,13 @@ def main():
 
     # 1. Match by start time: each ankle recording gets the phone recording that
     # started closest before it (phyphox is started first, then Start on the board)
-    ankles = []
+    ankles, empty = [], []
     for trial in trials:
         data, start = load_ankle(trial["file"])
-        ankles.append((trial, data, start))
+        if data is None:
+            empty.append(trial["file"][:-4])   # nothing to check or match
+        else:
+            ankles.append((trial, data, start))
     ankles.sort(key=lambda a: a[2])
     ends = real_end_times(ankles)
     used, matches = set(), []
@@ -350,6 +384,14 @@ def main():
 
     print(f"{len(trials)} ankle recordings, {len(phones)} phone recordings, "
           f"order {'agrees' if order_ok else 'DOES NOT agree'}")
+    excluded = load_excluded()
+    for name in excluded:
+        if not (RAW / name).exists():
+            print(f"  excluded_trials.csv lists {name}, but there's no such recording in raw/: typo?")
+    for name in empty:
+        if name + ".csv" not in excluded:
+            print(f"  no samples at all (header only, the sensor sent nothing): {name}, "
+                  "not in excluded_trials.csv yet")
     for p in phones:
         if p["folder"] not in used:
             print(f"  phone recording with no ankle trial: {p['folder']}")
@@ -372,22 +414,26 @@ def main():
     for trial, data, start, phone in matches:
         mag = np.linalg.norm(data[:, :3], axis=1)
         t = np.arange(len(data)) / RATE
-        s_ankle = find_stomp(t, mag, 0, STOMP_SEARCH_S, (0, t[-1]))
+        s_ankle = find_ankle_stomp(t, mag)
         q = check_ankle(data, start, ends.get(trial["file"]), s_ankle["i"] if s_ankle else None)
 
         s_phone = offset = None
         if phone is not None and s_ankle is not None:
             # Where the stomp should be in the phone recording, from the two
-            # clocks; then look within 3 s of that for the phone's own peak
+            # clocks (they agree to ~0.2 s); then look within PHONE_SEARCH_S
+            # of that for the phone's own peak. Any wider and putting the
+            # phone in the pocket, which can shake it harder than the stomp,
+            # gets picked instead.
             expected = start + s_ankle["t"] - phone["start"]
-            ankle_end = start + t[-1] - phone["start"]    # the trial's end, in phone time
             tp = phone["acc"][:, 0]
             s_phone = find_stomp(tp, np.linalg.norm(phone["acc"][:, 1:], axis=1) / G,
-                                 expected - 3, expected + 3, (expected, ankle_end - 1))
+                                 expected - PHONE_SEARCH_S, expected + PHONE_SEARCH_S)
             if s_phone:
                 offset = s_phone["t"]
                 s_phone["clock"] = s_phone["t"] - expected   # phone clock minus board clock
         problems = []
+        if q["length_s"] < SHORTEST_S:
+            problems.append(f"only {q['length_s']:.1f} s long (cut short)")
         if q.get("rate", RATE) < SLOWEST_RATE:
             problems.append(f"only {q['rate']:.1f} samples/s")
         if q["longest_frozen"] >= FROZEN_SAMPLES:
@@ -400,14 +446,19 @@ def main():
             problems.append("gravity off while still")
         if not stomp_is_clear(s_ankle):
             problems.append("ankle stomp unclear")
-        if phone is not None and not (stomp_is_clear(s_phone) and abs(s_phone["clock"]) < STOMP_CLOCK_S):
+        # The phone goes into the pocket just before the stomp, so it isn't
+        # quiet beforehand; landing where the clocks put it is the check
+        if phone is not None and not (s_phone and s_phone["height"] >= STOMP_MIN_G
+                                      and abs(s_phone["clock"]) < STOMP_CLOCK_S):
             problems.append("phone stomp unclear")
         verdict = "OK" if not problems else "; ".join(problems)
+        if trial["file"] in excluded:
+            verdict += f"  [EXCLUDED: {excluded[trial['file']]}]"
         plot_trial(trial, data, phone, s_ankle, offset, verdict)
-        rows.append((trial, q, phone, s_ankle, s_phone, start, verdict))
+        rows.append((trial, q, phone, s_ankle, s_phone, start, verdict, problems))
 
     # The printout: one block per trial
-    for trial, q, phone, sa, sp, start, verdict in rows:
+    for trial, q, phone, sa, sp, start, verdict, _ in rows:
         print(f"\n{trial['file']}  ({trial['activity']}, {trial['steps']} steps)  ->  {verdict}")
         real = f", real length {q['real_s']:.2f} s -> {q['rate']:.1f} samples/s" if "real_s" in q else ""
         print(f"  ankle: {q['samples']} samples = {q['length_s']:.2f} s{real}")
@@ -419,14 +470,25 @@ def main():
               + (f"{g[0]:.3f}-{g[1]:.3f} g" if g else "n/a"))
         if sa:
             print(f"  stomp ankle: at {sa['t']:.2f} s, {sa['height']:+.1f} g above 1 g, "
-                  f"{sa['vs_steps']:.1f}x the biggest step after it")
+                  f"{sa['vs_before']:.1f}x anything in the second before it")
         if phone:
             zips = f" (from {', '.join(phone['zips'])})" if phone["zips"] else ""
             print(f"  phone: {phone['folder']}{zips}, started {start - phone['start']:.1f} s before the ankle, "
                   f"{phone['acc'][-1, 0]:.1f} s long")
         if sp:
             print(f"  stomp phone: at {sp['t']:.2f} s, {sp['height']:+.1f} g above 1 g, "
-                  f"{sp['vs_steps']:.1f}x the biggest step after it; phone clock vs board {sp['clock']:+.2f} s")
+                  f"{sp['vs_before']:.1f}x anything in the second before it; phone clock vs board {sp['clock']:+.2f} s")
+
+    # 5. What's left for training
+    kept = [t for t in trials if t["file"] not in excluded]
+    print(f"\nFor training: {len(kept)} trials ({len(trials) - len(kept)} in trials.csv excluded)")
+    for activity in dict.fromkeys(t["activity"] for t in trials):
+        print(f"  {activity}: {sum(t['activity'] == activity for t in kept)}")
+    flagged = [(t["file"], p) for t, *_, p in rows if p and t["file"] not in excluded]
+    if flagged:
+        print("Kept for training although flagged above (add to excluded_trials.csv if they're bad):")
+        for name, p in flagged:
+            print(f"  {name}: {'; '.join(p)}")
     print(f"\nPlots in {PLOTS.relative_to(DATA.parent)}/")
 
 

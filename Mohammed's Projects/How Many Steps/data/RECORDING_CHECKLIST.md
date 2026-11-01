@@ -68,6 +68,8 @@ Same steps as above, with Phone 2 also filming:
 - [ ] `python check_recordings.py` in `data/`: for each new zip it says which trial folder to
       unzip it into (e.g. `phone_raw/Mohammed_Walk_normal_T03/`). Unzip them there.
 - [ ] Run `check_recordings.py` again: every trial should say OK. It also saves the real
-      lengths and makes the plots.
+      lengths and makes the plots. Add any damaged trial to `excluded_trials.csv` with the
+      reason (don't edit `trials.csv`); the end of the printout shows how many good trials
+      each activity has.
 - [ ] Run the sync again: it lists any trial still missing a count or a phone folder.
 - [ ] Watch the filmed trials and compare with `trials.csv`.

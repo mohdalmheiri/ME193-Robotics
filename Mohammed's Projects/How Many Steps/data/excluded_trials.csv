@@ -1,0 +1,14 @@
+file,reason
+Mohammed_Walk_fast_T02.csv,bad connection: readings drop to 0 from about 11 s in (415 failed reads)
+Mohammed_Walk_fast_T03.csv,empty file and no row in trials.csv: the app stopped during the trial
+Mohammed_Walk_fast_T04.csv,cut short: the sensor stopped 1.4 s in
+Mohammed_Walk_fast_T05.csv,no samples: the sensor sent nothing (wire off)
+Mohammed_Walk_fast_T06.csv,no samples: the sensor sent nothing (wire off)
+Mohammed_Walk_fast_T07.csv,no samples: the sensor sent nothing (wire off)
+Mohammed_Walk_fast_T08.csv,no samples: the sensor sent nothing (wire off)
+Mohammed_Run_T01.csv,no samples: the sensor sent nothing (wire off)
+Mohammed_Run_T02.csv,no samples: the sensor sent nothing (wire off)
+Mohammed_Run_T03.csv,no samples: the sensor sent nothing (wire off)
+Mohammed_Run_T04.csv,no samples: the sensor sent nothing (wire off)
+Mohammed_Run_T05.csv,no samples: the sensor sent nothing (wire off)
+Mohammed_Run_T06.csv,empty file and no row in trials.csv: the board crashed during the trial
