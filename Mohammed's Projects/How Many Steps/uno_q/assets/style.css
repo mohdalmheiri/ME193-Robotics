@@ -65,6 +65,24 @@ button small { display: block; font-size: 0.72rem; color: #bbb; margin-top: 2px;
 .next { color: #aaa; margin: 14px 0 0; word-break: break-all; }
 .next b { color: #eee; }
 
+/* Sensor not reading: stays at the top of the screen while scrolling. It
+   pushes the page down rather than covering it, so Stop stays reachable. */
+.alert {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  margin: -16px -16px 8px;   /* edge to edge over the body's padding */
+  padding: 22px 16px;
+  background: #d32f2f;
+  color: white;
+  font-size: 1.6rem;
+  font-weight: 800;
+  text-align: center;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
+}
+.alert span { display: block; margin-top: 8px; font-size: 1rem; font-weight: 400; }
+.alert[hidden] { display: none; }
+
 .banner {
   margin: 12px 0 0;
   padding: 16px;

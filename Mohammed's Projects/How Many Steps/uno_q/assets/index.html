@@ -12,6 +12,12 @@
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
+    <!-- Over everything, top of the screen, while the sensor isn't reading -->
+    <div id="sensor-alert" class="alert" role="alert" hidden>
+      Sensor isn't reading
+      <span id="sensor-alert-why"></span>
+    </div>
+
     <h1>Step Recorder</h1>
 
     <!-- 1. Before a trial: who and what -->
@@ -49,6 +55,7 @@
           <input id="distance" type="number" inputmode="decimal" min="0" step="0.1" />
         </div>
       </div>
+      <p id="count-bad" class="warning"></p>
       <p id="count-error" class="warning"></p>
       <div class="grid">
         <button id="save-btn" class="go">Save</button>

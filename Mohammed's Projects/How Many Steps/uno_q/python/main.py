@@ -1,7 +1,8 @@
 """Step Recorder: records counted ankle trials for HW7, controlled from a phone.
 
-The sketch (sketch/sketch.ino, same as HW6) reads the MPU-6050 100 times a
-second and queues the samples. This file runs on the board's Linux side:
+The sketch (sketch/sketch.ino, HW6's, plus setting the sensor up again if it
+restarts asleep) reads the MPU-6050 100 times a second and queues the
+samples. This file runs on the board's Linux side:
 
 - It serves the phone page (assets/) on port 7000.
 - About 10 times a second it pulls every queued sample from the sketch.
@@ -11,6 +12,9 @@ second and queues the samples. This file runs on the board's Linux side:
 - After Stop, the board waits for you to type in the real step count and
   distance on the phone, then adds one row to recordings/trials.csv:
   file, person, activity, steps, distance_m, duration_s.
+- It checks every sample, recording or not. If the sensor stops reading
+  (all channels 0 or -1, or no samples at all), /status says so and the
+  phone page shows a red banner until it reads again.
 
 A trial goes through three states:
     idle --Start--> recording --Stop--> waiting for count --Save--> idle
@@ -47,6 +51,10 @@ ACTIVITIES = [
 NO_STEP_ACTIVITIES = ["Stand", "Fidget", "LegSwing"]  # default 0 steps and 0 m
 DEFAULT_DISTANCE_M = 20      # the measured course; Outdoor has no default (it's never 20 m)
 SAMPLE_RATE_HZ = 100         # the sketch samples every 10 ms
+SENSOR_STALE_S = 0.5         # no good reading for this long = the sensor isn't reading
+# What a failed read turns into in the sketch: -1 raw on every channel,
+# divided by its scale factors (2048 LSB/g, 16.4 LSB per deg/s)
+FAILED_READ = (-1 / 2048, -1 / 16.4)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 RECORDINGS_DIR = os.path.join(BASE_DIR, "recordings")
@@ -63,7 +71,13 @@ csv_writer = None
 samples_saved = 0
 last_counter = None      # the sketch numbers every sample; a jump means samples were lost
 gap_count = 0
+bad_samples = 0          # samples in the current trial with no real reading (0 or -1)
 shown_on_matrix = None
+
+# ---- Sensor health (checked all the time, not only while recording) ----------
+last_good_time = time.time()   # starts as "now" so the page doesn't warn while the app starts
+last_batch_time = time.time()
+last_problem = None            # "zeros" or "no_answer", from the latest bad sample
 
 
 # ---- File names and trial numbers ---------------------------------------------
@@ -119,7 +133,7 @@ def append_trial(row):
 
 # ---- Start, stop, save, discard -------------------------------------------------
 def start_trial(person, activity):
-    global mode, trial, csv_file, csv_writer, samples_saved, last_counter, gap_count
+    global mode, trial, csv_file, csv_writer, samples_saved, last_counter, gap_count, bad_samples
     if mode == "recording":
         return {"ok": False, "error": "Already recording"}
     if mode == "pending":
@@ -137,6 +151,7 @@ def start_trial(person, activity):
     samples_saved = 0
     last_counter = None
     gap_count = 0
+    bad_samples = 0
     mode = "recording"
     logger.info(f"Started {name}")
     return {"ok": True, "file": name}
@@ -203,26 +218,67 @@ def delete_last_trial():
 
 
 # ---- Sensor data ------------------------------------------------------------------
+def sample_kind(values):
+    """'ok', 'zeros' (all six exactly 0: the sensor restarted asleep, e.g. a
+    loose VCC/GND wire) or 'no_answer' (all six -1 raw: the sensor didn't
+    answer, e.g. a wire off). A real reading is never either: gravity is
+    always there."""
+    if all(v == 0 for v in values):
+        return "zeros"
+    acc, gyro = values[:3], values[3:]
+    if all(abs(v - FAILED_READ[0]) < 1e-4 for v in acc) and all(abs(v - FAILED_READ[1]) < 1e-3 for v in gyro):
+        return "no_answer"
+    return "ok"
+
+
+def sensor_status():
+    """{"ok": True}, or {"ok": False, "problem": "zeros" / "no_answer" / "no_data"}."""
+    now = time.time()
+    if now - last_good_time < SENSOR_STALE_S:
+        return {"ok": True}
+    if now - last_batch_time > SENSOR_STALE_S:
+        return {"ok": False, "problem": "no_data"}    # the sketch sent nothing at all
+    return {"ok": False, "problem": last_problem}
+
+
 def poll_sensor():
-    """Pull every sample the sketch queued since the last call. While
-    recording, write each one to the trial's CSV; otherwise just drop them
-    (the sketch's queue still has to be emptied)."""
-    global samples_saved, last_counter, gap_count
+    """Pull every sample the sketch queued since the last call and check that
+    the sensor is really reading. While recording, write each one to the
+    trial's CSV; otherwise just drop them (the sketch's queue still has to be
+    emptied)."""
+    global samples_saved, last_counter, gap_count, bad_samples, last_good_time, last_batch_time, last_problem
+    was_ok = sensor_status()["ok"]
     batch = Bridge.call("get_batch")  # flat list: [counter, ax, ay, az, gx, gy, gz, counter, ...]
-    if not batch or mode != "recording":
-        return
-    if len(batch) % 7 != 0:
+    if batch and len(batch) % 7 != 0:
         # A partial sample shouldn't happen (the sketch uses provide_safe), but
         # skip the batch rather than crash, as in HW6.
         logger.warning(f"Skipped a batch of {len(batch)} values (not whole samples)")
         last_counter = None
         return
+    samples = [batch[i:i + 7] for i in range(0, len(batch or []), 7)]
+    kinds = [sample_kind(s[1:]) for s in samples]
+    if samples:
+        last_batch_time = time.time()
+    for kind in kinds:
+        if kind == "ok":
+            last_good_time = time.time()
+        else:
+            last_problem = kind
+    # Note each change in the app's log, for working out later what happened
+    is_ok = sensor_status()
+    if is_ok["ok"] != was_ok:
+        if is_ok["ok"]:
+            logger.info("Sensor reading again")
+        else:
+            logger.warning(f"Sensor isn't reading: {is_ok['problem']}")
+    if mode != "recording":
+        return
 
-    for i in range(0, len(batch), 7):
-        counter, ax, ay, az, gx, gy, gz = batch[i:i + 7]
+    for (counter, ax, ay, az, gx, gy, gz), kind in zip(samples, kinds):
         if last_counter is not None and counter != last_counter + 1:
             gap_count += int(counter - last_counter - 1)
         last_counter = counter
+        bad_samples += kind != "ok"
         # Batches arrive in bursts, so each row gets an evenly spaced time
         # (start + n x 10 ms) rather than the burst's arrival time. The time
         # is UTC with its "+00:00" marker (the board's clock runs on UTC), so
@@ -230,7 +286,8 @@ def poll_sensor():
         t = datetime.fromtimestamp(trial["start_time"] + samples_saved / SAMPLE_RATE_HZ, timezone.utc)
         csv_writer.writerow([t.isoformat(), ax, ay, az, gx, gy, gz, trial["activity"], trial["person"]])
         samples_saved += 1
-    csv_file.flush()   # so a power cut loses at most the last fraction of a second
+    if samples:
+        csv_file.flush()   # so a power cut loses at most the last fraction of a second
 
 
 # ---- LED matrix: shows the state when the phone is in a pocket ---------------------
@@ -388,6 +445,8 @@ def http_status():
         "duration_s": round(samples_saved / SAMPLE_RATE_HZ, 1),
         "samples_per_sec": round(samples_saved / elapsed, 1) if elapsed > 0 else 0,
         "gap_count": gap_count,
+        "sensor": sensor_status(),
+        "bad_samples": bad_samples,   # in the current (or just stopped) trial
         "activities": ACTIVITIES,
         "no_step_activities": NO_STEP_ACTIVITIES,
         "default_distance_m": DEFAULT_DISTANCE_M,

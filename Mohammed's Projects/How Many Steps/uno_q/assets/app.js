@@ -13,6 +13,13 @@ const LABELS = {
 };
 const STOMP_SECONDS = 4;   // how long the stomp reminder stays up
 
+// Why the sensor isn't reading (the board's /status "sensor.problem")
+const SENSOR_PROBLEMS = {
+  zeros: 'Every reading is 0: the sensor lost power for a moment (check the VCC and GND wires). The board is setting it up again.',
+  no_answer: "The sensor isn't answering: a wire is off (check all four).",
+  no_data: 'No readings are arriving from the board.',
+};
+
 const $ = (sel) => document.querySelector(sel);
 
 // localStorage remembers names and the last activity on this phone. It can be
@@ -156,6 +163,10 @@ async function refresh() {
   $('#status-rate').textContent = s.mode === 'recording' ? s.samples_per_sec : '-';
   $('#status-gaps').textContent = s.gap_count > 0 ? `${s.gap_count} samples missed` : '';
 
+  // Red banner while the sensor isn't reading (recording or not)
+  $('#sensor-alert').hidden = s.sensor.ok;
+  $('#sensor-alert-why').textContent = s.sensor.ok ? '' : SENSOR_PROBLEMS[s.sensor.problem] || '';
+
   $('#setup').hidden = s.mode !== 'idle';
   $('#start-btn').disabled = s.mode !== 'idle';
   $('#stop-btn').disabled = s.mode !== 'recording';
@@ -164,6 +175,10 @@ async function refresh() {
   if (s.mode === 'pending') {
     fillCountForm(s);
     $('#count-duration').textContent = s.duration_s;
+    // Even if the sensor came back, part of this trial has no real readings
+    $('#count-bad').textContent = s.bad_samples > 0
+      ? `${(s.bad_samples / 100).toFixed(1)} s of this trial had no sensor reading. Discard it and redo the trial.`
+      : '';
   } else {
     shownPending = null;
   }

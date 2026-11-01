@@ -4,8 +4,13 @@ The UNO Q app for recording counted ankle trials. Same wiring as HW6: an MPU-605
 right lower leg, near the ankle, with the board running from a power bank and controlled
 from a phone on port 7000.
 
-- `sketch/sketch.ino` is a copy of HW6's sketch. It samples the MPU-6050 at 100 Hz
+- `sketch/sketch.ino` is HW6's sketch. It samples the MPU-6050 at 100 Hz
   (±16 g, ±2000 °/s) and hands batches to Python. It also draws on the LED matrix.
+  One addition: if the sensor loses power for a moment (a loose VCC or GND wire), it
+  restarts asleep and reads exactly 0 on every channel. After 0.1 s of that, the sketch
+  sets it up again (wake, ±16 g, ±2000 °/s), retrying every 0.5 s until it reads.
+  The setup is three short I2C writes inside one 10 ms sample slot, so the sampling
+  timing doesn't change.
 - `python/main.py` serves the phone page and saves the trials. Each trial is one CSV,
   `Person_Activity_Tnn.csv`, in `python/recordings/`. After Stop, the board waits for
   the real step count and distance from the phone, then adds a row to
@@ -13,6 +18,11 @@ from a phone on port 7000.
   `time` (UTC), `ax ay az` (g), `gx gy gz` (°/s), `activity`, `person`.
 - `assets/` is the phone page: name, activity, Start/Stop, the count form, and the last
   saved trials, with buttons to delete the last trial or download everything as a zip.
+- If the sensor stops reading (every channel 0 = it lost power; every channel −1 = it
+  doesn't answer, a wire is off; or no samples at all), the page shows a red **Sensor
+  isn't reading** banner at the top, recording or not, until it reads again. After a
+  trial with unread samples, the count form says how many seconds and suggests
+  Discard. The check runs on every sample in `main.py`, which also logs each change.
 - The LED matrix shows the state when the phone is in a pocket: a dot = ready,
   **R** = recording, **?** = stopped, waiting for the step count.
 - While idle, the matrix scrolls the board's address (e.g. `172.20.10.2:7000`, or

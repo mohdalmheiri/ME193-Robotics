@@ -15,6 +15,17 @@ const unsigned long SAMPLE_INTERVAL_MS = 10; // 100 Hz
 unsigned long lastSampleMillis = 0;
 uint32_t sampleCounter = 0;
 
+// If the MPU-6050 loses power for a moment (a loose VCC or GND wire), it
+// restarts asleep and every reading is exactly 0 (and its ranges go back to
+// +/-2 g, +/-250 deg/s). A real reading is never 0 on all six channels
+// (gravity is always there), so after this many all-zero samples in a row the
+// sketch sets the sensor up again. The setup is three short I2C writes
+// (~1 ms) inside the current 10 ms slot, so the sampling timing doesn't change.
+const uint8_t ZERO_SAMPLES_BEFORE_SETUP = 10;   // 0.1 s
+const unsigned long SETUP_RETRY_MS = 500;       // while zeros go on (wire still off), retry twice a second
+uint8_t zeroRun = 0;
+unsigned long lastSetupMillis = 0;
+
 // Samples are queued here as a flat list of floats:
 // [counter, ax, ay, az, gx, gy, gz,  counter, ax, ay, az, gx, gy, gz,  ...]
 // Python pulls (and clears) this with Bridge.call("get_batch") a few times a
@@ -44,6 +55,14 @@ int16_t readWord(uint8_t reg) {
   int16_t hi = mpuWire->read();
   int16_t lo = mpuWire->read();
   return (int16_t)((hi << 8) | lo);
+}
+
+// Wake the sensor and set its ranges. Run at power-up and again whenever it
+// comes back asleep (all-zero readings).
+void setupMpu() {
+  writeReg(0x6B, 0x00); // PWR_MGMT_1: wake up
+  writeReg(0x1C, 0x18); // ACCEL_CONFIG: AFS_SEL=3 -> +/-16g
+  writeReg(0x1B, 0x18); // GYRO_CONFIG: FS_SEL=3 -> +/-2000 deg/s
 }
 
 // Exposed to Python: returns every sample collected since the last call, then empties the buffer.
@@ -85,9 +104,8 @@ void setup() {
     mpuWire = &Wire1;
   }
 
-  writeReg(0x6B, 0x00); // PWR_MGMT_1: wake up
-  writeReg(0x1C, 0x18); // ACCEL_CONFIG: AFS_SEL=3 -> +/-16g
-  writeReg(0x1B, 0x18); // GYRO_CONFIG: FS_SEL=3 -> +/-2000 deg/s
+  setupMpu();
+  lastSetupMillis = millis();
 
   sampleBuffer.reserve(FIELDS_PER_SAMPLE * 50);
 }
@@ -128,4 +146,17 @@ void loop() {
   sampleBuffer.push_back(gyd);
   sampleBuffer.push_back(gzd);
   sampleCounter++;
+
+  // All six exactly 0: the sensor restarted asleep. Set it up again (the
+  // zero samples are still sent, so Python can warn and count them).
+  if (ax == 0 && ay == 0 && az == 0 && gx == 0 && gy == 0 && gz == 0) {
+    if (zeroRun < 255) zeroRun++;
+  } else {
+    zeroRun = 0;
+  }
+  if (zeroRun >= ZERO_SAMPLES_BEFORE_SETUP && now - lastSetupMillis >= SETUP_RETRY_MS) {
+    setupMpu();
+    lastSetupMillis = now;
+    zeroRun = 0;
+  }
 }
