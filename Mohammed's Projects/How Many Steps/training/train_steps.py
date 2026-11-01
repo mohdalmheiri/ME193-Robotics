@@ -16,8 +16,9 @@ What it does:
    its trial's step rate (steps / moving time) and speed (distance / moving
    time); zero-step trials get 0 for both.
 4. Features per clip: the spread (standard deviation) and peak (largest
-   absolute value) of each channel. No averages: those mostly measure how the
-   sensor is tilted, not how you move.
+   absolute value) of each channel, plus 10 that don't depend on how the
+   sensor sits on the leg (FEATURE_SET = "combined", see clip_features). No
+   averages: those mostly measure how the sensor is tilted, not how you move.
 5. A small net, features -> 16 -> 16 -> 2 (steps/s, m/s), trained with mean
    squared error until the loss flattens.
 6. Leave-one-trial-out testing: for every trial, a committee of 5 nets
@@ -63,6 +64,10 @@ SOFT_STOMP_S = 3                 # a stomp too soft for the checks' 3 g minimum 
                                  # is taken as the biggest spike in the first 3 s instead
 PACES = ["Walk_slow", "Walk_normal", "Walk_fast", "Run"]
 CHANNELS = ["ax", "ay", "az", "gx", "gy", "gz"]
+# Which features describe a clip (see clip_features):
+#   "per_axis": spread and peak of each sensor axis (12 per sensor)
+#   "combined": those, plus 10 that don't depend on how the sensor sits on the leg (22 per sensor)
+FEATURE_SET = "combined"
 
 N_NETS = 5                       # committee size
 HIDDEN = 16
@@ -149,15 +154,37 @@ def clip_starts(tr):
 
 
 def clip_features(x):
-    """Spread and peak of each channel of one clip (rows = samples, 6 columns)."""
-    return np.concatenate([x.std(axis=0), np.abs(x).max(axis=0)])
+    """Features of one clip (rows = samples, 6 columns: ax ay az gx gy gz).
+
+    Per axis: the spread and peak of each channel. These depend on how the
+    sensor sits on the leg: re-strapped at another angle, the same swing
+    shows up on different axes.
+
+    Direction-free (FEATURE_SET = "combined"), for acceleration and rotation
+    each: the spread and peak of the overall size (magnitude, whatever the
+    direction), and the spread along the clip's own three main directions,
+    largest first (the square roots of the covariance's eigenvalues). The
+    same movement gives the same numbers however the sensor is turned."""
+    per_axis = np.concatenate([x.std(axis=0), np.abs(x).max(axis=0)])
+    if FEATURE_SET == "per_axis":
+        return per_axis
+    free = []
+    for v in (x[:, :3], x[:, 3:]):
+        size = np.linalg.norm(v, axis=1)
+        main_spreads = np.sqrt(np.clip(np.linalg.eigvalsh(np.cov(v.T))[::-1], 0, None))
+        free += [size.std(), size.max(), *main_spreads]
+    return np.concatenate([per_axis, free])
 
 
 def feature_names(with_phone):
-    names = [f"ankle_{c}_spread" for c in CHANNELS] + [f"ankle_{c}_peak" for c in CHANNELS]
-    if with_phone:
-        names += [f"phone_{c}_spread" for c in CHANNELS] + [f"phone_{c}_peak" for c in CHANNELS]
-    return names
+    def one(sensor):
+        names = [f"{sensor}_{c}_spread" for c in CHANNELS] + [f"{sensor}_{c}_peak" for c in CHANNELS]
+        if FEATURE_SET == "combined":
+            for kind in ("acc", "gyro"):
+                names += [f"{sensor}_{kind}_size_spread", f"{sensor}_{kind}_size_peak",
+                          f"{sensor}_{kind}_main1_spread", f"{sensor}_{kind}_main2_spread", f"{sensor}_{kind}_main3_spread"]
+        return names
+    return one("ankle") + (one("phone") if with_phone else [])
 
 
 def trial_clips(tr, with_phone):
