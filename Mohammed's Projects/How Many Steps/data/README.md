@@ -33,7 +33,7 @@ off GitHub.
 | `real_durations.csv` | The real length of each ankle recording (see below) |
 | `excluded_trials.csv` | Trials left out of training, with the reason (see below) |
 | `sync_from_board.py` | Copies `raw/` and `trials.csv` from the board, then lists anything missing |
-| `check_recordings.py` | Matches ankle and phone recordings, checks them for damage (bad connection, cut short, sensor shifted on the leg), finds the stomps, plots each trial to `../media/recording_checks/` |
+| `check_recordings.py` | Matches ankle and phone recordings, checks them for damage (bad connection, cut short, sensor shifted on the leg; not judged for runs, whose speed-up turns the leg's swing axis anyway), finds the stomps, plots each trial to `../media/recording_checks/` |
 | `wire_test.py` | Live sensor readings while you wiggle each wire in turn, to find a loose one |
 
 ## File names

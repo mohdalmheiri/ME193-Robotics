@@ -80,7 +80,9 @@ SLOWEST_RATE = 98.5              # samples/s; the sketch normally runs at ~99.3 
 SHORTEST_S = 5                   # even a 20 m run (stand, stomp, run, stand) takes longer than this
 MOVING_DPS = 60                  # deg/s: the leg is swinging (walking, running, LegSwing)
 SHIFT_DEG = 12                   # the swing axis turning this much within a trial = the sensor moved on the leg
-                                 # (a steady walk stays within ~3 deg; a run, with fewer strides, ~10)
+                                 # (a steady walk stays within ~3 deg)
+NO_SHIFT_CHECK = ["Run"]         # a run's speed-up turns the swing axis by 10-40 deg on its own, and the
+                                 # next run starts back where the last one did: not a shift, so not judged
 
 
 # ---- Loading ------------------------------------------------------------------
@@ -474,7 +476,7 @@ def main():
                            ("at_max", "readings at max"), ("glitches", "glitches")]:
             if q[key]:
                 problems.append(f"{q[key]} {label}")
-        if q["axis_turn"] is not None and q["axis_turn"] > SHIFT_DEG:
+        if q["axis_turn"] is not None and q["axis_turn"] > SHIFT_DEG and trial["activity"] not in NO_SHIFT_CHECK:
             problems.append(f"sensor shifted? swing axis turned {q['axis_turn']:.0f} deg")
         if q["still_gravity"] and not (0.9 < q["still_gravity"][0] and q["still_gravity"][1] < 1.1):
             problems.append("gravity off while still")
@@ -502,7 +504,8 @@ def main():
               f"glitches {q['glitches']} (+{q['glitches_stomp']} at the stomp), "
               f"peak {q['peak_g']:.1f} g, still gravity "
               + (f"{g[0]:.3f}-{g[1]:.3f} g" if g else "n/a")
-              + (f", swing axis turned {q['axis_turn']:.1f} deg" if q["axis_turn"] is not None else ""))
+              + (f", swing axis turned {q['axis_turn']:.1f} deg" if q["axis_turn"] is not None else "")
+              + (" (not judged for runs)" if trial["activity"] in NO_SHIFT_CHECK and q["axis_turn"] is not None else ""))
         if sa:
             print(f"  stomp ankle: at {sa['t']:.2f} s, {sa['height']:+.1f} g above 1 g, "
                   f"{sa['vs_before']:.1f}x anything in the second before it")
