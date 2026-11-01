@@ -34,7 +34,26 @@ message **twice a second** to:
 | `layer2` | the 16 values of the second hidden layer (after ReLU, so ≥ 0) | – |
 
 "±" means the true value is probably within that much of the number shown. Both
-uncertainties should grow as the walk goes on, since small errors add up.
+uncertainties grow as the walk goes on, since small errors add up.
+
+### Where the ± comes from
+
+The ± is how far off the step counter really was when it was tested on trials it hadn't
+seen (leave-one-trial-out, in `training/train_steps.py`), per pace, as the
+root-mean-square error. For example: about 2% of the steps on a slow walk, 5% on a run.
+Zero-step activities have no true total to take a percentage of, so for them it's false
+steps (and meters) per second. The numbers are in `training/step_model.npz`, with a table
+in `training/results.md`. Each half second, the sender picks the pace from the net's own
+step rate and adds that pace's share to the running ±.
+
+It is **not** the spread between the committee's 5 nets. The 5 nets agree with each
+other far more closely than they agree with the truth: in testing, the spread was
+usually 0.1-0.7 steps per trial while the real errors were larger, up to 64 steps on a
+leg-swing trial. A ± from that spread would look confident and be wrong. The
+leave-one-out error is measured against the truth, so it's honest about how far off the
+count can be.
+
+`fake_publisher.py` uses the same rule and the same numbers.
 
 ## Files
 

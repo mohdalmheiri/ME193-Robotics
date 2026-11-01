@@ -27,7 +27,10 @@ What it does:
    comparison.
 7. Saves the plots and tables, and step_model.npz: the ankle-only committee
    trained on every good trial, runnable on the UNO Q with plain numpy
-   (see numpy_predict below).
+   (see numpy_predict below). It also holds the +/- the dashboard shows,
+   taken from the leave-one-out errors per pace, not from the committee's
+   spread: the 5 nets agree with each other much more closely than they
+   agree with the truth (see uncertainty_table and clip_uncertainty).
 
 Outputs: ../media/train_loss.png, ../media/steps_est_vs_true.png,
 results.md (errors per pace) and results_per_trial.csv in this folder.
@@ -56,6 +59,8 @@ CLIP = 2 * RATE                  # 2 s clips...
 HOP = RATE // 2                  # ...a new one every 0.5 s
 MOVING_DPS = cr.MOVING_DPS       # the leg is swinging when the ankle rotates faster than this (60 deg/s)
 NO_STEP = ["Stand", "Fidget", "LegSwing"]
+SOFT_STOMP_S = 3                 # a stomp too soft for the checks' 3 g minimum (stomping while seated)
+                                 # is taken as the biggest spike in the first 3 s instead
 PACES = ["Walk_slow", "Walk_normal", "Walk_fast", "Run"]
 CHANNELS = ["ax", "ay", "az", "gx", "gy", "gz"]
 
@@ -103,7 +108,12 @@ def load_trial(trial):
     name = trial["file"][:-4]
     ankle, start = cr.load_ankle(trial["file"])
     t = np.arange(len(ankle)) / RATE
-    stomp = cr.find_ankle_stomp(t, np.linalg.norm(ankle[:, :3], axis=1))
+    mag = np.linalg.norm(ankle[:, :3], axis=1)
+    stomp = cr.find_ankle_stomp(t, mag)
+    if stomp is None:
+        # Too soft for the checks (LegSwing T04, stomped while seated): the
+        # biggest spike in the first seconds is still the stomp
+        stomp = cr.find_stomp(t, mag, 0, SOFT_STOMP_S)
 
     # The phone's stomp, looked for near where the clocks put it (as in the checks)
     phone = cr.load_phone(cr.PHONE / name)
@@ -283,8 +293,66 @@ def peak_count(tr):
     return 2 * len(kept)
 
 
+# ---- The +/- for the dashboard -------------------------------------------------------------
+UNC_GROUPS = ["Zero-step"] + PACES
+
+
+def uncertainty_table(trials, results):
+    """How far off the ankle-only estimates really were in the leave-one-out
+    test, per group, as the root-mean-square (a typical error, like a standard
+    deviation). Walking paces: a fraction of the steps and distance. Zero-step
+    trials have no true total to take a fraction of, so for them it's false
+    steps (and meters) per second. Also the step rates that separate the
+    groups, so the board can tell from the net's own estimate which one applies."""
+    table = {"groups": UNC_GROUPS, "steps_frac": [], "dist_frac": [], "steps_per_s": [], "dist_per_s": []}
+    for g in UNC_GROUPS:
+        idx = [i for i, tr in enumerate(trials) if tr["activity"] == g or (g == "Zero-step" and tr["activity"] in NO_STEP)]
+        rms = lambda v: float(np.sqrt(np.mean(np.square(v))))
+        if g == "Zero-step":
+            table["steps_frac"].append(0.0)
+            table["dist_frac"].append(0.0)
+            table["steps_per_s"].append(rms([results[i]["steps_est"] / trials[i]["moving_s"] for i in idx]))
+            table["dist_per_s"].append(rms([results[i]["dist_est"] / trials[i]["moving_s"] for i in idx]))
+        else:
+            table["steps_frac"].append(rms([(results[i]["steps_est"] - trials[i]["steps"]) / trials[i]["steps"] for i in idx]))
+            table["dist_frac"].append(rms([(results[i]["dist_est"] - trials[i]["distance"]) / trials[i]["distance"] for i in idx]))
+            table["steps_per_s"].append(0.0)
+            table["dist_per_s"].append(0.0)
+    # Group boundaries: halfway between the paces' typical step rates; below
+    # half the slowest pace's rate counts as not stepping
+    typical = [np.mean([tr["rate"] for tr in trials if tr["activity"] == p]) for p in PACES]
+    table["rate_edges"] = [typical[0] / 2] + [(a + b) / 2 for a, b in zip(typical, typical[1:])]
+    return table
+
+
+def clip_uncertainty(model, rate, speed, seconds):
+    """The +/- one clip adds to the running totals (steps, meters), given the
+    net's step rate and speed for it and the seconds it stands for. The board
+    adds these up over the walk, straight (not as independent errors), since
+    a trial's error is mostly a steady bias; over a whole trial of one pace
+    this gives that pace's leave-one-out error."""
+    g = int(np.searchsorted(model["unc_rate_edges"], rate))      # 0 = zero-step, 1.. = the paces in order
+    steps = model["unc_steps_frac"][g] * rate * seconds + model["unc_steps_per_s"][g] * seconds
+    meters = model["unc_dist_frac"][g] * speed * seconds + model["unc_dist_per_s"][g] * seconds
+    return float(steps), float(meters)
+
+
+def uncertainty_markdown(table):
+    lines = ["| Group | Steps +/- | Distance +/- | Applies when the net's step rate is |",
+             "|---|---|---|---|"]
+    edges = table["rate_edges"] + [None]
+    lower = [None] + table["rate_edges"]
+    for g, sf, df, sps, dps, lo, hi in zip(table["groups"], table["steps_frac"], table["dist_frac"],
+                                           table["steps_per_s"], table["dist_per_s"], lower, edges):
+        steps = f"{100 * sf:.1f}% of the steps" if g != "Zero-step" else f"{sps:.2f} false steps per second"
+        dist = f"{100 * df:.1f}% of the distance" if g != "Zero-step" else f"{dps:.2f} m per second"
+        when = (f"below {hi:.2f}" if lo is None else f"{lo:.2f} and up" if hi is None else f"{lo:.2f} to {hi:.2f}")
+        lines.append(f"| {g} | {steps} | {dist} | {when} steps/s |")
+    return "\n".join(lines)
+
+
 # ---- 7. The model for the UNO Q -----------------------------------------------------------------
-def save_for_board(nets, path):
+def save_for_board(nets, path, unc):
     """The committee's weights, rescaling and settings as plain numpy arrays.
     Each net was trained with its own rescaling, so mean/std are per net too."""
     arrays = {"feature_names": np.array(feature_names(False)), "clip_samples": CLIP,
@@ -294,6 +362,11 @@ def save_for_board(nets, path):
         arrays["b" + key[1]] = np.stack([n.layers[index].bias.detach().numpy() for n, _, _ in nets])
     arrays["mean"] = np.stack([m for _, m, _ in nets])
     arrays["std"] = np.stack([s for _, _, s in nets])
+    # The dashboard's +/- (see uncertainty_table and clip_uncertainty)
+    arrays["unc_groups"] = np.array(unc["groups"])
+    arrays["unc_rate_edges"] = np.array(unc["rate_edges"])
+    for key in ("steps_frac", "dist_frac", "steps_per_s", "dist_per_s"):
+        arrays["unc_" + key] = np.array(unc[key])
     np.savez(path, **arrays)
 
 
@@ -364,10 +437,10 @@ def plot_estimates(trials, res_ankle, res_both, peaks, path):
                     fmt=marker, ms=7, color=color, mec="#fcfcfb", mew=1, elinewidth=1.2, capsize=2, label=label)
     shown = np.minimum(peaks, top - 2)
     ax.plot(true_steps, shown, "^", ms=7, color=AQUA, mec="#fcfcfb", mew=1, label="peak counter (no net)")
-    for x, p in zip(true_steps, peaks):
-        if p > top - 2:
-            ax.annotate(f"peak counter: {p} (off the chart)", (x, top - 2), xytext=(8, -4),
-                        textcoords="offset points", color=INK_2, fontsize=9)
+    off_chart = sorted(p for p in peaks if p > top - 2)   # all at 0 true steps: one label for them
+    if off_chart:
+        ax.annotate(f"peak counter, off the chart: {', '.join(map(str, off_chart))}", (0, top - 2), xytext=(8, -4),
+                    textcoords="offset points", color=INK_2, fontsize=9)
     ax.plot([0, top], [0, top], color=MUTED, lw=1, ls="--", zorder=0)
     ax.text(44, 41, "perfect", color=MUTED, fontsize=9, ha="right")
     ax.set_xlim(-3, 45)
@@ -448,12 +521,18 @@ def main():
                         f"{a['dist_est']:.1f}", f"{a['dist_pm']:.1f}", f"{b['dist_est']:.1f}", f"{b['dist_pm']:.1f}"])
 
     table = error_table(trials, res_ankle, res_both, peaks)
+    unc = uncertainty_table(trials, res_ankle)
     with open(HERE / "results.md", "w") as f:
         f.write("# Step counter: leave-one-trial-out results\n\n"
                 f"Written by `train_steps.py`. {len(trials)} good trials, {n_clips} clips of 2 s. Each trial's "
                 f"totals come from a committee of {N_NETS} nets trained without it. Errors are the mean absolute "
                 "error per trial, and in brackets the total error as a % of the true total. The +/- is the spread "
-                "between the committee's nets.\n\n" + table + "\n")
+                "between the committee's nets.\n\n" + table + "\n\n"
+                "## The +/- the dashboard shows\n\n"
+                "From the ankle-only errors above (root-mean-square per group), not from the committee's "
+                "spread, which is far smaller than the real errors. Saved in `step_model.npz`; the board "
+                "picks the group from the net's own step rate for each clip and adds up `clip_uncertainty`.\n\n"
+                + uncertainty_markdown(unc) + "\n")
     print("\n" + table)
 
     plot_losses({"Ankle only": curves_ankle, "Ankle + phone": curves_both}, MEDIA / "train_loss.png")
@@ -466,11 +545,12 @@ def main():
     for k in range(N_NETS):
         net, mean, std, _, _ = train_net(X, y, seed=k)
         nets.append((net, mean, std))
-    save_for_board(nets, HERE / "step_model.npz")
+    save_for_board(nets, HERE / "step_model.npz", unc)
     # Check the numpy version gives the same answers as PyTorch
     torch_avg = np.mean([predict(n, m, s, X) for n, m, s in nets], axis=0)
     numpy_avg, _ = numpy_predict(np.load(HERE / "step_model.npz"), X)
     print(f"\nSaved step_model.npz; numpy vs PyTorch, largest difference: {np.abs(torch_avg - numpy_avg).max():.2e}")
+    print("\nThe dashboard's +/-:\n" + uncertainty_markdown(unc))
     print(f"Done in {(time.time() - begin) / 60:.1f} min")
 
 
