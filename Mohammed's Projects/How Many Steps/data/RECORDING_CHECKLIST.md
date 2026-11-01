@@ -20,7 +20,7 @@ trials.
       shows the live step count.
 - [ ] Course: 20 m, start and finish lines marked.
 
-## Every trial
+## Every trial (training trials: the paces, Stand, Fidget, LegSwing)
 
 1. **Phone 2:** pick the name and activity on the Step Recorder page. Note the
    **Next file** name.
@@ -41,9 +41,25 @@ trials.
 
 Wrong count saved? **Delete last trial** on the page, then redo it.
 
+## Test walks (checking the live count)
+
+The finished model only uses the ankle, so Test walks need no stomp, no phyphox and no
+measured course. Walk anywhere.
+
+1. **Phone 2:** pick **Test** on the Step Recorder page, then **Reset count** (so the Live
+   count shows just this walk).
+2. **Start.** Walk, counting your steps **silently** (every foot that lands, both feet).
+3. **Stop.**
+4. Type in **Steps**, and the **Distance** only if you really know it; otherwise **change
+   the 20 to 0** (0 = unknown). **Save.** The board stores its live count for the walk in
+   `live_counts.csv`, and the saved-trials table shows it.
+
+A wrong number saved anyway? Add a row to `data/trial_corrections.csv` rather than
+editing `trials.csv` (see `data/README.md`).
+
 ## Filmed trials (about 5)
 
-One each of Walk_slow, Walk_normal, Walk_fast, Run and Test, to check the counts later.
+One each of Walk_slow, Walk_normal, Walk_fast and Run, to check the counts later.
 Same steps as above, with Phone 2 also filming:
 
 - Before step 3: Control Center → **Screen Recording** on, while the page shows **Next
@@ -69,7 +85,7 @@ Same steps as above, with Phone 2 also filming:
       unzip it into (e.g. `phone_raw/Mohammed_Walk_normal_T03/`). Unzip them there.
 - [ ] Run `check_recordings.py` again: every trial should say OK. It also saves the real
       lengths and makes the plots. Add any damaged trial to `excluded_trials.csv` with the
-      reason (don't edit `trials.csv`); the end of the printout shows how many good trials
-      each activity has.
+      reason, and any wrong count or distance to `trial_corrections.csv` (don't edit
+      `trials.csv`); the end of the printout shows how many good trials each activity has.
 - [ ] Run the sync again: it lists any trial still missing a count or a phone folder.
 - [ ] Watch the filmed trials and compare with `trials.csv`.

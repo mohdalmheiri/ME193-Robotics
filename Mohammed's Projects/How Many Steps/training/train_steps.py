@@ -38,7 +38,6 @@ results.md (errors per pace) and results_per_trial.csv in this folder, and
 step_model.npz both here and in ../uno_q/python/ (the copy the board loads).
 """
 import csv
-import io
 import shutil
 import sys
 import time
@@ -92,12 +91,10 @@ BOARD_MODEL = PROJECT / "uno_q" / "python" / "step_model.npz"   # the copy the U
 
 # ---- 1-3. Loading, lining up, moving stretch -----------------------------------------
 def good_trials():
-    """The rows of trials.csv not in excluded_trials.csv, for the paces and the
-    zero-step activities. Test and Outdoor trials are kept for testing the
-    finished counter, never trained on. A power cut once left NUL bytes in
-    trials.csv; they're dropped as in check_recordings.py."""
-    with open(cr.DATA / "trials.csv", newline="") as f:
-        trials = list(csv.DictReader(io.StringIO(f.read().replace("\0", ""))))
+    """The rows of trials.csv (with trial_corrections.csv applied) not in
+    excluded_trials.csv, for the paces and the zero-step activities. Test and
+    Outdoor trials are kept for testing the finished counter, never trained on."""
+    trials = cr.load_trials()
     excluded = cr.load_excluded()
     return [t for t in trials if t["file"] not in excluded and t["activity"] in PACES + NO_STEP]
 

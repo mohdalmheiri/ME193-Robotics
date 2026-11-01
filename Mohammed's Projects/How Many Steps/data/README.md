@@ -33,6 +33,7 @@ off GitHub.
 | `live_counts.csv` | The board's live step count for each trial recorded since the live counter was added (copied from the board) |
 | `real_durations.csv` | The real length of each ankle recording (see below) |
 | `excluded_trials.csv` | Trials left out of training, with the reason (see below) |
+| `trial_corrections.csv` | Fixes to wrong counts or distances in `trials.csv`, with the reason (see below) |
 | `sync_from_board.py` | Copies `raw/` and `trials.csv` from the board, then lists anything missing |
 | `check_recordings.py` | Matches ankle and phone recordings, checks them for damage (bad connection, cut short, sensor shifted on the leg; not judged for runs, whose speed-up turns the leg's swing axis anyway), finds the stomps, plots each trial to `../media/recording_checks/` |
 | `wire_test.py` | Live sensor readings while you wiggle each wire in turn, to find a loose one |
@@ -54,7 +55,7 @@ activities contain `_`. Trial numbers count up separately for each person and ac
 | `Stand` | Stand still (0 steps, 0 m) |
 | `Fidget` | Stand and shift your weight, without stepping (0 steps, 0 m) |
 | `LegSwing` | Sit and swing the ankle leg (0 steps, 0 m) |
-| `Test` | Counted test walks (one way, 20 m), kept for testing the finished model |
+| `Test` | Counted walks anywhere, for checking the live count (never trained on). No stomp or phone recording needed; distance 0 = unknown |
 | `Outdoor` | The long walk, compared with the phone's own step counter |
 
 ## Ankle CSVs (`raw/`)
@@ -83,6 +84,14 @@ ever changed.
 | `duration_s` | length of the ankle recording, from its number of samples |
 
 For `Outdoor`, `steps` is the phone's step count, since nobody counts a long walk by hand.
+
+A wrong count or distance typed on the phone is fixed in `trial_corrections.csv`
+(`file, column, value, reason`), not in `trials.csv`: every sync replaces `trials.csv`
+with the board's copy, which would undo a direct edit, and the board's copy stays as it
+was typed. `check_recordings.py` and `train_steps.py` apply the corrections when they read
+`trials.csv`, and the check prints each one. For example, Test T03's distance is corrected
+from 20 m to 0 (unknown): the form's 20 m default was left in for a walk around the
+apartment.
 
 If the board loses power right after a save, the row can be lost and leave NUL bytes in its
 place (`trials.csv` has one such gap, just before `Mohammed_Run_T13`). The scripts skip

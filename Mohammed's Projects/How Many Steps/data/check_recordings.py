@@ -18,6 +18,10 @@ For every trial in trials.csv:
    sensor shifting on the leg partway through (see swing_axis_turn).
 3. Finds the stomp at the start, in the ankle and in the phone recording.
 4. Saves one plot per trial to ../media/recording_checks/.
+Corrections to trials.csv (a wrong count or distance typed on the phone) go
+in trial_corrections.csv, never into trials.csv itself: every sync replaces
+trials.csv with the board's copy. load_trials applies them.
+
 5. Marks the trials listed in excluded_trials.csv (left out of training, with
    the reason), then counts the trials left for training per activity and
    lists any trial with problems that isn't excluded yet.
@@ -52,6 +56,8 @@ PLOTS = DATA.parent / "media" / "recording_checks"
 REAL_LENGTHS = DATA / "real_durations.csv"
 REAL_COLUMNS = ["file", "samples", "start_utc", "end_utc", "real_s", "samples_per_s"]
 EXCLUDED = DATA / "excluded_trials.csv"   # trials left out of training: file, reason
+CORRECTIONS = DATA / "trial_corrections.csv"   # fixes to trials.csv: file, column, value, reason
+NO_STOMP = ["Test"]              # Test walks have no stomp or phone recording: not flagged for either
 KIT_TOOLS = Path.home() / "Documents" / "GitHub" / "ArduinoApps" / "tools"
 REMOTE_DIR = "/home/arduino/ArduinoApps/step-recorder/python/recordings"
 
@@ -136,6 +142,26 @@ def all_phone_recordings():
             # A stray or broken file shouldn't stop the check of everything else
             print(f"  skipping {p.relative_to(DATA)}: not a readable phyphox export ({e})")
     return recordings
+
+
+def load_trials(report=False):
+    """trials.csv with trial_corrections.csv applied. A power cut once left
+    NUL bytes in trials.csv (in place of a row that never reached the disk);
+    they're dropped so the next row still reads."""
+    with open(DATA / "trials.csv", newline="") as f:
+        trials = list(csv.DictReader(io.StringIO(f.read().replace("\0", ""))))
+    if CORRECTIONS.exists():
+        by_file = {t["file"]: t for t in trials}
+        with open(CORRECTIONS, newline="") as f:
+            for c in csv.DictReader(f):
+                t = by_file.get(c["file"])
+                if t is None or c["column"] not in t:
+                    print(f"  trial_corrections.csv: no {c['column']!r} of {c['file']} to correct: typo?")
+                    continue
+                if report:
+                    print(f"  corrected {c['file'][:-4]} {c['column']}: {t[c['column']]} -> {c['value']} ({c['reason']})")
+                t[c["column"]] = c["value"]
+    return trials
 
 
 def load_excluded():
@@ -386,8 +412,7 @@ def main():
     # A power cut right after saving a trial can leave NUL bytes in place of a
     # row that never reached the disk (they're in the board's copy too). The
     # row itself is gone; dropping the NULs keeps the next row readable.
-    with open(DATA / "trials.csv", newline="") as f:
-        trials = list(csv.DictReader(io.StringIO(f.read().replace("\0", ""))))
+    trials = load_trials(report=True)
     trial_names = {t["file"][:-4] for t in trials}
     recordings = all_phone_recordings()
     phones = unique_phone_recordings(recordings, trial_names)
@@ -437,7 +462,7 @@ def main():
         # Matched only through its zip: say where to unzip it
         elif phone is not None and phone["is_zip"]:
             print(f"  not unzipped yet: unzip original_zips/{phone['folder']} into phone_raw/{name}/")
-        elif phone is None:
+        elif phone is None and trial["activity"] not in NO_STOMP:
             print(f"  no phone recording for {name}")
     # GPS positions must never reach GitHub, whatever the files are called
     for p in recordings:
@@ -480,7 +505,7 @@ def main():
             problems.append(f"sensor shifted? swing axis turned {q['axis_turn']:.0f} deg")
         if q["still_gravity"] and not (0.9 < q["still_gravity"][0] and q["still_gravity"][1] < 1.1):
             problems.append("gravity off while still")
-        if not stomp_is_clear(s_ankle):
+        if not stomp_is_clear(s_ankle) and trial["activity"] not in NO_STOMP:
             problems.append("ankle stomp unclear")
         # The phone goes into the pocket just before the stomp, so it isn't
         # quiet beforehand; landing where the clocks put it is the check
