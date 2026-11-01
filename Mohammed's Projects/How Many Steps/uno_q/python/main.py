@@ -60,7 +60,7 @@ ACTIVITIES = [
     "Outdoor",    # the long walk, compared with the phone's step counter
 ]
 NO_STEP_ACTIVITIES = ["Stand", "Fidget", "LegSwing"]  # default 0 steps and 0 m
-DEFAULT_DISTANCE_M = 20      # the measured course; Outdoor has no default (it's never 20 m)
+DEFAULT_DISTANCE_M = 20      # the measured course; Outdoor and Test have no default (never the course)
 SAMPLE_RATE_HZ = 100         # the sketch samples every 10 ms
 SENSOR_STALE_S = 0.5         # no good reading for this long = the sensor isn't reading
 # What a failed read turns into in the sketch: -1 raw on every channel,

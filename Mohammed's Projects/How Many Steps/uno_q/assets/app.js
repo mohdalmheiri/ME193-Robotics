@@ -139,12 +139,14 @@ $('#delete-btn').onclick = async () => {
 // ---- Show the board's state ----
 function fillCountForm(s) {
   // Pre-fill once per trial: 0 steps / 0 m for the no-step activities,
-  // 20 m otherwise, nothing for Outdoor (its distance comes from GPS/phone).
+  // 20 m for the course trials, nothing for Outdoor (its distance comes from
+  // GPS/phone) and Test (walks anywhere: type the distance only if known, else 0).
   if (shownPending === s.trial.file) return;
   shownPending = s.trial.file;
   const noSteps = s.no_step_activities.includes(s.trial.activity);
   $('#steps').value = noSteps ? 0 : '';
-  $('#distance').value = noSteps ? 0 : (s.trial.activity === 'Outdoor' ? '' : s.default_distance_m);
+  const noDefault = ['Outdoor', 'Test'].includes(s.trial.activity);
+  $('#distance').value = noSteps ? 0 : (noDefault ? '' : s.default_distance_m);
   $('#count-file').textContent = s.trial.file;
   $('#phyphox-name').textContent = s.trial.file.replace(/\.csv$/, '');
   $('#count-error').textContent = '';

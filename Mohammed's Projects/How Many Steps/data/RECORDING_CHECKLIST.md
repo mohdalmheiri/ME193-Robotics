@@ -50,8 +50,8 @@ measured course. Walk anywhere.
    count shows just this walk).
 2. **Start.** Walk, counting your steps **silently** (every foot that lands, both feet).
 3. **Stop.**
-4. Type in **Steps**, and the **Distance** only if you really know it; otherwise **change
-   the 20 to 0** (0 = unknown). **Save.** The board stores its live count for the walk in
+4. Type in **Steps**, and the **Distance** only if you really know it; otherwise **0**
+   (0 = unknown; the box starts empty for Test). **Save.** The board stores its live count for the walk in
    `live_counts.csv`, and the saved-trials table shows it.
 
 A wrong number saved anyway? Add a row to `data/trial_corrections.csv` rather than
