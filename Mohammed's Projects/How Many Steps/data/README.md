@@ -33,7 +33,8 @@ off GitHub.
 | `real_durations.csv` | The real length of each ankle recording (see below) |
 | `excluded_trials.csv` | Trials left out of training, with the reason (see below) |
 | `sync_from_board.py` | Copies `raw/` and `trials.csv` from the board, then lists anything missing |
-| `check_recordings.py` | Matches ankle and phone recordings, checks them for damage, finds the stomps, plots each trial to `../media/recording_checks/` |
+| `check_recordings.py` | Matches ankle and phone recordings, checks them for damage (bad connection, cut short, sensor shifted on the leg), finds the stomps, plots each trial to `../media/recording_checks/` |
+| `wire_test.py` | Live sensor readings while you wiggle each wire in turn, to find a loose one |
 
 ## File names
 
@@ -81,6 +82,10 @@ ever changed.
 | `duration_s` | length of the ankle recording, from its number of samples |
 
 For `Outdoor`, `steps` is the phone's step count, since nobody counts a long walk by hand.
+
+If the board loses power right after a save, the row can be lost and leave NUL bytes in its
+place (`trials.csv` has one such gap, just before `Mohammed_Run_T13`). The scripts skip
+the NUL bytes when reading; the file itself stays as the board wrote it.
 
 ## excluded_trials.csv
 

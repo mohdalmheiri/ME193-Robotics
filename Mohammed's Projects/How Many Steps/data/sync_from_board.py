@@ -13,6 +13,7 @@ so on campus Wi-Fi it can't copy from a classmate's board by mistake.
 """
 import csv
 import filecmp
+import io
 import shutil
 import subprocess
 import sys
@@ -66,8 +67,10 @@ def main():
     # trial can still be redone
     rows = []
     if TRIALS_CSV.exists():
+        # A power cut right after a save can leave NUL bytes where a row never
+        # reached the disk; drop them so the next row still reads (see check_recordings.py)
         with open(TRIALS_CSV, newline="") as f:
-            rows = list(csv.DictReader(f))
+            rows = list(csv.DictReader(io.StringIO(f.read().replace("\0", ""))))
     in_trials = {r["file"] for r in rows}
     for name in sorted(board_files - in_trials):
         print(f"  no row in trials.csv (stopped but never saved?): {name}")

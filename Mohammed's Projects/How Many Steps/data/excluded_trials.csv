@@ -12,3 +12,17 @@ Mohammed_Run_T03.csv,no samples: the sensor sent nothing (wire off)
 Mohammed_Run_T04.csv,no samples: the sensor sent nothing (wire off)
 Mohammed_Run_T05.csv,no samples: the sensor sent nothing (wire off)
 Mohammed_Run_T06.csv,empty file and no row in trials.csv: the board crashed during the trial
+Mohammed_Walk_fast_T09.csv,bad connection: the sensor lost power 3.7 s in and reads 0 from then on
+Mohammed_Walk_fast_T10.csv,bad connection: all zeros (the sensor stayed asleep after Walk_fast T09)
+Mohammed_Walk_fast_T11.csv,bad connection: all zeros (the sensor stayed asleep after Walk_fast T09)
+Mohammed_Walk_fast_T12.csv,bad connection: all zeros (the sensor stayed asleep after Walk_fast T09)
+Mohammed_Walk_fast_T13.csv,bad connection: all zeros (the sensor stayed asleep after Walk_fast T09)
+Mohammed_Walk_fast_T14.csv,bad connection: all zeros (the sensor stayed asleep after Walk_fast T09)
+Mohammed_Run_T09.csv,bad connection: all zeros (the sensor stayed asleep after Walk_fast T09)
+Mohammed_Run_T10.csv,bad connection: all zeros (the sensor stayed asleep after Walk_fast T09)
+Mohammed_Run_T11.csv,bad connection: all zeros and cut short at 1.4 s
+Mohammed_Run_T12.csv,empty file and no row in trials.csv: the board lost power during the trial
+Mohammed_Run_T13.csv,sensor shifted on the leg during the run (swing axis turned 17 deg; ends standing 21 deg off)
+Mohammed_Run_T14.csv,bad connection: the sensor lost power 9.1 s in and reads 0 from then on
+Mohammed_Run_T15.csv,bad connection: all zeros (the sensor lost power before the trial)
+Mohammed_LegSwing_T02.csv,bad connection: all zeros; the phone also fell out of the pocket at the end

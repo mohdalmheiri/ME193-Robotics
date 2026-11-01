@@ -14,7 +14,8 @@ For every trial in trials.csv:
    recording with GPS data (Location.csv) isn't kept off GitHub.
 2. Checks the ankle recording for signs of a bad connection (see check_ankle):
    missing samples, frozen or zero readings, readings stuck at the sensor's
-   maximum, and one-sample glitches.
+   maximum, and one-sample glitches; for a recording cut short; and for the
+   sensor shifting on the leg partway through (see swing_axis_turn).
 3. Finds the stomp at the start, in the ankle and in the phone recording.
 4. Saves one plot per trial to ../media/recording_checks/.
 5. Marks the trials listed in excluded_trials.csv (left out of training, with
@@ -77,6 +78,9 @@ STOMP_CLOCK_S = 0.5              # the phone's stomp must be within this of wher
 NEAR_STOMP_S = 0.1               # glitches/at-max readings this close to the stomp are the impact itself
 SLOWEST_RATE = 98.5              # samples/s; the sketch normally runs at ~99.3 (it waits >= 10 ms per sample)
 SHORTEST_S = 5                   # even a 20 m run (stand, stomp, run, stand) takes longer than this
+MOVING_DPS = 60                  # deg/s: the leg is swinging (walking, running, LegSwing)
+SHIFT_DEG = 12                   # the swing axis turning this much within a trial = the sensor moved on the leg
+                                 # (a steady walk stays within ~3 deg; a run, with fewer strides, ~10)
 
 
 # ---- Loading ------------------------------------------------------------------
@@ -274,7 +278,32 @@ def check_ankle(data, start, end_time, stomp_index):
              if np.std(mag[i:i + RATE]) < 0.02]
     result["still_gravity"] = (min(np.mean(w) for w in still), max(np.mean(w) for w in still)) if still else None
     result["peak_g"] = float(mag.max())
+    result["axis_turn"] = swing_axis_turn(gyro, stomp_index)
     return result
+
+
+def swing_axis_turn(gyro, stomp_index):
+    """How far (degrees) the leg's main swing axis turns between the first and
+    second half of the movement, in the sensor's own axes. The leg swings
+    around the same axis all trial, so this stays small unless the sensor
+    itself turned on the leg (shifted). Standing differently at the start or
+    finish doesn't change it, unlike the gravity reading. None if the leg
+    hardly moves (Stand, Fidget)."""
+    if stomp_index is None:
+        return None
+    after = stomp_index + int(1.5 * RATE)          # past the stomp and its wobble
+    moving = np.flatnonzero(np.linalg.norm(gyro[after:], axis=1) > MOVING_DPS) + after
+    if len(moving) < 2 * RATE:
+        return None
+    first, last = moving[0], moving[-1]
+    middle = (first + last) // 2
+
+    def main_axis(g):
+        # the direction with the most rotation: the largest principal component
+        values, vectors = np.linalg.eigh(np.cov(g.T))
+        return vectors[:, -1]
+    cos = abs(main_axis(gyro[first:middle]) @ main_axis(gyro[middle:last]))   # the axis has no sign
+    return float(np.degrees(np.arccos(min(1.0, cos))))
 
 
 # ---- 3. The stomp -------------------------------------------------------------------
@@ -352,8 +381,11 @@ def plot_trial(trial, data, phone, stomp_ankle, offset, verdict):
 
 # ---- Main -------------------------------------------------------------------------------
 def main():
+    # A power cut right after saving a trial can leave NUL bytes in place of a
+    # row that never reached the disk (they're in the board's copy too). The
+    # row itself is gone; dropping the NULs keeps the next row readable.
     with open(DATA / "trials.csv", newline="") as f:
-        trials = list(csv.DictReader(f))
+        trials = list(csv.DictReader(io.StringIO(f.read().replace("\0", ""))))
     trial_names = {t["file"][:-4] for t in trials}
     recordings = all_phone_recordings()
     phones = unique_phone_recordings(recordings, trial_names)
@@ -442,6 +474,8 @@ def main():
                            ("at_max", "readings at max"), ("glitches", "glitches")]:
             if q[key]:
                 problems.append(f"{q[key]} {label}")
+        if q["axis_turn"] is not None and q["axis_turn"] > SHIFT_DEG:
+            problems.append(f"sensor shifted? swing axis turned {q['axis_turn']:.0f} deg")
         if q["still_gravity"] and not (0.9 < q["still_gravity"][0] and q["still_gravity"][1] < 1.1):
             problems.append("gravity off while still")
         if not stomp_is_clear(s_ankle):
@@ -467,7 +501,8 @@ def main():
               f"{q['failed_reads']}, at max {q['at_max']} (+{q['at_max_stomp']} at the stomp), "
               f"glitches {q['glitches']} (+{q['glitches_stomp']} at the stomp), "
               f"peak {q['peak_g']:.1f} g, still gravity "
-              + (f"{g[0]:.3f}-{g[1]:.3f} g" if g else "n/a"))
+              + (f"{g[0]:.3f}-{g[1]:.3f} g" if g else "n/a")
+              + (f", swing axis turned {q['axis_turn']:.1f} deg" if q["axis_turn"] is not None else ""))
         if sa:
             print(f"  stomp ankle: at {sa['t']:.2f} s, {sa['height']:+.1f} g above 1 g, "
                   f"{sa['vs_before']:.1f}x anything in the second before it")
