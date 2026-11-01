@@ -30,6 +30,7 @@ off GitHub.
 | `raw/` | Ankle recordings, one CSV per trial, copied from the board by `sync_from_board.py` |
 | `phone_raw/` | phyphox recordings: one folder per trial (e.g. `Mohammed_Walk_slow_T02/`), and the exports as phyphox named them in `original_zips/` |
 | `trials.csv` | One row per trial with the real counts (copied from the board) |
+| `live_counts.csv` | The board's live step count for each trial recorded since the live counter was added (copied from the board) |
 | `real_durations.csv` | The real length of each ankle recording (see below) |
 | `excluded_trials.csv` | Trials left out of training, with the reason (see below) |
 | `sync_from_board.py` | Copies `raw/` and `trials.csv` from the board, then lists anything missing |

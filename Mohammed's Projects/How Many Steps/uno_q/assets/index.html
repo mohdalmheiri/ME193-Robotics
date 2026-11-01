@@ -65,6 +65,18 @@
         the zip to <b id="phyphox-name">-</b> by time, so keep phyphox's file name.</p>
     </section>
 
+    <!-- Live step count (the trained net on the board, all the time) -->
+    <section id="live" class="panel">
+      <h2>Live count</h2>
+      <div class="grid">
+        <div class="big"><span id="live-steps">0</span><small>± <span id="live-steps-unc">0</span> steps</small></div>
+        <div class="big"><span id="live-distance">0</span><small>± <span id="live-distance-unc">0</span> m</small></div>
+      </div>
+      <p class="small"><span id="live-cadence">0</span> steps/s · <span id="live-speed">0</span> m/s ·
+        dashboard <span id="live-dashboard">-</span></p>
+      <button id="reset-btn">Reset count</button>
+    </section>
+
     <!-- 4. Live status -->
     <div id="status" class="panel">
       <p>State: <b id="status-mode">-</b></p>
@@ -77,7 +89,7 @@
     <section class="panel">
       <h2>Saved trials (<span id="trial-count">0</span>)</h2>
       <table>
-        <thead><tr><th>File</th><th>Steps</th><th>m</th><th>s</th></tr></thead>
+        <thead><tr><th>File</th><th>Steps</th><th>live</th><th>m</th><th>s</th></tr></thead>
         <tbody id="recent"></tbody>
       </table>
       <div class="grid">

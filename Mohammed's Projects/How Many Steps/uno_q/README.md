@@ -16,15 +16,33 @@ from a phone on port 7000.
   the real step count and distance from the phone, then adds a row to
   `python/recordings/trials.csv`. Every row of a CSV is one sample:
   `time` (UTC), `ax ay az` (g), `gx gy gz` (°/s), `activity`, `person`.
-- `assets/` is the phone page: name, activity, Start/Stop, the count form, and the last
-  saved trials, with buttons to delete the last trial or download everything as a zip.
+- `python/step_counter.py` counts steps live, all the time: every 0.5 s it computes the
+  22 training features of the last 2 s and runs the 5-net committee in
+  `python/step_model.npz` (plain numpy; `training/train_steps.py` writes this copy), then
+  adds rate × 0.5 s to the steps and speed × 0.5 s to the distance, with the per-pace ±.
+  A half-second that holds a sample that isn't a real reading counts nothing.
+  `training/check_live_math.py` checks it gives the same numbers as training.
+- The live count goes to the LED matrix, the phone page (with a Reset button) and the
+  dashboard: `main.py` publishes the message in `dashboard/README.md` to
+  `ME193/Mohammed/steps` on `broker.hivemq.com` after every clip, in the background, so
+  no internet never holds up recording. `python/requirements.txt` pins numpy and
+  paho-mqtt.
+- Each saved trial also gets its live count (from Start to Stop) in
+  `python/recordings/live_counts.csv`: `file, live_steps, live_steps_unc,
+  live_distance_m, live_distance_unc`. It's a separate file so `trials.csv` keeps its
+  columns. The page shows it in the saved-trials table, never in the count form, so it
+  can't sway the count you type in.
+- `assets/` is the phone page: name, activity, Start/Stop, the count form, the live
+  count, and the last saved trials, with buttons to delete the last trial or download
+  everything as a zip.
 - If the sensor stops reading (every channel 0 = it lost power; every channel −1 = it
   doesn't answer, a wire is off; or no samples at all), the page shows a red **Sensor
   isn't reading** banner at the top, recording or not, until it reads again. After a
   trial with unread samples, the count form says how many seconds and suggests
   Discard. The check runs on every sample in `main.py`, which also logs each change.
-- The LED matrix shows the state when the phone is in a pocket: a dot = ready,
-  **R** = recording, **?** = stopped, waiting for the step count.
+- The LED matrix shows the live step count (its last 3 digits; a dot in the bottom-right
+  corner from 1000 on). While recording, the top row is lit across. **?** = stopped,
+  waiting for the step count.
 - While idle, the matrix scrolls the board's address (e.g. `172.20.10.2:7000`, or
   `NO WIFI`) until a phone opens the page, and again whenever the address changes. The
   address comes from `board_setup/address_watcher.sh`, a small service on the board

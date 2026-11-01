@@ -17,7 +17,7 @@ trials.
 - [ ] Board strapped to the right lower leg, near the ankle, then plug in the power bank.
 - [ ] Wait for the LED matrix to scroll the address (`172.20.10.x:7000`).
 - [ ] **Phone 2:** open `http://<that address>` in Safari. Title **Step Recorder**, matrix
-      shows a dot.
+      shows the live step count.
 - [ ] Course: 20 m, start and finish lines marked.
 
 ## Every trial
@@ -25,7 +25,7 @@ trials.
 1. **Phone 2:** pick the name and activity on the Step Recorder page. Note the
    **Next file** name.
 2. **Phone 1:** phyphox **Steps - Motion**, check it's empty, press ▶. Into the pocket.
-3. **Phone 2: Start.** LED shows **R**.
+3. **Phone 2: Start.** The LED's top row lights up across (recording).
 4. Stand at the start line, still for 2 s. **Stomp once, hard**, with the ankle leg. Still 1 s.
 5. Walk (or run) **one way** to the finish line, 20 m. Count your steps **silently**: every
    foot that lands, both feet, from the first step to the last. The stomp isn't a step.
@@ -34,7 +34,7 @@ trials.
 7. **Phone 2: Stop.** LED shows **?**.
 8. **Phone 1:** take it out, phyphox **⏸**.
 9. **Phone 2:** type in **Steps** and **Distance** (20, or 0 for Stand / Fidget / LegSwing),
-   then **Save**. LED back to a dot. Messed up? **Discard** and redo the trial.
+   then **Save**. LED back to the step count. Messed up? **Discard** and redo the trial.
 10. **Phone 1: export first:** **⋮ → Export Data → CSV (Comma, decimal point)**, save to
     Files. Keep phyphox's own name; the laptop matches it by time.
 11. **Phone 1: then clear** the data (trash icon), ready for the next trial.

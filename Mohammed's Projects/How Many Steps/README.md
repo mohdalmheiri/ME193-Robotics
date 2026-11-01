@@ -7,9 +7,9 @@ count and a distance, shown live on a dashboard.
 
 ## How it works
 
-This section grows as the parts are built. So far there is a practice run on the HW6
-data, a live dashboard running on fake data, the recorder for counted trials, and the
-step counter trained on them.
+The board records counted trials, a net is trained on them on the laptop, and the
+trained net then runs live on the board, counting steps and distance and sending them
+to the dashboard. There is also a practice run on the HW6 data.
 
 ### Recording counted trials
 
@@ -49,6 +49,26 @@ to the laptop. Naming, columns and phyphox setup are in
 6. Save the plots, the error table (`training/results.md`) and `training/step_model.npz`:
    the ankle-only committee trained on all good trials, which runs with plain numpy
    (`numpy_predict` in the script), so the UNO Q doesn't need PyTorch.
+
+### Counting live on the UNO Q
+
+The Step Recorder app counts steps all the time, recording or not
+(`uno_q/python/step_counter.py`, plain numpy):
+
+1. It keeps the last 2 s of ankle samples. Every 0.5 s (50 new samples, so the clips
+   are spaced exactly as in training), it computes the same 22 features as training.
+2. It runs the 5-net committee from `step_model.npz` (which `train_steps.py` also
+   copies into `uno_q/python/`), and adds rate × 0.5 s to the steps and speed × 0.5 s
+   to the distance, plus the per-pace ±.
+3. The running count goes to the LED matrix, the Step Recorder page (with a Reset
+   button) and the dashboard, as the MQTT message in `dashboard/README.md`, with net 1's
+   two hidden layers as `layer1`/`layer2`.
+4. Every saved trial also stores its live count from Start to Stop, in
+   `live_counts.csv`, so it can be compared with the real count.
+
+`training/check_live_math.py` feeds saved recordings through the board's code in
+10-sample batches, as the board receives them, and checks that every clip's features
+and outputs match `train_steps.py` (they're identical).
 
 ### Practice: activity classifier on HW6 data
 
@@ -93,6 +113,7 @@ How Many Steps/
 │   ├── raw/                     ankle recordings, one CSV per trial
 │   ├── phone_raw/               phone recordings: one folder per trial, zips in original_zips/
 │   ├── trials.csv               real step count and distance for each trial
+│   ├── live_counts.csv          the board's live count for each trial (since it counts live)
 │   ├── excluded_trials.csv      damaged trials left out of training, with the reason
 │   ├── real_durations.csv       real length and sample rate of each ankle recording
 │   ├── sync_from_board.py       copies the trials from the board
@@ -101,12 +122,13 @@ How Many Steps/
 │   └── README.md                naming, columns, phyphox setup, the stomp
 ├── training/
 │   ├── train_steps.py           the step counter: training and leave-one-trial-out test
+│   ├── check_live_math.py       checks the board's live math matches training
 │   ├── step_model.npz           trained ankle-only committee, for plain numpy on the UNO Q
 │   ├── results.md               errors per pace
 │   ├── results_per_trial.csv    every held-out trial's estimates
 │   ├── practice_classifier.py   practice net on the HW6 data
 │   └── requirements.txt         laptop packages for training
-├── uno_q/                       Step Recorder app for the UNO Q (see its README)
+├── uno_q/                       Step Recorder app: recording and live counting (see its README)
 ├── dashboard/
 │   ├── index.html               live dashboard page (open in a browser)
 │   ├── fake_publisher.py        fake data until the hardware exists
@@ -154,6 +176,12 @@ python "Mohammed's Projects/How Many Steps/data/sync_from_board.py"
   there, so deleting them would reuse numbers.
 - `Outdoor` phone zips contain GPS positions, so they are kept off GitHub.
 
+- Live on the board, three counted walks around the apartment (Test T01-T03, 46, 31 and
+  62 steps) came out at 48.5 ± 2.4, 34.6 ± 1.4 and 61.5 ± 2.1. Replaying the recordings
+  shows where the extra comes from: during the walking itself the count was within 0.4,
+  0.1 and 1.6 steps, and the stomp, standing still and stopping add 1-4 steps per trial,
+  since training never saw the stomp. The live count runs nonstop, so those moments count
+  too.
 - Step counter, leave-one-trial-out on 39 trials (`training/results.md` has the full
   table): on walks and runs the ankle-only net is off by about 0.5-0.7 steps per trial
   (1.7-3.4%) and 0.4-1.4 m of 20 m; 1.5 steps per trial over all trials. The peak counter does well on most walks but

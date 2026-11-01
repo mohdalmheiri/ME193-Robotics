@@ -3,8 +3,8 @@
     python fake_publisher.py          (Ctrl+C to stop)
 
 Publishes one JSON message twice a second to ME193/Mohammed/steps on
-broker.hivemq.com, in the format written down in README.md (the UNO Q will
-send the same thing later). The numbers are made up but behave like the real
+broker.hivemq.com, in the format written down in README.md (the UNO Q's
+Step Recorder sends the same thing with real data; don't run both at once). The numbers are made up but behave like the real
 thing:
 
 - It loops through four activities: standing, walking, running, and sitting

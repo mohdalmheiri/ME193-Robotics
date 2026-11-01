@@ -111,3 +111,8 @@ td { padding: 4px 4px 4px 0; border-top: 1px solid #2a2a2a; word-break: break-al
 th:not(:first-child), td:not(:first-child) { text-align: right; white-space: nowrap; }
 
 a { text-decoration: none; }
+
+/* Live count: two big numbers with their +/- underneath */
+.big { font-size: 2.2rem; font-weight: 700; text-align: center; }
+.big small { display: block; font-size: 0.85rem; font-weight: 400; color: #aaa; }
+#live button { margin-top: 10px; }

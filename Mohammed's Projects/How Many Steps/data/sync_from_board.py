@@ -3,7 +3,8 @@
     python sync_from_board.py
 
 - Every Person_Activity_Tnn.csv on the board goes to raw/.
-- The board's trials.csv replaces trials.csv here (the board is the master copy).
+- The board's trials.csv replaces trials.csv here (the board is the master copy),
+  and so does live_counts.csv (the live step count of each trial).
 - Prints anything that doesn't match up: a recording without a row in
   trials.csv, a row without its recording, or a missing phyphox recording.
 
@@ -28,6 +29,7 @@ DATA_DIR = Path(__file__).resolve().parent
 RAW_DIR = DATA_DIR / "raw"
 PHONE_DIR = DATA_DIR / "phone_raw"
 TRIALS_CSV = DATA_DIR / "trials.csv"
+LIVE_COUNTS_CSV = DATA_DIR / "live_counts.csv"
 
 sys.path.insert(0, str(KIT_TOOLS))
 import deploy  # noqa: E402  (needs the line above to be found)
@@ -61,6 +63,8 @@ def main():
 
         if (tmp / "trials.csv").exists():
             shutil.copy2(tmp / "trials.csv", TRIALS_CSV)
+        if (tmp / "live_counts.csv").exists():
+            shutil.copy2(tmp / "live_counts.csv", LIVE_COUNTS_CSV)
     print(f"\n{new} new and {changed} updated recordings in raw/, trials.csv updated")
 
     # Cross-checks, so a missing count or phone file is noticed while the

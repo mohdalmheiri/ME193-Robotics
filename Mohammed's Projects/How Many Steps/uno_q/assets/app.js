@@ -122,6 +122,11 @@ $('#discard-btn').onclick = async () => {
   refresh();
 };
 
+$('#reset-btn').onclick = async () => {
+  try { await call('/reset_count'); } catch (e) { alert(e.message); }
+  refresh();
+};
+
 $('#delete-btn').onclick = async () => {
   const last = state && state.recent_trials[0];
   if (!last) return;
@@ -183,9 +188,20 @@ async function refresh() {
     shownPending = null;
   }
 
+  // Live count. It isn't shown in the count form after Stop, so it can't
+  // sway the number typed in; each saved trial's live count is in the table.
+  $('#live-steps').textContent = Math.floor(s.live.steps);
+  $('#live-steps-unc').textContent = s.live.steps_unc.toFixed(1);
+  $('#live-distance').textContent = s.live.distance_m.toFixed(1);
+  $('#live-distance-unc').textContent = s.live.distance_unc.toFixed(1);
+  $('#live-cadence').textContent = s.live.cadence.toFixed(2);
+  $('#live-speed').textContent = s.live.speed.toFixed(2);
+  $('#live-dashboard').textContent = s.live.dashboard ? 'connected' : 'offline';
+  $('#reset-btn').disabled = s.mode === 'recording';
+
   $('#trial-count').textContent = s.trial_count;
   $('#recent').innerHTML = s.recent_trials
-    .map((t) => `<tr><td>${t.file.replace(/\.csv$/, '')}</td><td>${t.steps}</td><td>${t.distance_m}</td><td>${t.duration_s}</td></tr>`)
+    .map((t) => `<tr><td>${t.file.replace(/\.csv$/, '')}</td><td>${t.steps}</td><td>${t.live_steps}</td><td>${t.distance_m}</td><td>${t.duration_s}</td></tr>`)
     .join('');
   $('#delete-btn').disabled = s.mode !== 'idle' || s.recent_trials.length === 0;
 }

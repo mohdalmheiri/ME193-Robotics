@@ -3,13 +3,12 @@
 A live webpage for the step counter: total steps and distance (each with its ±
 uncertainty), a scrolling chart of cadence, and the neural net's two hidden layers
 of 16 neurons drawn as circles that glow brighter when their value is higher. It
-listens to MQTT, so it works the same with the fake publisher now and the UNO Q
-later.
+listens to MQTT, so it works the same with the fake publisher and the UNO Q.
 
 ## Message format
 
-Whoever sends the data (`fake_publisher.py` now, the UNO Q later) publishes one JSON
-message **twice a second** to:
+Whoever sends the data (the UNO Q's Step Recorder app, or `fake_publisher.py` for testing)
+publishes one JSON message **twice a second** to:
 
 - Broker: `broker.hivemq.com` (port 1883 for Python, `wss://broker.hivemq.com:8884/mqtt` for the page)
 - Topic: `ME193/Mohammed/steps`
@@ -63,6 +62,12 @@ count can be.
 | `fake_publisher.py` | Sends made-up but realistic messages, cycling through standing, walking, running and sitting while swinging a leg |
 
 ## Run it
+
+With real data: power the board with the Step Recorder app (its default app). It
+publishes on its own whenever it has internet; nothing else to start. Don't run the
+fake publisher at the same time, since both would send to the same topic.
+
+For testing without the board:
 
 1. Start the fake data (needs `paho-mqtt`, already in `Mohammed's Projects/requirements.txt`).
    From the repo root, with `.venv` active:

@@ -34,10 +34,12 @@ What it does:
    agree with the truth (see uncertainty_table and clip_uncertainty).
 
 Outputs: ../media/train_loss.png, ../media/steps_est_vs_true.png,
-results.md (errors per pace) and results_per_trial.csv in this folder.
+results.md (errors per pace) and results_per_trial.csv in this folder, and
+step_model.npz both here and in ../uno_q/python/ (the copy the board loads).
 """
 import csv
 import io
+import shutil
 import sys
 import time
 from pathlib import Path
@@ -85,16 +87,19 @@ PEAK_GAP = int(0.4 * RATE)       # ...and swings of the same leg are at least 0.
 BLUE, ORANGE, AQUA = "#2a78d6", "#eb6834", "#1baf7a"
 INK, INK_2, MUTED, GRID, AXIS = "#0b0b0b", "#52514e", "#898781", "#e1e0d9", "#c3c2b7"
 MEDIA = PROJECT / "media"
+BOARD_MODEL = PROJECT / "uno_q" / "python" / "step_model.npz"   # the copy the UNO Q app loads
 
 
 # ---- 1-3. Loading, lining up, moving stretch -----------------------------------------
 def good_trials():
-    """The rows of trials.csv not in excluded_trials.csv. A power cut once left
-    NUL bytes in trials.csv; they're dropped as in check_recordings.py."""
+    """The rows of trials.csv not in excluded_trials.csv, for the paces and the
+    zero-step activities. Test and Outdoor trials are kept for testing the
+    finished counter, never trained on. A power cut once left NUL bytes in
+    trials.csv; they're dropped as in check_recordings.py."""
     with open(cr.DATA / "trials.csv", newline="") as f:
         trials = list(csv.DictReader(io.StringIO(f.read().replace("\0", ""))))
     excluded = cr.load_excluded()
-    return [t for t in trials if t["file"] not in excluded]
+    return [t for t in trials if t["file"] not in excluded and t["activity"] in PACES + NO_STEP]
 
 
 def phone_on_ankle_time(phone, offset, n):
@@ -573,6 +578,7 @@ def main():
         net, mean, std, _, _ = train_net(X, y, seed=k)
         nets.append((net, mean, std))
     save_for_board(nets, HERE / "step_model.npz", unc)
+    shutil.copyfile(HERE / "step_model.npz", BOARD_MODEL)       # deploy.py sends uno_q/ to the board
     # Check the numpy version gives the same answers as PyTorch
     torch_avg = np.mean([predict(n, m, s, X) for n, m, s in nets], axis=0)
     numpy_avg, _ = numpy_predict(np.load(HERE / "step_model.npz"), X)
