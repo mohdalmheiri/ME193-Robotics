@@ -15,10 +15,13 @@ What it does:
 3. Cuts it into 2 s clips, a new one every 0.5 s. Each clip is labelled with
    its trial's step rate (steps / moving time) and speed (distance / moving
    time); zero-step trials get 0 for both.
-4. Features per clip: the spread (standard deviation) and peak (largest
-   absolute value) of each channel, plus 10 that don't depend on how the
-   sensor sits on the leg (FEATURE_SET = "combined", see clip_features). No
-   averages: those mostly measure how the sensor is tilted, not how you move.
+4. Features per clip: 10 that don't depend on how the sensor sits on the
+   leg (FEATURE_SET = "direction_free", see clip_features): the overall size
+   of the acceleration and rotation, and their spread along the clip's own
+   main directions. No averages: those mostly measure how the sensor is
+   tilted, not how you move. (The earlier "combined" set added the spread and
+   peak of each sensor axis, 22 in all; test walks with the sensor strapped
+   at a new angle came out 14% low with it.)
 5. A small net, features -> 16 -> 16 -> 2 (steps/s, m/s), trained with mean
    squared error until the loss flattens.
 6. Leave-one-trial-out testing: for every trial, a committee of 5 nets
@@ -66,9 +69,10 @@ SOFT_STOMP_S = 3                 # a stomp too soft for the checks' 3 g minimum 
 PACES = ["Walk_slow", "Walk_normal", "Walk_fast", "Run"]
 CHANNELS = ["ax", "ay", "az", "gx", "gy", "gz"]
 # Which features describe a clip (see clip_features):
-#   "per_axis": spread and peak of each sensor axis (12 per sensor)
-#   "combined": those, plus 10 that don't depend on how the sensor sits on the leg (22 per sensor)
-FEATURE_SET = "combined"
+#   "direction_free": 10 per sensor that don't depend on how it sits on the leg
+#   "combined": those plus the spread and peak of each sensor axis (22; saved as step_model_22features.npz)
+#   "per_axis": only the spread and peak of each sensor axis (12)
+FEATURE_SET = "direction_free"
 
 N_NETS = 5                       # committee size
 HIDDEN = 16
@@ -155,37 +159,44 @@ def clip_starts(tr):
     return list(range(tr["lo"], tr["hi"] - CLIP + 1, HOP))
 
 
-def clip_features(x):
-    """Features of one clip (rows = samples, 6 columns: ax ay az gx gy gz).
-
-    Per axis: the spread and peak of each channel. These depend on how the
+def per_axis_features(x):
+    """The spread and peak of each of the 6 channels of one clip (rows =
+    samples, columns ax ay az gx gy gz): 12 numbers. These depend on how the
     sensor sits on the leg: re-strapped at another angle, the same swing
-    shows up on different axes.
+    shows up on different axes."""
+    return np.concatenate([x.std(axis=0), np.abs(x).max(axis=0)])
 
-    Direction-free (FEATURE_SET = "combined"), for acceleration and rotation
-    each: the spread and peak of the overall size (magnitude, whatever the
-    direction), and the spread along the clip's own three main directions,
-    largest first (the square roots of the covariance's eigenvalues). The
-    same movement gives the same numbers however the sensor is turned."""
-    per_axis = np.concatenate([x.std(axis=0), np.abs(x).max(axis=0)])
-    if FEATURE_SET == "per_axis":
-        return per_axis
+
+def direction_free_features(x):
+    """For acceleration and rotation each: the spread and peak of the overall
+    size (magnitude, whatever the direction), and the spread along the clip's
+    own three main directions, largest first (the square roots of the
+    covariance's eigenvalues): 10 numbers. The same movement gives the same
+    numbers however the sensor is turned."""
     free = []
     for v in (x[:, :3], x[:, 3:]):
         size = np.linalg.norm(v, axis=1)
         main_spreads = np.sqrt(np.clip(np.linalg.eigvalsh(np.cov(v.T))[::-1], 0, None))
         free += [size.std(), size.max(), *main_spreads]
-    return np.concatenate([per_axis, free])
+    return np.array(free)
+
+
+def clip_features(x):
+    """The features of one clip for FEATURE_SET (the board's step_counter.py
+    has the same formulas)."""
+    if FEATURE_SET == "per_axis":
+        return per_axis_features(x)
+    if FEATURE_SET == "direction_free":
+        return direction_free_features(x)
+    return np.concatenate([per_axis_features(x), direction_free_features(x)])
 
 
 def feature_names(with_phone):
     def one(sensor):
-        names = [f"{sensor}_{c}_spread" for c in CHANNELS] + [f"{sensor}_{c}_peak" for c in CHANNELS]
-        if FEATURE_SET == "combined":
-            for kind in ("acc", "gyro"):
-                names += [f"{sensor}_{kind}_size_spread", f"{sensor}_{kind}_size_peak",
-                          f"{sensor}_{kind}_main1_spread", f"{sensor}_{kind}_main2_spread", f"{sensor}_{kind}_main3_spread"]
-        return names
+        per_axis = [f"{sensor}_{c}_spread" for c in CHANNELS] + [f"{sensor}_{c}_peak" for c in CHANNELS]
+        free = [f"{sensor}_{kind}_{part}" for kind in ("acc", "gyro")
+                for part in ("size_spread", "size_peak", "main1_spread", "main2_spread", "main3_spread")]
+        return {"per_axis": per_axis, "direction_free": free, "combined": per_axis + free}[FEATURE_SET]
     return one("ankle") + (one("phone") if with_phone else [])
 
 
@@ -386,7 +397,7 @@ def uncertainty_markdown(table):
 def save_for_board(nets, path, unc):
     """The committee's weights, rescaling and settings as plain numpy arrays.
     Each net was trained with its own rescaling, so mean/std are per net too."""
-    arrays = {"feature_names": np.array(feature_names(False)), "clip_samples": CLIP,
+    arrays = {"feature_names": np.array(feature_names(False)), "feature_set": FEATURE_SET, "clip_samples": CLIP,
               "hop_samples": HOP, "rate_hz": RATE, "outputs": np.array(["steps_per_s", "meters_per_s"])}
     for key, index in [("W1", 0), ("W2", 2), ("W3", 4)]:
         arrays[key] = np.stack([n.layers[index].weight.detach().numpy() for n, _, _ in nets])
@@ -530,6 +541,29 @@ def error_table(trials, res_ankle, res_both, peaks):
     return "\n".join(lines)
 
 
+def comparison_table(trials, res_ankle, path):
+    """Ankle-only leave-one-out errors per group, next to the same test for an
+    earlier model (its results_per_trial file): steps and distance per trial."""
+    with open(path, newline="") as f:
+        old = {r["trial"]: r for r in csv.DictReader(f)}
+    lines = ["| Pace | Trials | Steps error: 22 features | Steps error: direction-free (now) "
+             "| Distance error: 22 features | Distance error: direction-free (now) |", "|---|---|---|---|---|---|"]
+    for g in PACES + ["Zero-step", "All"]:
+        idx = [i for i, tr in enumerate(trials)
+               if (g == "All" or tr["activity"] == g or (g == "Zero-step" and tr["activity"] in NO_STEP)) and tr["name"] in old]
+        steps = np.array([trials[i]["steps"] for i in idx], float)
+        dist = np.array([trials[i]["distance"] for i in idx], float)
+
+        def err(est, truth):
+            e = np.abs(np.array(est) - truth)
+            return f"{e.mean():.1f}" + (f" ({100 * e.sum() / truth.sum():.1f}%)" if truth.sum() > 0 else "")
+        lines.append(f"| {g} | {len(idx)} | {err([float(old[trials[i]['name']]['ankle_steps']) for i in idx], steps)} "
+                     f"| {err([res_ankle[i]['steps_est'] for i in idx], steps)} "
+                     f"| {err([float(old[trials[i]['name']]['ankle_m']) for i in idx], dist)} m "
+                     f"| {err([res_ankle[i]['dist_est'] for i in idx], dist)} m |")
+    return "\n".join(lines)
+
+
 # ---- Main -------------------------------------------------------------------------------------------
 def main():
     begin = time.time()
@@ -553,13 +587,22 @@ def main():
 
     table = error_table(trials, res_ankle, res_both, peaks)
     unc = uncertainty_table(trials, res_ankle)
+    # The 22-feature model's results, saved when the features changed, for comparison
+    old_results = HERE / "results_per_trial_22features.csv"
+    comparison = ""
+    if FEATURE_SET != "combined" and old_results.exists():
+        comparison = ("\n\n## Compared with the 22-feature model\n\n"
+                      "The same leave-one-out test, ankle only, for the earlier model with the 12 per-axis features "
+                      "as well (`step_model_22features.npz`, `results_per_trial_22features.csv`). Average error per "
+                      "trial, and in brackets as a % of the true total.\n\n" + comparison_table(trials, res_ankle, old_results))
     # evaluate_tests.py adds a "Test walks" section at the end of results.md; keep it
     marker = "<!-- test walks: written by evaluate_tests.py -->"
     old = (HERE / "results.md").read_text() if (HERE / "results.md").exists() else ""
     kept = ("\n" + marker + old.split(marker, 1)[1]) if marker in old else ""
     with open(HERE / "results.md", "w") as f:
         f.write("# Step counter: leave-one-trial-out results\n\n"
-                f"Written by `train_steps.py`. {len(trials)} good trials, {n_clips} clips of 2 s. Each trial's "
+                f"Written by `train_steps.py`, features: {FEATURE_SET} ({len(feature_names(False))} per sensor). "
+                f"{len(trials)} good trials, {n_clips} clips of 2 s. Each trial's "
                 f"totals come from a committee of {N_NETS} nets trained without it. Errors are the mean absolute "
                 "error per trial, and in brackets the total error as a % of the true total. The +/- is the spread "
                 "between the committee's nets.\n\n" + table + "\n\n"
@@ -567,8 +610,8 @@ def main():
                 "From the ankle-only errors above (root-mean-square per group), not from the committee's "
                 "spread, which is far smaller than the real errors. Saved in `step_model.npz`; the board "
                 "picks the group from the net's own step rate for each clip and adds up `clip_uncertainty`.\n\n"
-                + uncertainty_markdown(unc) + "\n" + kept)
-    print("\n" + table)
+                + uncertainty_markdown(unc) + comparison + "\n" + kept)
+    print("\n" + table + comparison)
 
     plot_losses({"Ankle only": curves_ankle, "Ankle + phone": curves_both}, MEDIA / "train_loss.png")
     plot_estimates(trials, res_ankle, res_both, peaks, MEDIA / "steps_est_vs_true.png")

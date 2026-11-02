@@ -4,8 +4,9 @@ ankle samples as they arrive. Plain numpy, no PyTorch.
 It does exactly what training/train_steps.py does to one clip:
 
 1. Keep the last 2 s (200 samples) of the ankle's 6 channels.
-2. Every 0.5 s (50 new samples), compute the clip's 22 features
-   (clip_features below, the same formulas as training's "combined" set).
+2. Every 0.5 s (50 new samples), compute the clip's features (clip_features
+   below, the same formulas as training; which set comes from the model file:
+   now the 10 direction-free ones).
 3. Run the 5 nets: rescale with each net's own mean/std, two hidden layers
    of 16 with ReLU, then 2 outputs (steps per second, meters per second),
    below 0 -> 0. The committee's answer is the average of the 5.
@@ -21,23 +22,28 @@ import numpy as np
 CHANNELS = 6                       # ax ay az (g), gx gy gz (deg/s)
 
 
-def clip_features(x):
-    """The 22 features of one clip (rows = samples, 6 columns), in the order
-    of the model's feature_names. The same formulas as clip_features in
-    training/train_steps.py with FEATURE_SET = "combined":
+def clip_features(x, feature_set="direction_free"):
+    """The features of one clip (rows = samples, 6 columns: ax ay az gx gy gz),
+    in the order of the model's feature_names. The same formulas as in
+    training/train_steps.py:
 
-    - spread (standard deviation) and peak (largest absolute value) of each
-      of the 6 channels: 12 numbers that depend on how the sensor sits;
-    - for acceleration and rotation each, the spread and peak of the overall
-      size (whatever the direction) and the spread along the clip's own three
-      main directions, largest first: 10 numbers that don't."""
+    - "direction_free" (10): for acceleration and rotation each, the spread and
+      peak of the overall size (whatever the direction) and the spread along
+      the clip's own three main directions, largest first. The same movement
+      gives the same numbers however the sensor sits on the leg.
+    - "combined" (22): first the spread (standard deviation) and peak (largest
+      absolute value) of each of the 6 channels, which do depend on how the
+      sensor sits, then the 10 above. The earlier model.
+    - "per_axis" (12): only the spread and peak of each channel."""
     per_axis = np.concatenate([x.std(axis=0), np.abs(x).max(axis=0)])
     free = []
     for v in (x[:, :3], x[:, 3:]):
         size = np.linalg.norm(v, axis=1)
         main_spreads = np.sqrt(np.clip(np.linalg.eigvalsh(np.cov(v.T))[::-1], 0, None))
         free += [size.std(), size.max(), *main_spreads]
-    return np.concatenate([per_axis, free])
+    free = np.array(free)
+    return {"direction_free": free, "per_axis": per_axis,
+            "combined": np.concatenate([per_axis, free])}[feature_set]
 
 
 class Committee:
@@ -52,6 +58,9 @@ class Committee:
         self.hop = int(m["hop_samples"])              # 50 samples = 0.5 s
         self.rate_hz = int(m["rate_hz"])
         self.n_features = len(m["feature_names"])
+        # Which features the nets were trained on (files from before this was
+        # saved are the 22-feature "combined" model)
+        self.feature_set = str(m["feature_set"]) if "feature_set" in m.files else "combined"
         # The +/- per pace group (see train_steps.uncertainty_table)
         self.unc_edges = m["unc_rate_edges"]
         self.unc_steps_frac, self.unc_dist_frac = m["unc_steps_frac"], m["unc_dist_frac"]
@@ -124,7 +133,7 @@ class LiveCounter:
             # count nothing rather than let the net guess from garbage
             self.rate = self.speed = 0.0
             return
-        self.rate, self.speed, self.hidden = self.c.run(clip_features(self.window))
+        self.rate, self.speed, self.hidden = self.c.run(clip_features(self.window, self.c.feature_set))
         self.steps += self.rate * seconds
         self.distance += self.speed * seconds
         more_steps, more_m = self.c.uncertainty(self.rate, self.speed, seconds)

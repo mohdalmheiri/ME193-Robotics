@@ -41,8 +41,9 @@ def main():
     print(f"Board's step_model.npz is the same file as training's: {'yes' if same_file else 'NO'}")
     model = np.load(HERE / "step_model.npz")
     committee = step_counter.Committee(ts.BOARD_MODEL)
-    if ts.FEATURE_SET != "combined" or committee.n_features != 22:
-        sys.exit(f"Training uses FEATURE_SET={ts.FEATURE_SET!r}, the board expects the 22 combined features")
+    if committee.feature_set != ts.FEATURE_SET or committee.n_features != len(ts.feature_names(False)):
+        sys.exit(f"Training uses FEATURE_SET={ts.FEATURE_SET!r}, the board's model {committee.feature_set!r}: "
+                 "rerun train_steps.py")
 
     trials = {t["file"][:-4]: t for t in ts.good_trials()}
     worst_feature = worst_output = 0.0
@@ -66,7 +67,7 @@ def main():
         for end, (rate, speed) in zip(ends, live_out):
             window = ankle[end - ts.CLIP:end]
             f_train = ts.clip_features(window)
-            f_live = step_counter.clip_features(window)
+            f_live = step_counter.clip_features(window, committee.feature_set)
             feat_diff = max(feat_diff, float(np.abs(f_train - f_live).max()))
             out_train, _ = ts.numpy_predict(model, f_train[None, :])
             out_diff = max(out_diff, float(np.abs(out_train[0] - [rate, speed]).max()))

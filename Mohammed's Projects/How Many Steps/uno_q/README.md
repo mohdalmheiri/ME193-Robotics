@@ -17,7 +17,8 @@ from a phone on port 7000.
   `python/recordings/trials.csv`. Every row of a CSV is one sample:
   `time` (UTC), `ax ay az` (g), `gx gy gz` (°/s), `activity`, `person`.
 - `python/step_counter.py` counts steps live, all the time: every 0.5 s it computes the
-  22 training features of the last 2 s and runs the 5-net committee in
+  training features of the last 2 s (the set the model file names: now the 10 that don't
+  depend on how the sensor sits on the leg) and runs the 5-net committee in
   `python/step_model.npz` (plain numpy; `training/train_steps.py` writes this copy), then
   adds rate × 0.5 s to the steps and speed × 0.5 s to the distance, with the per-pace ±.
   A half-second that holds a sample that isn't a real reading counts nothing.

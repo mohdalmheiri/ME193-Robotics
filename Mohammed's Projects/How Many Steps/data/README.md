@@ -34,7 +34,7 @@ off GitHub.
 | `real_durations.csv` | The real length of each ankle recording (see below) |
 | `excluded_trials.csv` | Trials left out of training, with the reason (see below) |
 | `trial_corrections.csv` | Fixes to wrong counts or distances in `trials.csv`, with the reason (see below) |
-| `test_paces.csv` | The pace and course length of each counted Test walk on the course (`file, pace, course_m`), kept out of `trials.csv` like the corrections; read by `training/evaluate_tests.py` |
+| `test_paces.csv` | The pace, course length and phase of each counted Test walk on the course (`file, pace, course_m, phase`; phase "before the fix" for T06-T17, which were counted by the 22-feature model, and "after the fix" from T18 on), kept out of `trials.csv` like the corrections; read by `training/evaluate_tests.py` |
 | `sync_from_board.py` | Copies `raw/` and `trials.csv` from the board, then lists anything missing |
 | `check_recordings.py` | Matches ankle and phone recordings, checks them for damage (bad connection, cut short, sensor shifted on the leg; not judged for runs, whose speed-up turns the leg's swing axis anyway), finds the stomps, plots each trial to `../media/recording_checks/` |
 | `wire_test.py` | Live sensor readings while you wiggle each wire in turn, to find a loose one |

@@ -2,9 +2,16 @@
 
     python evaluate_tests.py          (from this folder)
 
-Uses the Test walks listed in data/test_paces.csv (their pace, and the course
-length), the live count the board saved for each in data/live_counts.csv,
-and the real counts in data/trials.csv (with data/trial_corrections.csv).
+Uses the Test walks listed in data/test_paces.csv (their pace, the course
+length, and the phase), the live count the board saved for each in
+data/live_counts.csv, and the real counts in data/trials.csv (with
+data/trial_corrections.csv).
+
+Each phase is reported on its own. "before the fix" (Test T06-T17) was
+counted live by the 22-feature model; those walks showed the sensor-angle
+problem and so chose the fix (the 10 direction-free features), which means
+they can't test the fix fairly. Walks recorded after the redeploy are the
+fair test, compared with the current model's leave-one-out errors.
 
 1. For each walk: the live count vs the real count, and the live distance vs
    the course length; whether the error was within the live +/-; and the
@@ -12,12 +19,13 @@ and the real counts in data/trials.csv (with data/trial_corrections.csv).
 2. Per pace: average and worst error, and the error as a % of the true total;
    next to the leave-one-out error from training (results_per_trial.csv),
    i.e. what training predicted for unseen trials.
-3. A diagnostic: the same committee retrained on only the 10 direction-free
-   features, counting the same walks. If it does much better, the sensor sat
-   at an angle the 12 per-axis features hadn't seen.
-4. Saves test_results.csv (per walk), ../media/test_walks.png, and the
-   "Test walks" section of results.md (train_steps.py keeps that section
-   when it rewrites the file).
+3. For the walks before the fix, a diagnostic: the committee retrained with
+   all 22 features and with only the 10 direction-free ones, counting the
+   same walks. It shows why the fix was chosen.
+4. Saves test_results.csv (per walk), one plot per phase
+   (../media/test_walks.png before the fix, test_walks_after_fix.png after),
+   and the "Test walks" section of results.md (train_steps.py keeps that
+   section when it rewrites the file).
 """
 import csv
 from pathlib import Path
@@ -34,6 +42,14 @@ HERE = Path(__file__).resolve().parent
 RESULTS_MD = HERE / "results.md"
 MARKER = "<!-- test walks: written by evaluate_tests.py -->"
 PACES = ts.PACES
+BEFORE = "before the fix"
+# Each phase: the leave-one-out results of the model that counted it live, and its plot
+PHASES = {
+    BEFORE: {"loo": HERE / "results_per_trial_22features.csv", "plot": "test_walks.png",
+             "model": "the 22-feature model"},
+    "after the fix": {"loo": HERE / "results_per_trial.csv", "plot": "test_walks_after_fix.png",
+                      "model": "the direction-free model"},
+}
 
 
 def load_walks():
@@ -47,7 +63,7 @@ def load_walks():
     for p in paces:
         t, lv = trials[p["file"]], live[p["file"]]
         ankle, _ = cr.load_ankle(p["file"])
-        w = {"name": p["file"][:-4], "pace": p["pace"], "course_m": float(p["course_m"]),
+        w = {"name": p["file"][:-4], "pace": p["pace"], "course_m": float(p["course_m"]), "phase": p["phase"],
              "true": int(t["steps"]), "live": float(lv["live_steps"]), "live_unc": float(lv["live_steps_unc"]),
              "live_m": float(lv["live_distance_m"]), "live_m_unc": float(lv["live_distance_unc"]),
              "peak": ts.peak_count({"ankle": ankle, "stomp_i": None}), "ankle": ankle}
@@ -58,10 +74,10 @@ def load_walks():
     return walks
 
 
-def loo_by_pace():
+def loo_by_pace(path):
     """Training's leave-one-out error per pace (ankle only), as % of the true
-    total, from results_per_trial.csv: what training expected on unseen trials."""
-    with open(HERE / "results_per_trial.csv", newline="") as f:
+    total, from a results_per_trial file: what training expected on unseen trials."""
+    with open(path, newline="") as f:
         rows = list(csv.DictReader(f))
     out = {}
     for p in PACES:
@@ -75,12 +91,13 @@ def loo_by_pace():
 def direction_free_diagnostic(walks):
     """Retrain the committee on the training trials twice, with all 22
     features and with only the 10 direction-free ones, and count each walk's
-    moving stretch the training way (train_steps.clip_seconds). Not the
-    deployed model: this only shows whether the sensor's angle is the cause."""
+    moving stretch the training way (train_steps.clip_seconds). This is how
+    the fix was chosen, for the walks before it."""
     full = ts.clip_features
+    combined = lambda x: np.concatenate([ts.per_axis_features(x), ts.direction_free_features(x)])
     trials = [ts.load_trial(t) for t in ts.good_trials()]
     results = {}
-    for label, features in [("all 22 features", full), ("direction-free only", lambda x: full(x)[12:])]:
+    for label, features in [("all 22 features", combined), ("direction-free only", ts.direction_free_features)]:
         ts.clip_features = features
         X = np.vstack([ts.trial_clips(tr, False)[0] for tr in trials])
         y = np.vstack([ts.trial_clips(tr, False)[1] for tr in trials])
@@ -141,11 +158,13 @@ def diagnostic_table(walks, diag):
 
 
 # ---- Plot ----------------------------------------------------------------------------------
-def plot(walks, path):
+def plot(walks, path, phase):
     """Left: steps error per walk (live with its ±, and the peak counter),
     grouped by pace. Right: live distance error vs the 20 m course."""
     fig, axes = plt.subplots(1, 2, figsize=(12, 4.8), facecolor="#fcfcfb")
-    x = np.arange(len(walks)) + np.repeat(np.arange(len(PACES)), 3) * 0.8   # a gap between paces
+    walks = sorted(walks, key=lambda w: PACES.index(w["pace"]))
+    group = [PACES.index(w["pace"]) for w in walks]
+    x = np.arange(len(walks)) + np.array(group) * 0.8                        # a gap between paces
     ax = axes[0]
     ax.axhline(0, color=ts.MUTED, lw=1, ls="--", zorder=0)
     ax.errorbar(x - 0.12, [w["err"] for w in walks], yerr=[w["live_unc"] for w in walks], fmt="o", ms=7,
@@ -153,19 +172,20 @@ def plot(walks, path):
     ax.plot(x + 0.12, [w["peak_err"] for w in walks], "^", ms=7, color=ts.AQUA, mec="#fcfcfb", mew=1,
             label="peak counter (no net)")
     ax.set_ylabel("Estimate − your count (steps)", color=ts.INK_2)
-    ax.set_title("Steps: error on each 20 m walk", loc="left", color=ts.INK, fontsize=11)
+    ax.set_title(f"Steps: error on each 20 m walk ({phase})", loc="left", color=ts.INK, fontsize=11)
     ax.legend(frameon=False, labelcolor=ts.INK_2, loc="center left", bbox_to_anchor=(0, 0.62))
     ax = axes[1]
     ax.axhline(0, color=ts.MUTED, lw=1, ls="--", zorder=0)
     ax.errorbar(x, [w["m_err"] for w in walks], yerr=[w["live_m_unc"] for w in walks], fmt="o", ms=7,
                 color=ts.BLUE, mec="#fcfcfb", mew=1, elinewidth=1.4, capsize=3)
     ax.set_ylabel("Live distance − 20 m (m)", color=ts.INK_2)
-    ax.set_title("Distance: error on each 20 m walk", loc="left", color=ts.INK, fontsize=11)
-    centres = [x[3 * i:3 * i + 3].mean() for i in range(len(PACES))]
+    ax.set_title(f"Distance: error on each 20 m walk ({phase})", loc="left", color=ts.INK, fontsize=11)
+    shown = sorted(set(group))
+    centres = [x[np.array(group) == g].mean() for g in shown]
     for ax in axes:
-        ax.set_xticks(centres, [p.replace("_", "\n") for p in PACES], color=ts.INK_2)
+        ax.set_xticks(centres, [PACES[g].replace("_", "\n") for g in shown], color=ts.INK_2)
         ts.style(ax)
-    fig.text(0.01, 0.01, "Each dot is one walk, 3 per pace. Dashed line: exactly right. Error bars: the live ± "
+    fig.text(0.01, 0.01, "Each dot is one walk. Dashed line: exactly right. Error bars: the live ± "
              "(training's typical error for that pace).", color=ts.MUTED, fontsize=9)
     fig.tight_layout(rect=(0, 0.04, 1, 1))
     fig.savefig(path, dpi=120, facecolor=fig.get_facecolor())
@@ -173,39 +193,56 @@ def plot(walks, path):
 
 
 # ---- Main ------------------------------------------------------------------------------------
+def phase_section(phase, walks, diag):
+    loo = loo_by_pace(PHASES[phase]["loo"])
+    within = sum(abs(w["err"]) <= w["live_unc"] for w in walks)
+    text = (f"### {phase[0].upper() + phase[1:]}: counted live by {PHASES[phase]['model']}\n\n"
+            + ("These walks showed the sensor-angle problem and chose the fix, so they're the \"before\" "
+               "comparison, not a test of the fix.\n\n" if phase == BEFORE else
+               "Recorded after the redeploy: the fair test of the fix.\n\n")
+            + "Per pace (\"Training expected\" is that model's leave-one-out error):\n\n"
+            + per_pace_table(walks, loo) + "\n\nEach walk:\n\n" + per_walk_table(walks) + "\n\n"
+            + f"{within} of {len(walks)} walks were within the live ±.\n")
+    if diag:
+        text += ("\nWhy they came out low: the same committee retrained on the training trials and run on these "
+                 "walks the training way (moving stretch only). With all 22 features it undercounts like the board; "
+                 "with only the 10 features that don't depend on how the sensor sits on the leg, it's close. This is "
+                 "how the fix was chosen.\n\n" + diagnostic_table(walks, diag) + "\n")
+    return text
+
+
 def main():
     walks = load_walks()
-    loo = loo_by_pace()
-    diag = direction_free_diagnostic(walks)
+    phases = list(dict.fromkeys(w["phase"] for w in walks))      # in the order of test_paces.csv
+    by_phase = {p: [w for w in walks if w["phase"] == p] for p in phases}
+    diag = direction_free_diagnostic(by_phase[BEFORE]) if BEFORE in by_phase else None
 
     with open(HERE / "test_results.csv", "w", newline="") as f:
         wr = csv.writer(f)
-        wr.writerow(["walk", "pace", "true_steps", "live_steps", "live_steps_unc", "error", "within_unc", "peak_steps",
-                     "live_m", "live_m_unc", "m_error", "retrained_all22", "retrained_direction_free"])
-        for w, a, b in zip(walks, diag["all 22 features"], diag["direction-free only"]):
-            wr.writerow([w["name"], w["pace"], w["true"], w["live"], w["live_unc"], round(w["err"], 1),
+        wr.writerow(["walk", "phase", "pace", "true_steps", "live_steps", "live_steps_unc", "error", "within_unc",
+                     "peak_steps", "live_m", "live_m_unc", "m_error", "retrained_all22", "retrained_direction_free"])
+        retrained = {}
+        if diag:
+            for w, a, b in zip(by_phase[BEFORE], diag["all 22 features"], diag["direction-free only"]):
+                retrained[w["name"]] = (round(a, 1), round(b, 1))
+        for w in walks:
+            wr.writerow([w["name"], w["phase"], w["pace"], w["true"], w["live"], w["live_unc"], round(w["err"], 1),
                          abs(w["err"]) <= w["live_unc"], w["peak"], w["live_m"], w["live_m_unc"], round(w["m_err"], 2),
-                         round(a, 1), round(b, 1)])
+                         *retrained.get(w["name"], ("", ""))])
 
-    within = sum(abs(w["err"]) <= w["live_unc"] for w in walks)
     section = (f"{MARKER}\n## Test walks: the live count on the board\n\n"
-               f"Written by `evaluate_tests.py`. {len(walks)} counted walks on the 20 m course, 3 per pace, counted "
-               "live by the UNO Q (no stomp or phone). The live count is what the board saved for each walk; "
-               "the peak counter ran on the same recordings.\n\n"
-               "### Per pace\n\n" + per_pace_table(walks, loo) + "\n\n"
-               "### Each walk\n\n" + per_walk_table(walks) + "\n\n"
-               f"{within} of {len(walks)} walks were within the live ±.\n\n"
-               "### Why the walks came out low: the sensor's angle\n\n"
-               "The same committee retrained on the training trials and run on these walks the training way "
-               "(moving stretch only): with all 22 features it undercounts like the board; with only the 10 "
-               "features that don't depend on how the sensor sits on the leg, it's close. Diagnostic only, not "
-               "the deployed model.\n\n" + diagnostic_table(walks, diag) + "\n")
+               "Written by `evaluate_tests.py`. Counted walks on the 20 m course, counted live by the UNO Q (no "
+               "stomp or phone). The live count is what the board saved for each walk; the peak counter ran on the "
+               "same recordings.\n\n"
+               + "\n".join(phase_section(p, by_phase[p], diag if p == BEFORE else None) for p in phases))
+    if "after the fix" not in by_phase:
+        section += "\n### After the fix\n\nNo test walks yet (Test T18 and up, after the redeploy).\n"
     # Replace this section in results.md, keeping what train_steps.py wrote above it
     text = RESULTS_MD.read_text()
-    text = text.split(MARKER)[0].rstrip() + "\n\n" + section
-    RESULTS_MD.write_text(text)
+    RESULTS_MD.write_text(text.split(MARKER)[0].rstrip() + "\n\n" + section)
 
-    plot(walks, ts.MEDIA / "test_walks.png")
+    for p in phases:
+        plot(by_phase[p], ts.MEDIA / PHASES[p]["plot"], p)
     print(section)
 
 

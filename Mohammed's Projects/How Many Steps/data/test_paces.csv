@@ -1,13 +1,13 @@
-file,pace,course_m
-Mohammed_Test_T06.csv,Walk_slow,20
-Mohammed_Test_T07.csv,Walk_slow,20
-Mohammed_Test_T08.csv,Walk_slow,20
-Mohammed_Test_T09.csv,Walk_normal,20
-Mohammed_Test_T10.csv,Walk_normal,20
-Mohammed_Test_T11.csv,Walk_normal,20
-Mohammed_Test_T12.csv,Walk_fast,20
-Mohammed_Test_T13.csv,Walk_fast,20
-Mohammed_Test_T14.csv,Walk_fast,20
-Mohammed_Test_T15.csv,Run,20
-Mohammed_Test_T16.csv,Run,20
-Mohammed_Test_T17.csv,Run,20
+file,pace,course_m,phase
+Mohammed_Test_T06.csv,Walk_slow,20,before the fix
+Mohammed_Test_T07.csv,Walk_slow,20,before the fix
+Mohammed_Test_T08.csv,Walk_slow,20,before the fix
+Mohammed_Test_T09.csv,Walk_normal,20,before the fix
+Mohammed_Test_T10.csv,Walk_normal,20,before the fix
+Mohammed_Test_T11.csv,Walk_normal,20,before the fix
+Mohammed_Test_T12.csv,Walk_fast,20,before the fix
+Mohammed_Test_T13.csv,Walk_fast,20,before the fix
+Mohammed_Test_T14.csv,Walk_fast,20,before the fix
+Mohammed_Test_T15.csv,Run,20,before the fix
+Mohammed_Test_T16.csv,Run,20,before the fix
+Mohammed_Test_T17.csv,Run,20,before the fix

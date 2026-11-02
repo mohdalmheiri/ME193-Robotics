@@ -35,11 +35,12 @@ to the laptop. Naming, columns and phyphox setup are in
 2. Cut it into 2 s clips, a new one every 0.5 s. Each clip's labels are its trial's step
    rate (steps ÷ moving time) and speed (distance ÷ moving time), 0 for the zero-step
    trials.
-3. Describe each clip by the spread and peak of each channel, plus 10 numbers that don't
-   depend on how the sensor sits on the leg: the spread and peak of the overall
-   acceleration and rotation (whatever their direction), and the spread along the clip's
-   own three main directions. That's 22 numbers for the ankle, 44 with the phone. No
-   averages, since they mostly measure how the sensor is tilted.
+3. Describe each clip by 10 numbers that don't depend on how the sensor sits on the leg:
+   the spread and peak of the overall acceleration and rotation (whatever their
+   direction), and the spread along the clip's own three main directions. That's 10
+   numbers for the ankle, 20 with the phone. No averages, since they mostly measure how
+   the sensor is tilted. (An earlier version also used the spread and peak of each sensor
+   axis, 22 in all; see the notes for why it was dropped.)
 4. Train a net, features → 16 → 16 → 2 (steps/s, m/s), with mean squared error, inputs
    rescaled on the training trials only, until the loss flattens.
 5. Leave one trial out at a time: a committee of 5 nets trained without it estimates the
@@ -56,7 +57,8 @@ The Step Recorder app counts steps all the time, recording or not
 (`uno_q/python/step_counter.py`, plain numpy):
 
 1. It keeps the last 2 s of ankle samples. Every 0.5 s (50 new samples, so the clips
-   are spaced exactly as in training), it computes the same 22 features as training.
+   are spaced exactly as in training), it computes the same features as training (the
+   model file says which set: now the 10 direction-free ones).
 2. It runs the 5-net committee from `step_model.npz` (which `train_steps.py` also
    copies into `uno_q/python/`), and adds rate × 0.5 s to the steps and speed × 0.5 s
    to the distance, plus the per-pace ±.
@@ -128,6 +130,8 @@ How Many Steps/
 │   ├── evaluate_tests.py        how the live count did on the counted Test walks
 │   ├── test_results.csv         every Test walk: live vs real count and distance
 │   ├── step_model.npz           trained ankle-only committee, for plain numpy on the UNO Q
+│   ├── step_model_22features.npz   the earlier 22-feature committee, kept for comparison
+│   ├── results_per_trial_22features.csv   its leave-one-out results
 │   ├── results.md               errors per pace
 │   ├── results_per_trial.csv    every held-out trial's estimates
 │   ├── practice_classifier.py   practice net on the HW6 data
@@ -140,7 +144,7 @@ How Many Steps/
 └── media/
     ├── train_loss.png           step counter's loss while training
     ├── steps_est_vs_true.png    estimated vs true steps and distance, per held-out trial
-    ├── test_walks.png           the live count's error on each counted 20 m Test walk
+    ├── test_walks.png           the live count's error on each counted 20 m Test walk (before the fix)
     ├── practice_loss.png        loss curve from the practice run
     └── recording_checks/        one plot per trial: ankle and phone, lined up on the stomp
 ```
@@ -181,8 +185,9 @@ python "Mohammed's Projects/How Many Steps/data/sync_from_board.py"
   there, so deleting them would reuse numbers.
 - `Outdoor` phone zips contain GPS positions, so they are kept off GitHub.
 
-- Live on the board, 12 counted walks on the 20 m course (3 per pace, Test T06-T17;
-  `training/results.md`, `media/test_walks.png`): the live count came out **low**, by
+- **Before the fix:** live on the board with the 22-feature model, 12 counted walks on
+  the 20 m course (3 per pace, Test T06-T17; `training/results.md`,
+  `media/test_walks.png`): the live count came out **low**, by
   14% of the steps overall (slow 10%, normal 20%, fast 18%, run 7%) and 15% of the
   distance, against the 2-3% the leave-one-out test predicted. Only 2 of 12 walks were
   within the live ±. The cause is the sensor's angle on the leg: for these walks it sat
@@ -191,6 +196,15 @@ python "Mohammed's Projects/How Many Steps/data/sync_from_board.py"
   features, the same committee counts these walks within 0.6 steps on average (3.1 with
   all 22). The peak counter was right on most slow and normal walks but double-counted 3
   walks (+22 to +26 steps).
+- **The fix:** the counter now uses only the 10 direction-free features. In the
+  leave-one-out test it's as accurate overall as the 22-feature model (1.5 steps per
+  trial, 7.5%) and better on zero-step trials (3.2 vs 3.7 steps), but slightly worse on
+  walks and runs (0.7-1.0 vs 0.5-0.7 steps per trial, 1.8-4.4% vs 1.7-3.5%): the
+  per-axis features helped when the sensor sat as in training. The 22-feature model is
+  kept as `training/step_model_22features.npz`, with its results in
+  `results_per_trial_22features.csv`. Test T06-T17 chose this fix, so they can't test it
+  fairly; new test walks from Test T18 on are the fair test (`evaluate_tests.py` reports
+  them separately, as "after the fix").
 - The ± is training's typical error per pace, so it only holds when the sensor sits as
   it did in training. A new sensor angle is an error it doesn't cover.
 - Live on the board, three counted walks around the apartment (Test T01-T03, 46, 31 and
@@ -200,23 +214,21 @@ python "Mohammed's Projects/How Many Steps/data/sync_from_board.py"
   since training never saw the stomp. The live count runs nonstop, so those moments count
   too.
 - Step counter, leave-one-trial-out on 39 trials (`training/results.md` has the full
-  table): on walks and runs the ankle-only net is off by about 0.5-0.7 steps per trial
-  (1.7-3.4%) and 0.4-1.4 m of 20 m; 1.5 steps per trial over all trials. The peak counter does well on most walks but
+  table): on walks and runs the ankle-only net is off by about 0.7-1.0 steps per trial
+  (1.8-4.4%) and 0.6-1.6 m of 20 m; 1.5 steps per trial over all trials. The peak
+  counter does well on most walks but
   double-counts some fast walks, overcounts runs (41% and 13% off) and counts leg swings
   as steps. Adding the phone barely changes walks and runs.
-- Leg swings: with 8 LegSwing trials (sitting and standing, slow, fast and small), every
-  held-out one comes out at 0-4 steps except LegSwing T03, at about 27. Its swing turns the
-  sensor around the same axis as walking does (it was recorded with the sensor strapped
-  as for that session's walks). Per-axis features depend on how the sensor sits on the
-  leg, which is why the 10 direction-free features were added: with only the per-axis
-  ones, T03 came out at 64 steps and the error over all trials was 2.3 steps per trial
-  (1.5 now), while walks and runs stayed within 0.1 step per trial of the current numbers.
-  `FEATURE_SET` at the top of `train_steps.py` switches back.
-- The dashboard's ± is the leave-one-out error per pace (e.g. about 3% of the steps on a
-  walk, 5% on a run), saved in `step_model.npz`, not the spread between the committee's 5
-  nets. The nets agree with each other much more closely than with the truth (a spread of
-  0.2-1.3 steps per trial, with the real error over twice that in 12 of 39 trials and up
-  to 27 steps), so a ± from their spread would look confident and be wrong. Details in
+- Leg swings: with 8 LegSwing trials (sitting and standing, slow, fast and small), the
+  held-out ones come out at 0-10 steps. LegSwing T03, whose swing turns the sensor the way
+  walking does, went from 64 steps (per-axis features only) to 27 (22 features) to about
+  1 now; LegSwing T05 and T09 (big and mixed swings) are the highest now, at about 10.
+  `FEATURE_SET` at the top of `train_steps.py` switches between the feature sets.
+- The dashboard's ± is the leave-one-out error per pace (e.g. about 2-4% of the steps on
+  a walk, 5% on a run), saved in `step_model.npz`, not the spread between the committee's
+  5 nets. The nets agree with each other much more closely than with the truth (a spread
+  of 0.3-1.9 steps per trial, with the real error over twice that in 12 of 39 trials and
+  up to 10 steps), so a ± from their spread would look confident and be wrong. Details in
   [`dashboard/README.md`](dashboard/README.md).
 - The step counter's settings (clip length, layer size, learning rate, when to stop, the
   peak counter's thresholds) are constants at the top of `train_steps.py`.
