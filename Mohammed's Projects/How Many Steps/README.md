@@ -44,9 +44,10 @@ to the laptop. Naming, columns and phyphox setup are in
 4. Train a net, features → 16 → 16 → 2 (steps/s, m/s), with mean squared error, inputs
    rescaled on the training trials only, until the loss flattens.
 5. Leave one trial out at a time: a committee of 5 nets trained without it estimates the
-   trial's total steps and distance (rate × 0.5 s, added up over its clips), with the
-   spread between the 5 as the ±. Done for ankle only and for ankle + phone, next to a
-   plain peak counter (2 × the right leg's swings).
+   trial's total steps and distance (rate × 0.5 s, added up over its clips). The ± in
+   `results.md`'s tables is the spread between the 5 nets; the dashboard's ± instead comes
+   from these leave-one-out errors per pace (see the notes for why). Done for ankle only
+   and for ankle + phone, next to a plain peak counter (2 × the right leg's swings).
 6. Save the plots, the error table (`training/results.md`) and `training/step_model.npz`:
    the ankle-only committee trained on all good trials, which runs with plain numpy
    (`numpy_predict` in the script), so the UNO Q doesn't need PyTorch.
@@ -91,12 +92,40 @@ walking, running and biking from the recordings in
 
 ### Live dashboard
 
-The wearable will publish one JSON message twice a second over MQTT (`broker.hivemq.com`,
-topic `ME193/Mohammed/steps`) with the step count, distance, both ± uncertainties,
-cadence, speed and the values of the net's two hidden layers. `dashboard/index.html`
-subscribes over WebSockets and shows it all live. Until the UNO Q sends real data,
-`dashboard/fake_publisher.py` sends realistic made-up messages. The message format is
-in [`dashboard/README.md`](dashboard/README.md).
+The board publishes one JSON message twice a second over MQTT (`broker.hivemq.com`, topic
+`ME193/Mohammed/steps`) with the step count, distance, both ± uncertainties, cadence,
+speed and the values of the net's two hidden layers. `dashboard/index.html` subscribes
+over WebSockets and shows it all live. `dashboard/fake_publisher.py` sends realistic
+made-up messages in the same format, for testing without the hardware. The message format
+is in [`dashboard/README.md`](dashboard/README.md).
+
+### How well it works
+
+1. **The prediction (leave-one-out, 39 trials):** the ankle-only counter is off by 1.5
+   steps per trial overall (7.5%), and by 0.7-1.0 steps (1.8-4.4%) and 0.6-1.6 m of 20 m
+   on walks and runs. The plain peak counter is off by 70% overall: it double-counts some
+   fast walks, overcounts runs and counts leg swings as steps.
+2. **Before the fix: 14% low.** With the earlier 22-feature model, 12 counted walks on the
+   20 m course (Test T06-T17) came out 14.2% low, against the 2-3% predicted. After a
+   wiring repair, the sensor sat 20-68° away from its angle in every training session, and
+   12 of the 22 features were measured along the sensor's own axes, so the same walk
+   looked slower to the net.
+3. **The fix:** the counter now uses only the 10 features that don't depend on the
+   sensor's angle. In the leave-one-out test that's as accurate overall as before (1.5
+   steps per trial), better on zero-step trials and 0.1-0.3 steps per trial worse on walks
+   and runs. T06-T17 chose the fix, so fresh walks were recorded to test it.
+4. **After the fix: 3.0%.** 12 fresh counted walks on the course (Test T18-T29) came out
+   3.0% off overall, as predicted (3.1%): slow walks 2.7%, normal 1.7%, fast 0.7%, runs
+   9.4%. With the leg swing below, 10 of the 13 were within the live ±. The runs were low
+   because Stop was pressed on the last step (see the notes).
+5. **Leg swing:** 30 s of seated leg swinging (Test T30) gave 0.2 false steps; the peak
+   counter counted 48. In the leave-one-out test, held-out leg-swing trials come out at
+   0-10 steps.
+6. **Demo:** in the apartment lobby, on video, 39 steps counted silently showed as 38 on
+   the dashboard.
+
+The full tables are in [`training/results.md`](training/results.md); the plots are
+`media/test_walks.png` (before the fix) and `media/test_walks_after_fix.png` (after).
 
 ## Hardware
 
@@ -140,7 +169,7 @@ How Many Steps/
 ├── uno_q/                       Step Recorder app: recording and live counting (see its README)
 ├── dashboard/
 │   ├── index.html               live dashboard page (open in a browser)
-│   ├── fake_publisher.py        fake data until the hardware exists
+│   ├── fake_publisher.py        made-up data, for testing without the hardware
 │   └── README.md                the MQTT message format
 └── media/
     ├── train_loss.png           step counter's loss while training
@@ -162,7 +191,8 @@ python train_steps.py            # step counter, about 1.5 min
 python practice_classifier.py    # practice run on the HW6 data
 ```
 
-Dashboard on fake data (from the repo root; `paho-mqtt` is in
+Dashboard: with the board on, just open `dashboard/index.html`. To test it without the
+board, send made-up data (from the repo root; `paho-mqtt` is in
 `Mohammed's Projects/requirements.txt`):
 
 ```
@@ -174,10 +204,17 @@ Step Recorder: from the ArduinoApps kit, `python3 tools/deploy.py step-recorder`
 `step-recorder` folder is a symlink to `uno_q/`). It is the board's default app, so it
 starts on power-up and scrolls its address on the LED matrix. The board joins home Wi-Fi
 or Phone 2's hotspot, whichever it finds; the one-time board setup (address service,
-hotspot, default app) is in [`uno_q/README.md`](uno_q/README.md). After recording, from the repo root:
+hotspot, default app) is in [`uno_q/README.md`](uno_q/README.md). After recording, from
+the repo root (the full routine is in
+[`data/RECORDING_CHECKLIST.md`](data/RECORDING_CHECKLIST.md)):
 
 ```
 python "Mohammed's Projects/How Many Steps/data/sync_from_board.py"
+cd "Mohammed's Projects/How Many Steps/data"
+python check_recordings.py       # the after-session check: damage, stomps, one plot per trial
+cd ../training
+python evaluate_tests.py         # the live count vs the real count on the Test walks
+python check_live_math.py        # the board's live math matches training exactly
 ```
 
 ## Tuning and notes
@@ -186,71 +223,33 @@ python "Mohammed's Projects/How Many Steps/data/sync_from_board.py"
 - Leave the recordings on the board after syncing: trial numbers come from the files
   there, so deleting them would reuse numbers.
 - `Outdoor` phone zips contain GPS positions, so they are kept off GitHub.
-
-- **Before the fix:** live on the board with the 22-feature model, 12 counted walks on
-  the 20 m course (3 per pace, Test T06-T17; `training/results.md`,
-  `media/test_walks.png`): the live count came out **low**, by
-  14% of the steps overall (slow 10%, normal 20%, fast 18%, run 7%) and 15% of the
-  distance, against the 2-3% the leave-one-out test predicted. Only 2 of 12 walks were
-  within the live ±. The cause is the sensor's angle on the leg: for these walks it sat
-  20-68° away from every training session (after the wiring repair), and 12 of the 22
-  features are measured per sensor axis. Retrained on only the 10 direction-free
-  features, the same committee counts these walks within 0.6 steps on average (3.1 with
-  all 22). The peak counter was right on most slow and normal walks but double-counted 3
-  walks (+22 to +26 steps).
-- **The fix:** the counter now uses only the 10 direction-free features. In the
-  leave-one-out test it's as accurate overall as the 22-feature model (1.5 steps per
-  trial, 7.5%) and better on zero-step trials (3.2 vs 3.7 steps), but slightly worse on
-  walks and runs (0.7-1.0 vs 0.5-0.7 steps per trial, 1.8-4.4% vs 1.7-3.5%): the
-  per-axis features helped when the sensor sat as in training. The 22-feature model is
-  kept as `training/step_model_22features.npz`, with its results in
-  `results_per_trial_22features.csv`. Test T06-T17 chose this fix, so they can't test it
-  fairly; new test walks from Test T18 on are the fair test (`evaluate_tests.py` reports
-  them separately, as "after the fix").
-- **After the fix:** 12 fresh counted walks on the 20 m course plus a 30 s leg swing
-  (Test T18-T30; `training/results.md`, `media/test_walks_after_fix.png`). The live count
-  was off by 3.0% of the steps overall, as the leave-one-out test expected (3.1%), down
-  from 14.2% before the fix: slow walks 2.7%, normal 1.7%, fast 0.7%, runs 9.4%. Distance
-  was off by 6.9% (5.4% expected), down from 14.5%. 10 of the 13 walks were within the
-  live ±. The leg swing gave 0.2 false steps (the peak counter counted 48).
-- **Demo:** in the apartment lobby (on video, saved outside the repo), 39 steps counted
-  silently showed as 38 on the dashboard (2.6% off). The board needed a restart before it
-  connected to the dashboard over Phone 2's hotspot.
-- Runs and one slow walk came out low because Stop was pressed right at the last step.
-  Each live clip looks back 2 s, so the last second or so of walking or running isn't
-  counted until after Stop. Counted over the whole recording, Run T18 is 15.4 steps (16
-  true) against 12.9 live. Standing still for 2 s before pressing Stop avoids this.
-- The ± is training's typical error per pace, so it only holds when the sensor sits as
-  it did in training. A new sensor angle is an error it doesn't cover.
-- Live on the board, three counted walks around the apartment (Test T01-T03, 46, 31 and
-  62 steps) came out at 48.5 ± 2.4, 34.6 ± 1.4 and 61.5 ± 2.1. Replaying the recordings
-  shows where the extra comes from: during the walking itself the count was within 0.4,
-  0.1 and 1.6 steps, and the stomp, standing still and stopping add 1-4 steps per trial,
-  since training never saw the stomp. The live count runs nonstop, so those moments count
-  too.
-- Step counter, leave-one-trial-out on 39 trials (`training/results.md` has the full
-  table): on walks and runs the ankle-only net is off by about 0.7-1.0 steps per trial
-  (1.8-4.4%) and 0.6-1.6 m of 20 m; 1.5 steps per trial over all trials. The peak
-  counter does well on most walks but
-  double-counts some fast walks, overcounts runs (41% and 13% off) and counts leg swings
-  as steps. Adding the phone barely changes walks and runs.
-- Leg swings: with 8 LegSwing trials (sitting and standing, slow, fast and small), the
-  held-out ones come out at 0-10 steps. LegSwing T03, whose swing turns the sensor the way
-  walking does, went from 64 steps (per-axis features only) to 27 (22 features) to about
-  1 now; LegSwing T05 and T09 (big and mixed swings) are the highest now, at about 10.
-  `FEATURE_SET` at the top of `train_steps.py` switches between the feature sets.
-- The dashboard's ± is the leave-one-out error per pace (e.g. about 2-4% of the steps on
-  a walk, 5% on a run), saved in `step_model.npz`, not the spread between the committee's
-  5 nets. The nets agree with each other much more closely than with the truth (a spread
-  of 0.3-1.9 steps per trial, with the real error over twice that in 12 of 39 trials and
-  up to 10 steps), so a ± from their spread would look confident and be wrong. Details in
+- Stand still for 2 s before pressing Stop on a test walk. Each live clip looks back 2 s,
+  so the last second or so of walking or running isn't counted until after Stop: Run T18
+  was 12.9 steps live, but 15.4 counted over the whole recording (16 true).
+- The live count runs nonstop, so a stomp and standing before and after also count: on
+  three apartment walks with a stomp (Test T01-T03) they added 1-4 steps, while during
+  the walking itself the count was within 0.1-1.6 steps.
+- If the page works but the dashboard gets nothing, restart the board while the hotspot
+  is on; at the lobby demo it needed a restart before it connected over the hotspot.
+- The dashboard's ± is the leave-one-out error per pace (about 2-4% of the steps on a
+  walk, 5% on a run), saved in `step_model.npz`, not the spread between the committee's 5
+  nets. The nets agree with each other much more closely than with the truth (a spread of
+  0.3-1.9 steps per trial, with the real error over twice that in 12 of 39 trials and up
+  to 10 steps), so a ± from their spread would look confident and be wrong. It only holds
+  when the sensor sits on the leg as in training. Details in
   [`dashboard/README.md`](dashboard/README.md).
+- The 22-feature model is kept as `training/step_model_22features.npz`, with its
+  leave-one-out results in `results_per_trial_22features.csv`; `FEATURE_SET` at the top of
+  `train_steps.py` switches between the feature sets. Under it, LegSwing T03 (whose swing
+  turns the sensor the way walking does) came out at 27 steps; it's about 1 now. The
+  highest leg swings now are T05 and T09 (big and mixed swings), at about 10 steps.
+- Adding the phone barely changes walks and runs in the leave-one-out test.
 - The step counter's settings (clip length, layer size, learning rate, when to stop, the
   peak counter's thresholds) are constants at the top of `train_steps.py`.
 - The practice run's settings (clip length, hidden layer size, epochs, learning rate,
   random seed) are constants at the top of `practice_classifier.py`.
-- With only 4 test recordings, the accuracy depends a lot on which recordings are held
-  out. The default seed scores 100%, but other seeds range from 58% to 98%. Testing on
-  every recording in turn (leave-one-recording-out) gives 88.5% with all 18 features and
-  96.5% without the 6 averages. The averages mostly record how the board was tilted on
-  the leg, the same problem Model 2 v1 had in HW6.
+- With only 4 test recordings, the practice run's accuracy depends a lot on which
+  recordings are held out. The default seed scores 100%, but other seeds range from 58% to
+  98%. Testing on every recording in turn (leave-one-recording-out) gives 88.5% with all
+  18 features and 96.5% without the 6 averages. The averages mostly record how the board
+  was tilted on the leg, the same problem Model 2 v1 had in HW6.
