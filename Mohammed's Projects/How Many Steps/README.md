@@ -114,7 +114,9 @@ How Many Steps/
 │   ├── phone_raw/               phone recordings: one folder per trial, zips in original_zips/
 │   ├── trials.csv               real step count and distance for each trial
 │   ├── live_counts.csv          the board's live count for each trial (since it counts live)
+│   ├── test_paces.csv           pace of each counted Test walk on the course
 │   ├── excluded_trials.csv      damaged trials left out of training, with the reason
+│   ├── trial_corrections.csv    fixes to wrong counts or distances in trials.csv, with the reason
 │   ├── real_durations.csv       real length and sample rate of each ankle recording
 │   ├── sync_from_board.py       copies the trials from the board
 │   ├── check_recordings.py      damage checks, stomp alignment, one plot per trial
@@ -123,6 +125,8 @@ How Many Steps/
 ├── training/
 │   ├── train_steps.py           the step counter: training and leave-one-trial-out test
 │   ├── check_live_math.py       checks the board's live math matches training
+│   ├── evaluate_tests.py        how the live count did on the counted Test walks
+│   ├── test_results.csv         every Test walk: live vs real count and distance
 │   ├── step_model.npz           trained ankle-only committee, for plain numpy on the UNO Q
 │   ├── results.md               errors per pace
 │   ├── results_per_trial.csv    every held-out trial's estimates
@@ -136,6 +140,7 @@ How Many Steps/
 └── media/
     ├── train_loss.png           step counter's loss while training
     ├── steps_est_vs_true.png    estimated vs true steps and distance, per held-out trial
+    ├── test_walks.png           the live count's error on each counted 20 m Test walk
     ├── practice_loss.png        loss curve from the practice run
     └── recording_checks/        one plot per trial: ankle and phone, lined up on the stomp
 ```
@@ -176,6 +181,18 @@ python "Mohammed's Projects/How Many Steps/data/sync_from_board.py"
   there, so deleting them would reuse numbers.
 - `Outdoor` phone zips contain GPS positions, so they are kept off GitHub.
 
+- Live on the board, 12 counted walks on the 20 m course (3 per pace, Test T06-T17;
+  `training/results.md`, `media/test_walks.png`): the live count came out **low**, by
+  14% of the steps overall (slow 10%, normal 20%, fast 18%, run 7%) and 15% of the
+  distance, against the 2-3% the leave-one-out test predicted. Only 2 of 12 walks were
+  within the live ±. The cause is the sensor's angle on the leg: for these walks it sat
+  20-68° away from every training session (after the wiring repair), and 12 of the 22
+  features are measured per sensor axis. Retrained on only the 10 direction-free
+  features, the same committee counts these walks within 0.6 steps on average (3.1 with
+  all 22). The peak counter was right on most slow and normal walks but double-counted 3
+  walks (+22 to +26 steps).
+- The ± is training's typical error per pace, so it only holds when the sensor sits as
+  it did in training. A new sensor angle is an error it doesn't cover.
 - Live on the board, three counted walks around the apartment (Test T01-T03, 46, 31 and
   62 steps) came out at 48.5 ± 2.4, 34.6 ± 1.4 and 61.5 ± 2.1. Replaying the recordings
   shows where the extra comes from: during the walking itself the count was within 0.4,

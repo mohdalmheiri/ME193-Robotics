@@ -1,0 +1,13 @@
+walk,pace,true_steps,live_steps,live_steps_unc,error,within_unc,peak_steps,live_m,live_m_unc,m_error,retrained_all22,retrained_direction_free
+Mohammed_Test_T06,Walk_slow,32,29.2,1.1,-2.8,False,32,17.55,0.85,-2.45,29.6,31.7
+Mohammed_Test_T07,Walk_slow,32,29.9,1.2,-2.1,False,32,17.95,0.86,-2.05,29.8,31.8
+Mohammed_Test_T08,Walk_slow,31,26.5,1.1,-4.5,False,32,16.22,0.84,-3.78,28.0,31.8
+Mohammed_Test_T09,Walk_normal,29,21.7,1.0,-7.3,False,30,14.97,0.8,-5.03,24.1,29.4
+Mohammed_Test_T10,Walk_normal,28,23.1,0.9,-4.9,False,54,16.31,0.75,-3.69,23.8,27.2
+Mohammed_Test_T11,Walk_normal,28,23.6,0.9,-4.4,False,28,17.12,0.76,-2.88,23.8,27.4
+Mohammed_Test_T12,Walk_fast,24,18.9,0.7,-5.1,False,46,15.88,0.63,-4.12,19.2,24.1
+Mohammed_Test_T13,Walk_fast,25,20.3,0.8,-4.7,False,48,16.69,0.72,-3.31,21.2,25.4
+Mohammed_Test_T14,Walk_fast,25,21.2,0.8,-3.8,False,26,18.17,0.84,-1.83,21.2,25.5
+Mohammed_Test_T15,Run,17,14.2,0.7,-2.8,False,18,17.2,1.33,-2.8,16.4,17.8
+Mohammed_Test_T16,Run,17,17.4,0.9,0.4,True,20,22.14,1.94,2.14,18.5,18.3
+Mohammed_Test_T17,Run,17,16.6,0.9,-0.4,True,20,20.83,1.85,0.83,19.0,17.7

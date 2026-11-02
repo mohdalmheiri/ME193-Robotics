@@ -301,9 +301,11 @@ def leave_one_trial_out(trials, with_phone):
 def peak_count(tr):
     """The non-neural step counter. Each swing of the right leg (the one with
     the sensor) makes one big rotation peak around the leg's main swing axis,
-    so steps = 2 x the peaks. Runs on everything after the stomp; it doesn't
-    need the moving stretch or any training."""
-    g = tr["ankle"][tr["stomp_i"] + RATE // 2:, 3:]
+    so steps = 2 x the peaks. Runs on everything after the stomp (from the
+    start for a recording without one, like a Test walk: stomp_i None); it
+    doesn't need the moving stretch or any training."""
+    start = 0 if tr.get("stomp_i") is None else tr["stomp_i"] + RATE // 2
+    g = tr["ankle"][start:, 3:]
     # The main swing axis: the direction with the most rotation (no labels used)
     values, vectors = np.linalg.eigh(np.cov(g.T))
     swing = g @ vectors[:, -1]
@@ -551,6 +553,10 @@ def main():
 
     table = error_table(trials, res_ankle, res_both, peaks)
     unc = uncertainty_table(trials, res_ankle)
+    # evaluate_tests.py adds a "Test walks" section at the end of results.md; keep it
+    marker = "<!-- test walks: written by evaluate_tests.py -->"
+    old = (HERE / "results.md").read_text() if (HERE / "results.md").exists() else ""
+    kept = ("\n" + marker + old.split(marker, 1)[1]) if marker in old else ""
     with open(HERE / "results.md", "w") as f:
         f.write("# Step counter: leave-one-trial-out results\n\n"
                 f"Written by `train_steps.py`. {len(trials)} good trials, {n_clips} clips of 2 s. Each trial's "
@@ -561,7 +567,7 @@ def main():
                 "From the ankle-only errors above (root-mean-square per group), not from the committee's "
                 "spread, which is far smaller than the real errors. Saved in `step_model.npz`; the board "
                 "picks the group from the net's own step rate for each clip and adds up `clip_uncertainty`.\n\n"
-                + uncertainty_markdown(unc) + "\n")
+                + uncertainty_markdown(unc) + "\n" + kept)
     print("\n" + table)
 
     plot_losses({"Ankle only": curves_ankle, "Ankle + phone": curves_both}, MEDIA / "train_loss.png")
