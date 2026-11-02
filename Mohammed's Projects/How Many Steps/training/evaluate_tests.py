@@ -42,6 +42,9 @@ HERE = Path(__file__).resolve().parent
 RESULTS_MD = HERE / "results.md"
 MARKER = "<!-- test walks: written by evaluate_tests.py -->"
 PACES = ts.PACES
+GROUPS = PACES + ["LegSwing"]    # the plot's groups: the paces, then zero-step walks (0 true steps)
+LABELS = {"Walk_slow": "Walk\nslow", "Walk_normal": "Walk\nnormal", "Walk_fast": "Walk\nfast", "Run": "Run",
+          "LegSwing": "Leg swing\n(0 steps)"}
 BEFORE = "before the fix"
 # Each phase: the leave-one-out results of the model that counted it live, and its plot
 PHASES = {
@@ -116,12 +119,12 @@ def direction_free_diagnostic(walks):
 
 # ---- Tables ------------------------------------------------------------------------------
 def per_walk_table(walks):
-    lines = ["| Walk | Pace | Your count | Live count | Error | Within ±? | Peak counter | Live distance (of 20 m) |",
+    lines = ["| Walk | Pace | Your count | Live count | Error | Within ±? | Peak counter | Live distance (true) |",
              "|---|---|---|---|---|---|---|---|"]
     for w in walks:
         lines.append(f"| {w['name'][9:]} | {w['pace'].replace('_', ' ')} | {w['true']} | {w['live']:.1f} ± {w['live_unc']:.1f} "
                      f"| {w['err']:+.1f} | {'yes' if abs(w['err']) <= w['live_unc'] else 'no'} | {w['peak']} ({w['peak_err']:+d}) "
-                     f"| {w['live_m']:.1f} ± {w['live_m_unc']:.1f} m ({w['m_err']:+.1f}) |")
+                     f"| {w['live_m']:.1f} ± {w['live_m_unc']:.1f} m (of {w['course_m']:.0f} m: {w['m_err']:+.1f}) |")
     return "\n".join(lines)
 
 
@@ -129,9 +132,10 @@ def per_pace_table(walks, loo):
     lines = ["| Pace | Live: average error | Live: worst | Live: error % | Training expected (leave-one-out) "
              "| Peak counter: error % | Live distance: average error | Distance error % | Training expected (distance) |",
              "|---|---|---|---|---|---|---|---|---|"]
-    groups = PACES + ["All"]
+    groups = [p for p in PACES if any(w["pace"] == p for w in walks)] + ["All"]
     for g in groups:
-        ws = [w for w in walks if g == "All" or w["pace"] == g]
+        # zero-step walks have no true total to take a % of: reported on their own (zero_step_lines)
+        ws = [w for w in walks if (g == "All" and w["pace"] in PACES) or w["pace"] == g]
         true = sum(w["true"] for w in ws)
         err = [w["err"] for w in ws]
         worst = max(err, key=abs)
@@ -145,6 +149,35 @@ def per_pace_table(walks, loo):
         # worst = the biggest one, with its sign (- = counted too few)
         lines.append(f"| {g.replace('_', ' ')} | {np.mean(np.abs(err)):.1f} steps | {worst:+.1f} | {pct:.1f}% | {expected[0]} "
                      f"| {peak_pct:.1f}% | {np.mean(np.abs(m_err)):.1f} m | {m_pct:.1f}% | {expected[1]} |")
+    return "\n".join(lines)
+
+
+def zero_step_lines(walks):
+    """The false steps and meters on walks with 0 true steps (e.g. a leg swing)."""
+    return "\n".join(f"- {w['name'][9:]} ({w['pace']}, 0 steps): the live count gave {w['live']:.1f} ± "
+                     f"{w['live_unc']:.1f} false steps and {w['live_m']:.1f} ± {w['live_m_unc']:.1f} m; "
+                     f"the peak counter {w['peak']} steps."
+                     for w in walks if w["pace"] not in PACES)
+
+
+def before_after_table(by_phase):
+    """Per pace: the live error % before and after the fix, and what each model's
+    leave-one-out test expected."""
+    loo = {p: loo_by_pace(PHASES[p]["loo"]) for p in (BEFORE, "after the fix")}
+    lines = ["| Pace | Steps error %: before (22 features) | Steps error %: after (direction-free) "
+             "| Expected after (leave-one-out) | Distance error %: before | Distance error %: after |",
+             "|---|---|---|---|---|---|"]
+    def pct(ws, key, total):
+        return 100 * sum(abs(w[key]) for w in ws) / sum(w[total] for w in ws)
+    for g in PACES + ["All"]:
+        b = [w for w in by_phase[BEFORE] if (g == "All" and w["pace"] in PACES) or w["pace"] == g]
+        a = [w for w in by_phase["after the fix"] if (g == "All" and w["pace"] in PACES) or w["pace"] == g]
+        if not a or not b:
+            continue
+        exp = loo["after the fix"][g][0] if g in PACES else np.mean([v[0] for v in loo["after the fix"].values()])
+        lines.append(f"| {g.replace('_', ' ')} | {pct(b, 'err', 'true'):.1f}% | {pct(a, 'err', 'true'):.1f}% "
+                     f"| {exp:.1f}%{' (average)' if g == 'All' else ''} | {pct(b, 'm_err', 'course_m'):.1f}% "
+                     f"| {pct(a, 'm_err', 'course_m'):.1f}% |")
     return "\n".join(lines)
 
 
@@ -162,31 +195,40 @@ def plot(walks, path, phase):
     """Left: steps error per walk (live with its ±, and the peak counter),
     grouped by pace. Right: live distance error vs the 20 m course."""
     fig, axes = plt.subplots(1, 2, figsize=(12, 4.8), facecolor="#fcfcfb")
-    walks = sorted(walks, key=lambda w: PACES.index(w["pace"]))
-    group = [PACES.index(w["pace"]) for w in walks]
+    walks = sorted(walks, key=lambda w: GROUPS.index(w["pace"]))
+    group = [GROUPS.index(w["pace"]) for w in walks]
     x = np.arange(len(walks)) + np.array(group) * 0.8                        # a gap between paces
     ax = axes[0]
     ax.axhline(0, color=ts.MUTED, lw=1, ls="--", zorder=0)
     ax.errorbar(x - 0.12, [w["err"] for w in walks], yerr=[w["live_unc"] for w in walks], fmt="o", ms=7,
                 color=ts.BLUE, mec="#fcfcfb", mew=1, elinewidth=1.4, capsize=3, label="live count on the board (± shown)")
-    ax.plot(x + 0.12, [w["peak_err"] for w in walks], "^", ms=7, color=ts.AQUA, mec="#fcfcfb", mew=1,
+    # Zoomed to +/-8 steps so the live count's errors are readable; the peak
+    # counter's big misses are drawn at the edge and labelled with their value
+    limit = 8
+    peak = np.array([w["peak_err"] for w in walks], float)
+    ax.plot(x + 0.12, np.clip(peak, -limit + 0.5, limit - 0.5), "^", ms=7, color=ts.AQUA, mec="#fcfcfb", mew=1,
             label="peak counter (no net)")
+    for xi, p in zip(x, peak):
+        if abs(p) > limit - 0.5:
+            ax.annotate(f"{p:+.0f}", (xi + 0.12, np.sign(p) * (limit - 0.5)), xytext=(0, -12 if p > 0 else 6),
+                        textcoords="offset points", ha="center", color=ts.INK_2, fontsize=8)
+    ax.set_ylim(-limit, limit)
     ax.set_ylabel("Estimate − your count (steps)", color=ts.INK_2)
-    ax.set_title(f"Steps: error on each 20 m walk ({phase})", loc="left", color=ts.INK, fontsize=11)
-    ax.legend(frameon=False, labelcolor=ts.INK_2, loc="center left", bbox_to_anchor=(0, 0.62))
+    ax.set_title(f"Steps: error on each walk ({phase})", loc="left", color=ts.INK, fontsize=11)
+    ax.legend(frameon=False, labelcolor=ts.INK_2, loc="lower right", fontsize=9)
     ax = axes[1]
     ax.axhline(0, color=ts.MUTED, lw=1, ls="--", zorder=0)
     ax.errorbar(x, [w["m_err"] for w in walks], yerr=[w["live_m_unc"] for w in walks], fmt="o", ms=7,
                 color=ts.BLUE, mec="#fcfcfb", mew=1, elinewidth=1.4, capsize=3)
-    ax.set_ylabel("Live distance − 20 m (m)", color=ts.INK_2)
-    ax.set_title(f"Distance: error on each 20 m walk ({phase})", loc="left", color=ts.INK, fontsize=11)
+    ax.set_ylabel("Live distance − true distance (m)", color=ts.INK_2)
+    ax.set_title(f"Distance: error on each walk ({phase})", loc="left", color=ts.INK, fontsize=11)
     shown = sorted(set(group))
     centres = [x[np.array(group) == g].mean() for g in shown]
     for ax in axes:
-        ax.set_xticks(centres, [PACES[g].replace("_", "\n") for g in shown], color=ts.INK_2)
+        ax.set_xticks(centres, [LABELS[GROUPS[g]] for g in shown], color=ts.INK_2)
         ts.style(ax)
     fig.text(0.01, 0.01, "Each dot is one walk. Dashed line: exactly right. Error bars: the live ± "
-             "(training's typical error for that pace).", color=ts.MUTED, fontsize=9)
+             "(training's typical error for that pace). Peak counter points beyond ±8 steps sit at the edge, labelled.", color=ts.MUTED, fontsize=9)
     fig.tight_layout(rect=(0, 0.04, 1, 1))
     fig.savefig(path, dpi=120, facecolor=fig.get_facecolor())
     plt.close(fig)
@@ -201,7 +243,9 @@ def phase_section(phase, walks, diag):
                "comparison, not a test of the fix.\n\n" if phase == BEFORE else
                "Recorded after the redeploy: the fair test of the fix.\n\n")
             + "Per pace (\"Training expected\" is that model's leave-one-out error):\n\n"
-            + per_pace_table(walks, loo) + "\n\nEach walk:\n\n" + per_walk_table(walks) + "\n\n"
+            + per_pace_table(walks, loo) + "\n\n"
+            + (zero_step_lines(walks) + "\n\n" if any(w["pace"] not in PACES for w in walks) else "")
+            + "Each walk:\n\n" + per_walk_table(walks) + "\n\n"
             + f"{within} of {len(walks)} walks were within the live ±.\n")
     if diag:
         text += ("\nWhy they came out low: the same committee retrained on the training trials and run on these "
@@ -237,6 +281,10 @@ def main():
                + "\n".join(phase_section(p, by_phase[p], diag if p == BEFORE else None) for p in phases))
     if "after the fix" not in by_phase:
         section += "\n### After the fix\n\nNo test walks yet (Test T18 and up, after the redeploy).\n"
+    elif BEFORE in by_phase:
+        section += ("\n### Before vs after the fix\n\nThe live count's error as a % of the true total, per pace, "
+                    "next to what the direction-free model's leave-one-out test expected:\n\n"
+                    + before_after_table(by_phase) + "\n")
     # Replace this section in results.md, keeping what train_steps.py wrote above it
     text = RESULTS_MD.read_text()
     RESULTS_MD.write_text(text.split(MARKER)[0].rstrip() + "\n\n" + section)

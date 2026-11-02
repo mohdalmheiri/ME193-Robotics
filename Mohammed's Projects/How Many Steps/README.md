@@ -145,6 +145,7 @@ How Many Steps/
     ├── train_loss.png           step counter's loss while training
     ├── steps_est_vs_true.png    estimated vs true steps and distance, per held-out trial
     ├── test_walks.png           the live count's error on each counted 20 m Test walk (before the fix)
+    ├── test_walks_after_fix.png the same for the walks after the fix
     ├── practice_loss.png        loss curve from the practice run
     └── recording_checks/        one plot per trial: ankle and phone, lined up on the stomp
 ```
@@ -205,6 +206,16 @@ python "Mohammed's Projects/How Many Steps/data/sync_from_board.py"
   `results_per_trial_22features.csv`. Test T06-T17 chose this fix, so they can't test it
   fairly; new test walks from Test T18 on are the fair test (`evaluate_tests.py` reports
   them separately, as "after the fix").
+- **After the fix:** 12 fresh counted walks on the 20 m course plus a 30 s leg swing
+  (Test T18-T30; `training/results.md`, `media/test_walks_after_fix.png`). The live count
+  was off by 3.0% of the steps overall, as the leave-one-out test expected (3.1%), down
+  from 14.2% before the fix: slow walks 2.7%, normal 1.7%, fast 0.7%, runs 9.4%. Distance
+  was off by 6.9% (5.4% expected), down from 14.5%. 10 of the 13 walks were within the
+  live ±. The leg swing gave 0.2 false steps (the peak counter counted 48).
+- Runs and one slow walk came out low because Stop was pressed right at the last step.
+  Each live clip looks back 2 s, so the last second or so of walking or running isn't
+  counted until after Stop. Counted over the whole recording, Run T18 is 15.4 steps (16
+  true) against 12.9 live. Standing still for 2 s before pressing Stop avoids this.
 - The ± is training's typical error per pace, so it only holds when the sensor sits as
   it did in training. A new sensor angle is an error it doesn't cover.
 - Live on the board, three counted walks around the apartment (Test T01-T03, 46, 31 and

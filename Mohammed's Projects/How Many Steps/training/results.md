@@ -57,20 +57,20 @@ Per pace ("Training expected" is that model's leave-one-out error):
 
 Each walk:
 
-| Walk | Pace | Your count | Live count | Error | Within ±? | Peak counter | Live distance (of 20 m) |
+| Walk | Pace | Your count | Live count | Error | Within ±? | Peak counter | Live distance (true) |
 |---|---|---|---|---|---|---|---|
-| Test_T06 | Walk slow | 32 | 29.2 ± 1.1 | -2.8 | no | 32 (+0) | 17.6 ± 0.8 m (-2.4) |
-| Test_T07 | Walk slow | 32 | 29.9 ± 1.2 | -2.1 | no | 32 (+0) | 17.9 ± 0.9 m (-2.1) |
-| Test_T08 | Walk slow | 31 | 26.5 ± 1.1 | -4.5 | no | 32 (+1) | 16.2 ± 0.8 m (-3.8) |
-| Test_T09 | Walk normal | 29 | 21.7 ± 1.0 | -7.3 | no | 30 (+1) | 15.0 ± 0.8 m (-5.0) |
-| Test_T10 | Walk normal | 28 | 23.1 ± 0.9 | -4.9 | no | 54 (+26) | 16.3 ± 0.8 m (-3.7) |
-| Test_T11 | Walk normal | 28 | 23.6 ± 0.9 | -4.4 | no | 28 (+0) | 17.1 ± 0.8 m (-2.9) |
-| Test_T12 | Walk fast | 24 | 18.9 ± 0.7 | -5.1 | no | 46 (+22) | 15.9 ± 0.6 m (-4.1) |
-| Test_T13 | Walk fast | 25 | 20.3 ± 0.8 | -4.7 | no | 48 (+23) | 16.7 ± 0.7 m (-3.3) |
-| Test_T14 | Walk fast | 25 | 21.2 ± 0.8 | -3.8 | no | 26 (+1) | 18.2 ± 0.8 m (-1.8) |
-| Test_T15 | Run | 17 | 14.2 ± 0.7 | -2.8 | no | 18 (+1) | 17.2 ± 1.3 m (-2.8) |
-| Test_T16 | Run | 17 | 17.4 ± 0.9 | +0.4 | yes | 20 (+3) | 22.1 ± 1.9 m (+2.1) |
-| Test_T17 | Run | 17 | 16.6 ± 0.9 | -0.4 | yes | 20 (+3) | 20.8 ± 1.9 m (+0.8) |
+| Test_T06 | Walk slow | 32 | 29.2 ± 1.1 | -2.8 | no | 32 (+0) | 17.6 ± 0.8 m (of 20 m: -2.4) |
+| Test_T07 | Walk slow | 32 | 29.9 ± 1.2 | -2.1 | no | 32 (+0) | 17.9 ± 0.9 m (of 20 m: -2.1) |
+| Test_T08 | Walk slow | 31 | 26.5 ± 1.1 | -4.5 | no | 32 (+1) | 16.2 ± 0.8 m (of 20 m: -3.8) |
+| Test_T09 | Walk normal | 29 | 21.7 ± 1.0 | -7.3 | no | 30 (+1) | 15.0 ± 0.8 m (of 20 m: -5.0) |
+| Test_T10 | Walk normal | 28 | 23.1 ± 0.9 | -4.9 | no | 54 (+26) | 16.3 ± 0.8 m (of 20 m: -3.7) |
+| Test_T11 | Walk normal | 28 | 23.6 ± 0.9 | -4.4 | no | 28 (+0) | 17.1 ± 0.8 m (of 20 m: -2.9) |
+| Test_T12 | Walk fast | 24 | 18.9 ± 0.7 | -5.1 | no | 46 (+22) | 15.9 ± 0.6 m (of 20 m: -4.1) |
+| Test_T13 | Walk fast | 25 | 20.3 ± 0.8 | -4.7 | no | 48 (+23) | 16.7 ± 0.7 m (of 20 m: -3.3) |
+| Test_T14 | Walk fast | 25 | 21.2 ± 0.8 | -3.8 | no | 26 (+1) | 18.2 ± 0.8 m (of 20 m: -1.8) |
+| Test_T15 | Run | 17 | 14.2 ± 0.7 | -2.8 | no | 18 (+1) | 17.2 ± 1.3 m (of 20 m: -2.8) |
+| Test_T16 | Run | 17 | 17.4 ± 0.9 | +0.4 | yes | 20 (+3) | 22.1 ± 1.9 m (of 20 m: +2.1) |
+| Test_T17 | Run | 17 | 16.6 ± 0.9 | -0.4 | yes | 20 (+3) | 20.8 ± 1.9 m (of 20 m: +0.8) |
 
 2 of 12 walks were within the live ±.
 
@@ -93,6 +93,50 @@ Why they came out low: the same committee retrained on the training trials and r
 
 Average error per walk: all 22 features: 3.1 steps; direction-free only: 0.6 steps.
 
-### After the fix
+### After the fix: counted live by the direction-free model
 
-No test walks yet (Test T18 and up, after the redeploy).
+Recorded after the redeploy: the fair test of the fix.
+
+Per pace ("Training expected" is that model's leave-one-out error):
+
+| Pace | Live: average error | Live: worst | Live: error % | Training expected (leave-one-out) | Peak counter: error % | Live distance: average error | Distance error % | Training expected (distance) |
+|---|---|---|---|---|---|---|---|---|
+| Walk slow | 0.9 steps | -1.7 | 2.7% | 1.7% | 1.0% | 0.8 m | 3.9% | 3.1% |
+| Walk normal | 0.5 steps | -0.6 | 1.7% | 3.2% | 1.1% | 1.0 m | 4.8% | 3.9% |
+| Walk fast | 0.2 steps | -0.2 | 0.7% | 3.1% | 2.6% | 1.2 m | 5.9% | 6.8% |
+| Run | 1.6 steps | -3.1 | 9.4% | 4.3% | 16.0% | 2.6 m | 13.0% | 7.9% |
+| All | 0.8 steps | -3.1 | 3.0% | 3.1% (average) | 3.9% | 1.4 m | 6.9% | 5.4% (average) |
+
+- Test_T30 (LegSwing, 0 steps): the live count gave 0.2 ± 4.9 false steps and 0.2 ± 3.0 m; the peak counter 48 steps.
+
+Each walk:
+
+| Walk | Pace | Your count | Live count | Error | Within ±? | Peak counter | Live distance (true) |
+|---|---|---|---|---|---|---|---|
+| Test_T18 | Run | 16 | 12.9 ± 0.8 | -3.1 | no | 20 (+4) | 14.9 ± 1.5 m (of 20 m: -5.1) |
+| Test_T19 | Run | 17 | 16.4 ± 0.9 | -0.6 | yes | 18 (+1) | 18.7 ± 1.8 m (of 20 m: -1.3) |
+| Test_T20 | Run | 17 | 16.0 ± 0.9 | -1.0 | no | 20 (+3) | 18.6 ± 1.9 m (of 20 m: -1.4) |
+| Test_T21 | Walk slow | 33 | 31.3 ± 1.4 | -1.7 | no | 34 (+1) | 18.4 ± 1.1 m (of 20 m: -1.6) |
+| Test_T22 | Walk slow | 32 | 32.4 ± 1.4 | +0.4 | yes | 32 (+0) | 19.7 ± 1.1 m (of 20 m: -0.3) |
+| Test_T23 | Walk slow | 32 | 31.5 ± 1.4 | -0.5 | yes | 32 (+0) | 19.6 ± 1.1 m (of 20 m: -0.4) |
+| Test_T24 | Walk normal | 30 | 29.6 ± 1.3 | -0.4 | yes | 30 (+0) | 19.2 ± 1.1 m (of 20 m: -0.8) |
+| Test_T25 | Walk normal | 29 | 28.5 ± 1.2 | -0.5 | yes | 30 (+1) | 19.2 ± 1.1 m (of 20 m: -0.8) |
+| Test_T26 | Walk normal | 28 | 27.4 ± 1.3 | -0.6 | yes | 28 (+0) | 18.7 ± 1.2 m (of 20 m: -1.3) |
+| Test_T27 | Walk fast | 25 | 24.8 ± 1.0 | -0.2 | yes | 26 (+1) | 18.4 ± 1.4 m (of 20 m: -1.6) |
+| Test_T28 | Walk fast | 26 | 26.2 ± 1.1 | +0.2 | yes | 26 (+0) | 19.3 ± 1.4 m (of 20 m: -0.7) |
+| Test_T29 | Walk fast | 25 | 24.9 ± 0.9 | -0.1 | yes | 26 (+1) | 18.8 ± 1.3 m (of 20 m: -1.2) |
+| Test_T30 | LegSwing | 0 | 0.2 ± 4.9 | +0.2 | yes | 48 (+48) | 0.2 ± 3.0 m (of 0 m: +0.2) |
+
+10 of 13 walks were within the live ±.
+
+### Before vs after the fix
+
+The live count's error as a % of the true total, per pace, next to what the direction-free model's leave-one-out test expected:
+
+| Pace | Steps error %: before (22 features) | Steps error %: after (direction-free) | Expected after (leave-one-out) | Distance error %: before | Distance error %: after |
+|---|---|---|---|---|---|
+| Walk slow | 9.9% | 2.7% | 1.7% | 13.8% | 3.9% |
+| Walk normal | 19.5% | 1.7% | 3.2% | 19.3% | 4.8% |
+| Walk fast | 18.4% | 0.7% | 3.1% | 15.4% | 5.9% |
+| Run | 7.1% | 9.4% | 4.3% | 9.6% | 13.0% |
+| All | 14.2% | 3.0% | 3.1% (average) | 14.5% | 6.9% |
