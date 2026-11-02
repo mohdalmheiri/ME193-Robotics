@@ -117,6 +117,7 @@ How Many Steps/
 │   ├── trials.csv               real step count and distance for each trial
 │   ├── live_counts.csv          the board's live count for each trial (since it counts live)
 │   ├── test_paces.csv           pace of each counted Test walk on the course
+│   ├── demo_walks.csv           demo walks shown on the dashboard (real vs shown count)
 │   ├── excluded_trials.csv      damaged trials left out of training, with the reason
 │   ├── trial_corrections.csv    fixes to wrong counts or distances in trials.csv, with the reason
 │   ├── real_durations.csv       real length and sample rate of each ankle recording
@@ -212,6 +213,9 @@ python "Mohammed's Projects/How Many Steps/data/sync_from_board.py"
   from 14.2% before the fix: slow walks 2.7%, normal 1.7%, fast 0.7%, runs 9.4%. Distance
   was off by 6.9% (5.4% expected), down from 14.5%. 10 of the 13 walks were within the
   live ±. The leg swing gave 0.2 false steps (the peak counter counted 48).
+- **Demo:** in the apartment lobby (on video, saved outside the repo), 39 steps counted
+  silently showed as 38 on the dashboard (2.6% off). The board needed a restart before it
+  connected to the dashboard over Phone 2's hotspot.
 - Runs and one slow walk came out low because Stop was pressed right at the last step.
   Each live clip looks back 2 s, so the last second or so of walking or running isn't
   counted until after Stop. Counted over the whole recording, Run T18 is 15.4 steps (16

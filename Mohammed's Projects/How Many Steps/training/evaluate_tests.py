@@ -22,7 +22,10 @@ fair test, compared with the current model's leave-one-out errors.
 3. For the walks before the fix, a diagnostic: the committee retrained with
    all 22 features and with only the 10 direction-free ones, counting the
    same walks. It shows why the fix was chosen.
-4. Saves test_results.csv (per walk), one plot per phase
+4. Adds the demo walks in data/demo_walks.csv (walks shown on the dashboard
+   but not recorded as trials: the real count and the count the dashboard
+   showed).
+5. Saves test_results.csv (per walk), one plot per phase
    (../media/test_walks.png before the fix, test_walks_after_fix.png after),
    and the "Test walks" section of results.md (train_steps.py keeps that
    section when it rewrites the file).
@@ -285,6 +288,16 @@ def main():
         section += ("\n### Before vs after the fix\n\nThe live count's error as a % of the true total, per pace, "
                     "next to what the direction-free model's leave-one-out test expected:\n\n"
                     + before_after_table(by_phase) + "\n")
+    demos = cr.DATA / "demo_walks.csv"
+    if demos.exists():
+        with open(demos, newline="") as f:
+            rows = list(csv.DictReader(f))
+        section += ("\n### Demo walks (shown on the dashboard, not recorded as trials)\n\n"
+                    "| Date | Where | Your count | Dashboard showed | Off by | Note |\n|---|---|---|---|---|---|\n"
+                    + "\n".join(f"| {r['date']} | {r['place']} | {r['true_steps']} | {r['dashboard_steps']} "
+                                 f"| {int(r['dashboard_steps']) - int(r['true_steps']):+d} "
+                                 f"({100 * abs(int(r['dashboard_steps']) - int(r['true_steps'])) / int(r['true_steps']):.1f}%) "
+                                 f"| {r['note']} |" for r in rows) + "\n")
     # Replace this section in results.md, keeping what train_steps.py wrote above it
     text = RESULTS_MD.read_text()
     RESULTS_MD.write_text(text.split(MARKER)[0].rstrip() + "\n\n" + section)

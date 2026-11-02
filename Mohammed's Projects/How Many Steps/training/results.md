@@ -140,3 +140,9 @@ The live count's error as a % of the true total, per pace, next to what the dire
 | Walk fast | 18.4% | 0.7% | 3.1% | 15.4% | 5.9% |
 | Run | 7.1% | 9.4% | 4.3% | 9.6% | 13.0% |
 | All | 14.2% | 3.0% | 3.1% (average) | 14.5% | 6.9% |
+
+### Demo walks (shown on the dashboard, not recorded as trials)
+
+| Date | Where | Your count | Dashboard showed | Off by | Note |
+|---|---|---|---|---|---|
+| 2026-11-01 | apartment lobby | 39 | 38 | -1 (2.6%) | demo video (saved outside the repo); counted silently; the board needed a restart to connect to the dashboard over the phone hotspot |

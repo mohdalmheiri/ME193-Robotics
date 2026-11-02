@@ -63,6 +63,10 @@ On the hotspot, keep Phone 2's Settings → Personal Hotspot screen open while t
 starts: iPhones hide the hotspot from Wi-Fi scans otherwise. The board gets a
 `172.20.10.x` address, and Phone 2 opens the page at the address on the matrix.
 
+If the page works but the dashboard gets nothing (the Live count panel says "dashboard
+offline"), restart the board while the hotspot is on. At the lobby demo the board
+needed a restart before it connected to the dashboard over the hotspot.
+
 ## Setting up a board (once)
 
 From the ArduinoApps kit, after deploying:
