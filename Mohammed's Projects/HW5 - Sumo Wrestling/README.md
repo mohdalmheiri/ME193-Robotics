@@ -73,8 +73,8 @@ git clone https://github.com/mohdalmheiri/ME193-Robotics.git
 cd ME193-Robotics
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r "Mohammed's Projects/Sumo Wrestling/requirements.txt"
-cd "Mohammed's Projects/Sumo Wrestling"
+pip install -r "Mohammed's Projects/HW5 - Sumo Wrestling/requirements.txt"
+cd "Mohammed's Projects/HW5 - Sumo Wrestling"
 python tests/test_behavior_tree.py     # should say "All tests passed!"
 python sumo.py
 ```

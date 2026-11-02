@@ -55,16 +55,16 @@ straight to the motors and stops them if messages stop arriving.
 
 1. Install YOLO and MQTT (from the repo root, with `.venv` active):
    ```
-   pip install -r "Mohammed's Projects/Door-to-door Service/YOLO/requirements.txt"
+   pip install -r "Mohammed's Projects/HW4 - Door-to-door Service/YOLO/requirements.txt"
    ```
 2. Deploy the UNO Q app with Arduino App Lab: `mqtt-minifig-monitor` for
    Part 1, or `mqtt-minifig-drive` for Part 2.
 3. Run the detector from its own folder:
    ```
-   cd "Mohammed's Projects/Door-to-door Service/YOLO"            # Part 1
+   cd "Mohammed's Projects/HW4 - Door-to-door Service/YOLO"            # Part 1
    python detect_publish.py
 
-   cd "Mohammed's Projects/Door-to-door Service/YOLO-green-car"  # Part 2
+   cd "Mohammed's Projects/HW4 - Door-to-door Service/YOLO-green-car"  # Part 2
    python detect_publish.py
    ```
 4. Press `q` in the video window to quit.

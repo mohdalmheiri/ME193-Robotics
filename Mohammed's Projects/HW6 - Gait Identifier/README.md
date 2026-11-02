@@ -162,7 +162,7 @@ Those SCL/SDA pins are the `Wire` bus. The sketch checks `Wire` first and falls 
 ## Files
 
 ```
-Gait Identifier/
+HW6 - Gait Identifier/
 ├── unoq_app/              UNO Q app "Gait Recorder"
 │   ├── sketch/sketch.ino    reads the MPU-6050 at 100 Hz, draws on the LED matrix
 │   ├── python/main.py       phone page, recording, live predictions
@@ -188,8 +188,8 @@ Gait Identifier/
 From the repo root, with `.venv` active:
 
 ```
-pip install -r "Mohammed's Projects/Gait Identifier/training/requirements.txt"
-cd "Mohammed's Projects/Gait Identifier/training"
+pip install -r "Mohammed's Projects/HW6 - Gait Identifier/training/requirements.txt"
+cd "Mohammed's Projects/HW6 - Gait Identifier/training"
 python train.py
 ```
 
@@ -207,7 +207,7 @@ that name is a symlink to `unoq_app/`:
 
 ```
 cd ArduinoApps
-ln -s "<path to repo>/Mohammed's Projects/Gait Identifier/unoq_app" mpu6050-check   # once
+ln -s "<path to repo>/Mohammed's Projects/HW6 - Gait Identifier/unoq_app" mpu6050-check   # once
 python3 tools/deploy.py mpu6050-check
 ```
 

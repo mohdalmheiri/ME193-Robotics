@@ -12,14 +12,14 @@ comes from someone else.
 
 | Folder | Assignment | Summary |
 |---|---|---|
-| [`Pose Race/`](./Pose%20Race) | Pose Race (HW1) | Control a LEGO car with arm gestures tracked via webcam + MediaPipe Pose |
-| [`AprilTag Parking/`](./AprilTag%20Parking) | AprilTag Parking (HW2) | Drive a LEGO car to center an AprilTag in a webcam (or phone-camera) feed using a P/spring controller |
-| [`The Whistling World Cup/`](./The%20Whistling%20World%20Cup) | The Whistling World Cup (HW3) | Drive a LEGO car with recorder notes and claps picked up by the laptop mic, playing ball vs. goalie over MQTT |
-| [`Door-to-door Service/`](./Door-to-door%20Service) | Door-to-door Service (HW4) | Detect LEGO minifigs with a YOLO model on the laptop camera and send their position over MQTT to an Arduino UNO Q car |
-| [`A Little Ping Pong/`](./A%20Little%20Ping%20Pong) | A Little Ping Pong (Midterm) | Augmented-reality ping-pong against a virtual opponent: a LEGO Double Motor is the paddle (AprilTag + MediaPipe tracking, trained IMU swing classifier, haptics), with the live score over MQTT on an Arduino UNO Q scoreboard |
-| [`Sumo Wrestling/`](./Sumo%20Wrestling) | Sumo Wrestling (HW5) | LEGO sumo robot with shared control: a behavior tree fuses the controller levers with a color sensor (tape edge) and an HC-SR04 on an Arduino UNO Q over MQTT (opponent boost) |
-| [`Gait Identifier/`](./Gait%20Identifier) | Gait Identifier (HW6) | Wearable MPU-6050 on an Arduino UNO Q that tells standing, walking, running and biking apart live, with a threshold model and a decision tree trained on the laptop |
-| [`How Many Steps/`](./How%20Many%20Steps) | How many steps? (HW7) | Ankle-worn IMU on an Arduino UNO Q that counts steps and estimates distance with a PyTorch neural net (in progress: practice net on the HW6 data) |
+| [`HW1 - Pose Race/`](./HW1%20-%20Pose%20Race) | Pose Race (HW1) | Control a LEGO car with arm gestures tracked via webcam + MediaPipe Pose |
+| [`HW2 - AprilTag Parking/`](./HW2%20-%20AprilTag%20Parking) | AprilTag Parking (HW2) | Drive a LEGO car to center an AprilTag in a webcam (or phone-camera) feed using a P/spring controller |
+| [`HW3 - The Whistling World Cup/`](./HW3%20-%20The%20Whistling%20World%20Cup) | The Whistling World Cup (HW3) | Drive a LEGO car with recorder notes and claps picked up by the laptop mic, playing ball vs. goalie over MQTT |
+| [`HW4 - Door-to-door Service/`](./HW4%20-%20Door-to-door%20Service) | Door-to-door Service (HW4) | Detect LEGO minifigs with a YOLO model on the laptop camera and send their position over MQTT to an Arduino UNO Q car |
+| [`MT - A Little Ping Pong/`](./MT%20-%20A%20Little%20Ping%20Pong) | A Little Ping Pong (Midterm) | Augmented-reality ping-pong against a virtual opponent: a LEGO Double Motor is the paddle (AprilTag + MediaPipe tracking, trained IMU swing classifier, haptics), with the live score over MQTT on an Arduino UNO Q scoreboard |
+| [`HW5 - Sumo Wrestling/`](./HW5%20-%20Sumo%20Wrestling) | Sumo Wrestling (HW5) | LEGO sumo robot with shared control: a behavior tree fuses the controller levers with a color sensor (tape edge) and an HC-SR04 on an Arduino UNO Q over MQTT (opponent boost) |
+| [`HW6 - Gait Identifier/`](./HW6%20-%20Gait%20Identifier) | Gait Identifier (HW6) | Wearable MPU-6050 on an Arduino UNO Q that tells standing, walking, running and biking apart live, with a threshold model and a decision tree trained on the laptop |
+| [`HW7 - How Many Steps/`](./HW7%20-%20How%20Many%20Steps) | How many steps? (HW7) | Ankle-worn IMU on an Arduino UNO Q that counts steps and estimates distance with a PyTorch neural net (in progress: practice net on the HW6 data) |
 
 ## Setup
 
@@ -39,19 +39,19 @@ see that project's README.
 Door-to-door Service has its own requirements, since YOLO is a big install:
 
 ```
-pip install -r "Mohammed's Projects/Door-to-door Service/YOLO/requirements.txt"
+pip install -r "Mohammed's Projects/HW4 - Door-to-door Service/YOLO/requirements.txt"
 ```
 
 Gait Identifier's training has its own requirements too:
 
 ```
-pip install -r "Mohammed's Projects/Gait Identifier/training/requirements.txt"
+pip install -r "Mohammed's Projects/HW6 - Gait Identifier/training/requirements.txt"
 ```
 
 How Many Steps uses PyTorch for its neural net:
 
 ```
-pip install -r "Mohammed's Projects/How Many Steps/training/requirements.txt"
+pip install -r "Mohammed's Projects/HW7 - How Many Steps/training/requirements.txt"
 ```
 
 The `ArduinoApps` in Door-to-door Service, the `unoq_scoreboard` app in A Little

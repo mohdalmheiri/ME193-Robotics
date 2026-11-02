@@ -77,7 +77,7 @@ and outputs match `train_steps.py` (they're identical).
 
 `training/practice_classifier.py` trains a small PyTorch net to recognize standing,
 walking, running and biking from the recordings in
-[`Gait Identifier/data/raw`](../Gait%20Identifier/data/raw):
+[`HW6 - Gait Identifier/data/raw`](../HW6%20-%20Gait%20Identifier/data/raw):
 
 1. Trim 2 s off both ends of each recording and cut the rest into back-to-back 2 s clips
    (200 samples at 100 Hz).
@@ -130,7 +130,7 @@ The full tables are in [`training/results.md`](training/results.md); the plots a
 ## Hardware
 
 - Arduino UNO Q with an MPU-6050 IMU on I2C, wired as in
-  [HW6](../Gait%20Identifier/README.md), strapped to the right lower leg near the ankle
+  [HW6](../HW6%20-%20Gait%20Identifier/README.md), strapped to the right lower leg near the ankle
 - USB power bank, so the board runs without the laptop
 - A phone: controls the recorder (port 7000) and records its own sensors with
   [phyphox](https://phyphox.org)
@@ -139,7 +139,7 @@ The full tables are in [`training/results.md`](training/results.md); the plots a
 ## Files
 
 ```
-How Many Steps/
+HW7 - How Many Steps/
 ├── data/
 │   ├── raw/                     ankle recordings, one CSV per trial
 │   ├── phone_raw/               phone recordings: one folder per trial, zips in original_zips/
@@ -185,8 +185,8 @@ How Many Steps/
 From the repo root, with `.venv` active:
 
 ```
-pip install -r "Mohammed's Projects/How Many Steps/training/requirements.txt"
-cd "Mohammed's Projects/How Many Steps/training"
+pip install -r "Mohammed's Projects/HW7 - How Many Steps/training/requirements.txt"
+cd "Mohammed's Projects/HW7 - How Many Steps/training"
 python train_steps.py            # step counter, about 1.5 min
 python practice_classifier.py    # practice run on the HW6 data
 ```
@@ -196,8 +196,8 @@ board, send made-up data (from the repo root; `paho-mqtt` is in
 `Mohammed's Projects/requirements.txt`):
 
 ```
-python "Mohammed's Projects/How Many Steps/dashboard/fake_publisher.py"
-open "Mohammed's Projects/How Many Steps/dashboard/index.html"
+python "Mohammed's Projects/HW7 - How Many Steps/dashboard/fake_publisher.py"
+open "Mohammed's Projects/HW7 - How Many Steps/dashboard/index.html"
 ```
 
 Step Recorder: from the ArduinoApps kit, `python3 tools/deploy.py step-recorder` (its
@@ -209,8 +209,8 @@ the repo root (the full routine is in
 [`data/RECORDING_CHECKLIST.md`](data/RECORDING_CHECKLIST.md)):
 
 ```
-python "Mohammed's Projects/How Many Steps/data/sync_from_board.py"
-cd "Mohammed's Projects/How Many Steps/data"
+python "Mohammed's Projects/HW7 - How Many Steps/data/sync_from_board.py"
+cd "Mohammed's Projects/HW7 - How Many Steps/data"
 python check_recordings.py       # the after-session check: damage, stomps, one plot per trial
 cd ../training
 python evaluate_tests.py         # the live count vs the real count on the Test walks

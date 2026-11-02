@@ -79,7 +79,7 @@ Same steps as above, with Phone 2 also filming:
 
 - [ ] **Phone 1: Auto-Lock back on** (Settings → Display & Brightness → Auto-Lock).
 - [ ] **Phone 2:** turn off Personal Hotspot.
-- [ ] Laptop: `python "Mohammed's Projects/How Many Steps/data/sync_from_board.py"`
+- [ ] Laptop: `python "Mohammed's Projects/HW7 - How Many Steps/data/sync_from_board.py"`
       (the board must be back on home Wi-Fi).
 - [ ] Copy the phyphox zips, as named, into `data/phone_raw/original_zips/`.
 - [ ] `python check_recordings.py` in `data/`: for each new zip it says which trial folder to

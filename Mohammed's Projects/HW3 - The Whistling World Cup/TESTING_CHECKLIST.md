@@ -9,7 +9,7 @@ the one above it works.
 
 - [ ] `cd ~/Documents/GitHub/ME193-Robotics` and
       `source .venv/bin/activate` (the venv at the repo root)
-- [ ] `cd "Mohammed's Projects/The Whistling World Cup"`
+- [ ] `cd "Mohammed's Projects/HW3 - The Whistling World Cup"`
 - [ ] Charge/power on the LEGO hub, have the recorder and a working mic
       (AirPods) ready
 - [ ] `python whistling.py --role ball --practice --recalibrate`

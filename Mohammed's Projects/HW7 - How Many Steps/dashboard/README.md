@@ -74,7 +74,7 @@ For testing without the board:
    From the repo root, with `.venv` active:
 
    ```
-   python "Mohammed's Projects/How Many Steps/dashboard/fake_publisher.py"
+   python "Mohammed's Projects/HW7 - How Many Steps/dashboard/fake_publisher.py"
    ```
 
 2. Open `index.html` in a browser (double-click it, or `open index.html` from this

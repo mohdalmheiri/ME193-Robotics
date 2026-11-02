@@ -8,7 +8,7 @@ work the step counter will need later (cut IMU data into clips, turn each
 clip into numbers, train a net in PyTorch, test it fairly) on data we
 already have.
 
-1. Loads every CSV in "Gait Identifier/data/raw" (the HW6 recordings).
+1. Loads every CSV in "HW6 - Gait Identifier/data/raw" (the HW6 recordings).
 2. Trims 2 s off both ends of each recording and cuts the rest into 2 s clips.
 3. Describes each clip with 18 numbers: the average, spread and peak of each
    of the 6 IMU channels.
@@ -30,8 +30,8 @@ import torch
 from torch import nn
 
 # ---- Settings ------------------------------------------------------------
-PROJECT = Path(__file__).resolve().parent.parent           # .../How Many Steps
-DATA_DIR = PROJECT.parent / "Gait Identifier" / "data" / "raw"
+PROJECT = Path(__file__).resolve().parent.parent           # .../HW7 - How Many Steps
+DATA_DIR = PROJECT.parent / "HW6 - Gait Identifier" / "data" / "raw"
 MEDIA_DIR = PROJECT / "media"
 
 SAMPLE_RATE_HZ = 100     # the HW6 sketch read the MPU-6050 100 times a second

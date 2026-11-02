@@ -56,7 +56,7 @@ The physical scoreboard that shows these is in [unoq_scoreboard/](unoq_scoreboar
 ## Files
 
 ```
-A Little Ping Pong/
+MT - A Little Ping Pong/
 ├── game.py                  run this
 ├── record.json              best streak per level
 ├── visuals_and_sounds/      what you see and hear
@@ -104,9 +104,9 @@ python3 -m venv .venv          # first time only
 Run it from the repo root:
 
 ```bash
-.venv/bin/python "Mohammed's Projects/A Little Ping Pong/game.py"              # normal: Double Motor paddle
-.venv/bin/python "Mohammed's Projects/A Little Ping Pong/game.py" --no-motor   # no motor: press S to swing
-.venv/bin/python "Mohammed's Projects/A Little Ping Pong/game.py" --threshold  # old threshold swing detection
+.venv/bin/python "Mohammed's Projects/MT - A Little Ping Pong/game.py"              # normal: Double Motor paddle
+.venv/bin/python "Mohammed's Projects/MT - A Little Ping Pong/game.py" --no-motor   # no motor: press S to swing
+.venv/bin/python "Mohammed's Projects/MT - A Little Ping Pong/game.py" --threshold  # old threshold swing detection
 ```
 
 Turn the Double Motor on before starting. On first use, macOS asks to let the terminal use the camera and Bluetooth. Every 10 seconds the terminal prints the frame rate and where the time goes (`[perf] ...`).
@@ -141,15 +141,15 @@ Your **streak** is how many balls in a row you've hit (it resets when you miss).
   - swing detection (`SWING_PROB`, thresholds)
   - targets, camera and performance
 - **Drawing constants:** table and ball-flight constants are at the top of [visuals_and_sounds/ar_view.py](visuals_and_sounds/ar_view.py).
-- **Checking the opponent:** after changing the opponent's `BOT_*` values, run `.venv/bin/python "Mohammed's Projects/A Little Ping Pong/opponent/tune_opponent.py"`. It uses the same opponent code as the game and prints, per level, how often the opponent fails to return different kinds of shots, and how often a player who hits 90% or 60% of balls wins points and games.
+- **Checking the opponent:** after changing the opponent's `BOT_*` values, run `.venv/bin/python "Mohammed's Projects/MT - A Little Ping Pong/opponent/tune_opponent.py"`. It uses the same opponent code as the game and prints, per level, how often the opponent fails to return different kinds of shots, and how often a player who hits 90% or 60% of balls wins points and games.
 
 ### Retraining the swing classifier
 
 If swings are missed or gentle moves count as swings, record more data and retrain (the Double Motor must be on):
 
 ```bash
-.venv/bin/python "Mohammed's Projects/A Little Ping Pong/swing_classifier/collect_swing_data.py"      # 30 beeps + 60 s moving + 10 s still
-.venv/bin/python "Mohammed's Projects/A Little Ping Pong/swing_classifier/train_swing_classifier.py"  # prints accuracy, saves swing_model.joblib
+.venv/bin/python "Mohammed's Projects/MT - A Little Ping Pong/swing_classifier/collect_swing_data.py"      # 30 beeps + 60 s moving + 10 s still
+.venv/bin/python "Mohammed's Projects/MT - A Little Ping Pong/swing_classifier/train_swing_classifier.py"  # prints accuracy, saves swing_model.joblib
 ```
 
 - **What the collector does:** after each beep, swing like you do in the game. Then move around normally without swinging. Every run appends to `swing_classifier/swing_data.csv`, so you can add data later (for example `--swings 10 --idle 20 --still 5`).
