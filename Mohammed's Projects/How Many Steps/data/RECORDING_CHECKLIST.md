@@ -49,10 +49,11 @@ measured course. Walk anywhere.
 1. **Phone 2:** pick **Test** on the Step Recorder page, then **Reset count** (so the Live
    count shows just this walk).
 2. **Start.** Walk, counting your steps **silently** (every foot that lands, both feet).
-3. **Stop.**
+3. **Stand still for 2 s, then Stop.** The live count looks at the last 2 s of movement,
+   so pressing Stop on the last step leaves that last second or two uncounted.
 4. Type in **Steps**, and the **Distance** only if you really know it; otherwise **0**
-   (0 = unknown; the box starts empty for Test). **Save.** The board stores its live count for the walk in
-   `live_counts.csv`, and the saved-trials table shows it.
+   (0 = unknown; the box starts empty for Test). **Save.** The board stores its live
+   count for the walk in `live_counts.csv`, and the saved-trials table shows it.
 
 A wrong number saved anyway? Add a row to `data/trial_corrections.csv` rather than
 editing `trials.csv` (see `data/README.md`).
