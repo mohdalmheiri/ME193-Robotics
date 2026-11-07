@@ -20,6 +20,7 @@ comes from someone else.
 | [`HW5 - Sumo Wrestling/`](./HW5%20-%20Sumo%20Wrestling) | Sumo Wrestling (HW5) | LEGO sumo robot with shared control: a behavior tree fuses the controller levers with a color sensor (tape edge) and an HC-SR04 on an Arduino UNO Q over MQTT (opponent boost) |
 | [`HW6 - Gait Identifier/`](./HW6%20-%20Gait%20Identifier) | Gait Identifier (HW6) | Wearable MPU-6050 on an Arduino UNO Q that tells standing, walking, running and biking apart live, with a threshold model and a decision tree trained on the laptop |
 | [`HW7 - How Many Steps/`](./HW7%20-%20How%20Many%20Steps) | How many steps? (HW7) | Ankle-worn IMU on an Arduino UNO Q that counts steps and estimates distance with a PyTorch neural net (in progress: practice net on the HW6 data) |
+| [`MT2 - The Impenetrable Safe/`](./MT2%20-%20The%20Impenetrable%20Safe) | The Impenetrable Safe (MT2) | A box that unlocks when a PyTorch CNN counts the right 3-number finger code on a webcam, with an Arduino UNO Q swinging the latch through a Cytron Maker Drive (in progress) |
 
 ## Setup
 

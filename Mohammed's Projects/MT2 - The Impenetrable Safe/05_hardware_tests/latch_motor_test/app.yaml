@@ -1,0 +1,9 @@
+# app.yaml: the app's "name tag". Arduino App Lab and arduino-app-cli read this
+# file to know that this folder is an app, what to call it, and what it needs.
+name: Latch Motor Test
+description: "Swings the safe's latch motor forward and back through the Cytron Maker Drive (D9/D10)"
+icon: 🔐
+
+# This test needs no network ports and no extra App Lab "bricks" (add-ons).
+ports: []
+bricks: []
