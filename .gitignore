@@ -22,6 +22,8 @@ Kat-Projects/MQTT/
 **/ehthumbs.db
 **/Thumbs.db
 **/desktop.ini
+# Office lock files (they exist while a file is open in Excel or Word)
+**/~$*
 
 # Python bytecode caches, ignored even inside "Public stuff"
 **/__pycache__/
