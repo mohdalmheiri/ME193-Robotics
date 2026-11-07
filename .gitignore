@@ -7,6 +7,11 @@
 !Public stuff/**
 !Mohammed's Projects/
 !Mohammed's Projects/**
+!Kat-Projects/
+!Kat-Projects/**
+
+# Local venv, ignored even inside "Kat-Projects"
+Kat-Projects/MQTT/
 
 # OS / editor junk files, ignored even inside "Public stuff"
 **/.DS_Store

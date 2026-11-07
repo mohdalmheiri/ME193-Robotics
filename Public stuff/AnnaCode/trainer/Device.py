@@ -1,96 +1,13 @@
 import asyncio
-import threading
-import concurrent.futures
 import legoeducation as le
-import legoeducation.background_worker as bw
-import legoeducation.basic_device as bd
+import webhub
+from webhub import flush_pending_commands, drop_stale_commands   # re-exported: other modules call Device.flush_pending_commands()
 from pyscript import document, window
 from pyscript.js_modules import ble
 from pyscript.ffi import create_proxy
 import json
 
 import state
-
-def _nowait_event_wait(self, timeout=None):
-    return self._flag
-threading.Event.wait = _nowait_event_wait
-
-def _nowait_future_result(self, timeout=None):
-    if self._state == 'FINISHED':
-        return self._Future__get_result()
-    return None
-concurrent.futures.Future.result = _nowait_future_result
-
-_worker_started = False
-
-def _wasm_start_thread(self):
-    global _worker_started
-    if _worker_started:
-        return
-    _worker_started = True
-    self.loop = asyncio.get_event_loop()
-    self.loop_ready.set()
-    asyncio.ensure_future(_wasm_worker_loop(self))
-
-def _wasm_put_request(self, request):
-    asyncio.ensure_future(self.async_put_request(request))
-
-bw.Worker.start_thread = _wasm_start_thread
-bw.Worker.put_request  = _wasm_put_request
-
-async def _wasm_worker_loop(worker):
-    worker._js_ble_registry = {}
-    while True:
-        try:
-            req = await worker.request_queue.get()
-            if req is None:
-                break
-            topic = req.get('topic')
-            if topic == 'send':
-                device  = req.get('msg')
-                message = req.get('msg2')
-                js_ble  = worker._js_ble_registry.get(id(device))
-                if js_ble is not None and message is not None:
-                    try:
-                        await js_ble.send(list(message))
-                    except Exception as e:
-                        print(f"BLE send error: {e}")
-            elif topic == 'connect':
-                cb = req.get('msg3')
-                if cb:
-                    cb(True)
-            elif topic == 'disconnect':
-                device = req.get('msg')
-                js_ble = worker._js_ble_registry.pop(id(device), None)
-                if js_ble is not None:
-                    js_ble.disconnect()
-            elif topic == 'scan':
-                cb = req.get('msg2')
-                if cb:
-                    cb([])
-        except Exception as e:
-            print(f"Worker loop error: {e}")
-
-bd.my_worker.start_thread()
-
-def flush_pending_commands():
-    """Drop any not-yet-sent BLE requests.
-
-    The run loop enqueues a 'send' request every tick (main.py's 50ms
-    loop_network) but _wasm_worker_loop sends them strictly one at a
-    time, awaiting each BLE write. If BLE round-trips run slower than
-    the tick rate, motor-speed updates pile up in request_queue faster
-    than they drain. Stop's motor_stop() request would otherwise land
-    at the tail of that backlog, so the robot keeps executing stale
-    speed commands for a while after Stop is pressed. Call this right
-    before issuing the stop command so it isn't stuck behind them.
-    """
-    q = bd.my_worker.request_queue
-    while not q.empty():
-        try:
-            q.get_nowait()
-        except Exception:
-            break
 
 _DEVICE_MAP = {
     "Double Motor": le.DoubleMotor,
@@ -197,11 +114,24 @@ def show_reading(plot_id: str, val):
     else:
         el.textContent = str(int(val)) if isinstance(val, (int, float)) else str(val)
 
+def _battery_html(pct) -> str:
+    """Tiny battery icon plus percent; an empty icon with an ellipsis until the hub reports."""
+    if pct is None:
+        return '<span class="battery-body"></span><span class="battery-pct">?</span>'
+    pct = max(0, min(100, int(pct)))
+    color = "var(--red)" if pct < 20 else ("#e0a100" if pct < 50 else "var(--green)")
+    return (f'<span class="battery-body"><span class="battery-fill" '
+            f'style="width:{pct}%;background:{color}"></span></span>'
+            f'<span class="battery-pct">{pct}%</span>')
+
 class Element:
     def __init__(self):
         self.myble = ble.BLEDevice.new()
         self.hub = None
         self.name = None
+        self._logged_items = False
+        self._info_default = None
+        self.battery = None   # percent, from the hub's info notification
         self.plots = []
         self.plot_vars = []
         self.in_list = []
@@ -301,6 +231,7 @@ class Element:
 
         try:
             self.hub = hub_cls()
+            self._info_default = self.hub.info_device   # placeholder until the hub reports
 
             _hub = self.hub
             self._notification_proxy = create_proxy(
@@ -323,16 +254,23 @@ class Element:
             
             self.hub.device = self.hub  # <-- THIS is the fix
 
-            registry = getattr(bd.my_worker, '_js_ble_registry', None)
-            if registry is not None:
-                registry[id(self.hub)] = self.myble 
-                print(f"Registered hub id={id(self.hub)}")
-            else:
-                print("WARNING: worker registry not found")
+            webhub.registry[id(self.hub)] = self.myble
+            self.hub._first_notification_ready = asyncio.Event()
+            print(f"Registered hub id={id(self.hub)}")
 
             self.hub.connected = True
             
             await asyncio.sleep(0)
+
+            # Only the latest firmware is supported: older hubs get an alert to update.
+            kind = next(k for k in _DEVICE_MAP if k in self.name)
+            if not await webhub.check_firmware(self.hub, kind):
+                self.myble.disconnect()
+                webhub.registry.pop(id(self.hub), None)
+                self.hub.connected = False
+                self.hub = None
+                return
+
             
             # Hub sometimes ignores the first request; re-send until the
             # first notification arrives (3 tries x 2 s).
@@ -427,11 +365,41 @@ class Element:
         elif "Controller" in self.name:
             return ["LightIntensity", "BeepFrequency"] #["LightColor", "LightPattern", "LightIntensity", "BeepPattern", "BeepFrequency"]
 
+    def sync_battery(self):
+        """Pick up the battery level the library last stored from the hub.
+
+        The first notifications are handled before our callback is attached,
+        so a level carried in one of those is only visible on hub.info_device.
+        """
+        info = getattr(self.hub, "info_device", None)
+        if info is None or info is self._info_default:
+            return
+        if info.batteryLevel != self.battery:
+            print(f"{self.name} battery reading: {info.batteryLevel}")
+            self.battery = info.batteryLevel
+            self._show_battery()
+
+    def _show_battery(self):
+        el = document.querySelector(f'[id="chip-{self.name}"] .device-battery')
+        if el:
+            el.innerHTML = _battery_html(self.battery)
+            el.title = f"Battery {self.battery}%"
+
     def notif_callback(self, data):                    
         parsed_items = le.device_notification_parser(data)
+        self.sync_battery()
+        if not self._logged_items:
+            self._logged_items = True
+            print(f"{self.name} notification items: {[type(i).__name__ for i in parsed_items]}")
         for parsed_item in parsed_items:
-    
-            if isinstance(parsed_item, le.MotorNotification):
+
+            if isinstance(parsed_item, le.InfoDeviceNotification):
+                print(f"{self.name} battery reading: {parsed_item.batteryLevel}")
+                if parsed_item.batteryLevel != self.battery:
+                    self.battery = parsed_item.batteryLevel
+                    self._show_battery()
+
+            elif isinstance(parsed_item, le.MotorNotification):
                 if "Double Motor" in self.name:
                     side = "Left" if parsed_item.motorBitMask == le.MOTOR_BITS_LEFT else "Right"
                     self.state[side + "Position"] = parsed_item.position
@@ -452,8 +420,8 @@ class Element:
                 self.state["AccelerationY"] = parsed_item.accelerometerY
                 self.state["AccelerationZ"] = parsed_item.accelerometerZ
                 self.state["GyroX"] = parsed_item.gyroscopeX
-                self.state["GyroY"] = parsed_item.gyroscopeX
-                self.state["GyroZ"] = parsed_item.gyroscopeX
+                self.state["GyroY"] = parsed_item.gyroscopeY
+                self.state["GyroZ"] = parsed_item.gyroscopeZ
 
             elif isinstance(parsed_item, le.ColorSensorNotification):
                 self.state["Reflection"] = parsed_item.reflection
@@ -571,12 +539,14 @@ async def add_device_chip(dev: "Element"):
     dl = document.getElementById("device-list")
 
     name = dev.name
+    dev.sync_battery()
     chip = document.createElement("div")
     chip.className = "device-row"
     chip.id = f"chip-{name}"
     chip.innerHTML = (
         f'<div class="device-indicator"></div>'
         f'<span class="device-name">{name}</span>'
+        f'<span class="device-battery" title="{"Battery %d%%" % dev.battery if dev.battery is not None else "Waiting for battery level"}">{_battery_html(dev.battery)}</span>'
         f'<button class="btn-disconnect" title="Disconnect">'
         f'    <svg width="11" height="11" viewBox="0 0 24 24" fill="none"'
         f'         stroke="currentColor" stroke-width="2.5">'
