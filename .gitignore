@@ -55,3 +55,7 @@ Mohammed's Projects/MT2 - The Impenetrable Safe/02_data_collection/data_old_640x
 # MT2 stop-action movie frames (8 MB): kept on this laptop only; only the overview goes in Git
 Mohammed's Projects/MT2 - The Impenetrable Safe/03_training/feature_maps/*
 !Mohammed's Projects/MT2 - The Impenetrable Safe/03_training/feature_maps/overview.png
+# MT2 secret word the laptop sends with every latch command (stays on the laptop and the board)
+Mohammed's Projects/MT2 - The Impenetrable Safe/04_unoq_app/safe_app/python/link_secret.txt
+# MT2 unlock code (stays on the laptop, so the code isn't public)
+Mohammed's Projects/MT2 - The Impenetrable Safe/04_unoq_app/safe_code.txt

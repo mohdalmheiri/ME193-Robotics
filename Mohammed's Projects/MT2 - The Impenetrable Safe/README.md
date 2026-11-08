@@ -110,8 +110,16 @@ MT2 - The Impenetrable Safe/
     loss.png, accuracy.png      training curves (made by train.py)
     confusion_matrix.png        which counts get mixed up (made by train.py)
     mistakes.png                the validation photos it gets wrong (made by train.py)
-    feature_maps/               5 movie frames per class + overview.png (made by feature_maps.py)
-  04_unoq_app/                  the final app that runs on the UNO Q
+    feature_maps/overview.png   one row per class for this README (the 30 movie frames stay on the laptop)
+  04_unoq_app/                  the lock itself
+    laptop_lock.py              the whole lock on the laptop first: camera, network, code, screen
+    safe_code.txt               the unlock code (laptop only, not in Git)
+    safe_app/                   UNO Q app: receives UNLOCK / LOCK and drives the latch
+      app.yaml                  the app's name tag for App Lab (web server on port 7000)
+      python/main.py            small web server; passes moves to the sketch
+      python/link_secret.txt    secret word for commands (laptop and board only, not in Git)
+      sketch/sketch.ino         the tuned latch moves; homes and locks at power-up
+      assets/index.html         a status page (locked / unlocked)
   05_hardware_tests/
     latch_motor_test/           UNO Q app that spins the latch motor both ways
       app.yaml                  the app's name tag for App Lab
@@ -255,9 +263,87 @@ finger shapes.
 
 ### 04_unoq_app
 
-The App Lab app for the UNO Q: the Python side reads the camera, runs the
-model and checks the code; the sketch side drives the latch motor when the
-Python side says to.
+The lock is built on the laptop first (`laptop_lock.py`), then moved to the
+UNO Q. On the UNO Q, the Python side will read the camera, run the network
+and check the code, and the sketch side will drive the latch motor.
+
+`laptop_lock.py` uses the same camera checks, crop box and network as
+training. The lock's rules are kept in one small class (`LockLogic`) with
+no camera or window code, so it can move to the UNO Q unchanged.
+
+**The lock policy.** The network guesses about 25 times a second, and single
+guesses are shaky: a hand moving into place can look like any number for a
+moment. So the lock only trusts an answer that stays the same and confident.
+
+- **IDLE:** asleep. Nothing counts until SPACE (the "button") is pressed.
+- **READY:** a digit 1–5 is accepted when the network gives the same
+  answer, at least 85% sure, on every frame for 1 second. One unsure or
+  different frame starts the second over. "0" isn't a code digit.
+- **Between digits:** the hand must show "0" (a fist, or no hand) for
+  0.5 s. Without this, holding up 1 finger for 3 seconds would type 1-1-1.
+  With it, repeated digits work: 1, fist, 1, fist, 2.
+- **After 3 digits:** the right code unlocks the latch. A wrong code is a
+  strike; the digits are cleared, and a fist is needed before trying again.
+- **3 strikes in a row:** a 30-second lockout where everything is ignored.
+  Trying all 125 possible codes would take over 20 minutes.
+- **No progress for 15 s** while entering a code: back to IDLE, so a
+  half-typed code doesn't wait for the next person.
+- **UNLOCKED:** L swings the latch shut again. L does nothing while locked,
+  so the arm is never pushed past the locked position.
+
+All the numbers (85%, 1 s, 0.5 s, 3 strikes, 30 s, 15 s) are settings at
+the top of the file. The code itself is in `safe_code.txt`, kept out of Git
+so it isn't public; without that file the lock won't start, rather than
+fall back to a default code. The screen shows the camera, LOCKED or
+UNLOCKED, the state with its countdown, the digits as dots, a bar that
+fills while a digit is held, the live guess, and the strikes.
+
+**The motor link.** When the code is right, the laptop sends UNLOCK to the
+UNO Q app (`safe_app/`) as a web request, by USB cable first and by Wi-Fi
+if USB gets no answer:
+
+```
+laptop_lock.py --(web request, USB cable or Wi-Fi)--> safe_app/python/main.py
+               --(Bridge)--> safe_app/sketch/sketch.ino --> motor
+```
+
+- **Why the USB cable:** `adb forward` (the USB tool App Lab installs)
+  links the laptop's port 7007 to the board's port 7000, so the request
+  can only reach this board. It needs no Wi-Fi and no board address.
+  Campus addresses change and get reused by classmates' boards.
+- **Wi-Fi fallback:** `http://Mohammed.local:7000` (`WIFI_HOST`, a setting
+  at the top of `laptop_lock.py`). It is used because USB data hasn't
+  worked yet (see the build log). It works on home Wi-Fi. It is weaker:
+  - the secret word travels unencrypted, so someone listening on an open
+    network could copy it;
+  - on campus, `.local` names often don't work, and addresses change.
+  A classmate's board would just refuse the command (wrong secret word).
+- **Link order:** the link that last worked is tried first. The screen shows
+  which one is in use: "UNO Q by USB" in green, "UNO Q by Wi-Fi" in orange.
+- **Sending twice is harmless:** if a command arrives but its answer is
+  lost, the retry over the other link can deliver it a second time. The
+  sketch ignores a second UNLOCK or LOCK.
+- **Other option considered:** MQTT through a public server (anyone who
+  guesses the topic could unlock it).
+- **The secret word:** the board's port is also reachable over Wi-Fi, so
+  every UNLOCK / LOCK must carry the word in `safe_app/python/link_secret.txt`.
+  That file is made once, kept out of Git, and deployed with the app.
+- **No fake success:** the big LOCKED / UNLOCKED / MOVING text shows only
+  what the board itself reports. The laptop asks the board every second, in
+  the background. Without an answer, the screen shows "UNKNOWN - board not
+  connected", because the arm could be in either position.
+- **Following the board:** if the board reports the latch open while the
+  lock is idle (for example, left open last time), the lock switches to
+  UNLOCKED so L can shut it. If the board restarts, it homes and locks the
+  arm, and the lock goes back to IDLE.
+- **The sketch:** it moves only when asked. It ignores a second LOCK while
+  already locked, because nothing stops the arm at 90°.
+- **At power-up:** the sketch homes the arm against the wall, then locks.
+  The safe always starts LOCKED, but it is open for about half a second
+  during startup.
+
+This link is only for the laptop stage. Once the webcam and the network run
+on the UNO Q, the board checks the code itself.
 
 ### 05_hardware_tests/latch_motor_test
 
@@ -338,6 +424,39 @@ python feature_maps.py     # movie frames in feature_maps/
 
 The same seed gives the same network every time. In the live window the
 guess is green when the network is at least 80% sure, orange when it isn't.
+
+### The lock on the laptop
+
+```
+source .venv/bin/activate
+cd "Mohammed's Projects/MT2 - The Impenetrable Safe/04_unoq_app"
+python laptop_lock.py      # SPACE start, L lock again, q or Esc quits
+```
+
+Before the first run, deploy the board half once, with the board plugged
+in by USB (`safe-app` in ArduinoApps is a link to `04_unoq_app/safe_app`):
+
+```
+cd ~/Documents/GitHub/ArduinoApps
+export PATH="$HOME/Library/Arduino15/packages/arduino/tools/adb/32.0.0:$PATH"
+python3 tools/deploy.py safe-app
+```
+
+The arm swings to the wall and back out about 3 s after the app starts.
+`link_secret.txt` must exist before deploying. If it is ever lost, make a
+new one and deploy again:
+`python3 -c "import secrets; print(secrets.token_urlsafe(24))" > safe_app/python/link_secret.txt`
+
+The code is in `safe_code.txt` next to `laptop_lock.py` (3 digits, each 1-5,
+e.g. `echo "3 1 4" > safe_code.txt`; not in Git). Hold each digit until
+its dot fills, make a fist until the next dot is ready, then show the next
+digit. The panel shows "UNO Q by USB: locked" or "UNO Q by Wi-Fi: locked"
+when the board answers, and "not connected" when it doesn't. The lock still
+runs without the board, but the latch won't move.
+
+The safe app does **not** start by itself after the board loses power.
+Start it again with the deploy command above. Within a few seconds the arm
+homes against the wall and then locks.
 
 ### Latch motor test
 
@@ -643,3 +762,84 @@ A short running record of what was tried, what failed and what fixed it.
     daylight score is the same, but the mistakes are different.
 
   *Not tested yet:* the live test with a hand, and other people's hands.
+- **2026-11-08: the lock, on the laptop first.** `04_unoq_app/laptop_lock.py`
+  runs the whole code lock from the webcam, with the policy described in the
+  04_unoq_app section.
+
+  - *Tested in simulation:* 17 made-up guess sequences, all passed:
+    - the right code unlocks; L locks; repeated digits 1-1-2 work
+    - holding one digit for 4 s types it only once
+    - not accepted: a 0.8 s hold, 80% confidence, or a hold broken by one
+      unsure frame
+    - a wrong code is a strike; 3 strikes lock out for 30 s, then reset
+    - 15 s without progress returns to IDLE
+  - *Real camera:* about 24 frames per second; the empty box reads "0" at
+    97%. A full code hasn't been entered with a real hand yet.
+  - *Motor link:* a web request through the USB cable, with a secret word
+    (options and reasons in the 04_unoq_app section).
+    - New UNO Q app `safe_app`: a small web server passes commands over the
+      Bridge to a sketch with the tuned moves. The sketch moves only when
+      asked; at power-up it homes the arm and locks.
+    - Tested on the laptop against a stand-in board: unlock and lock
+      accepted, a wrong secret refused, and a missing board reported in
+      under a second (so the lock stays LOCKED).
+    - 2 extra simulation tests: when the board doesn't answer, the lock
+      neither shows UNLOCKED nor pretends to be shut (19 tests in all).
+    - *Board test:* see the next entry.
+- **2026-11-08: safe_app on the real board; USB not seen.**
+  - *Deploy failed first:* "port 7000 is declared by multiple sources:
+    arduino:web_ui, app.yaml". The web_ui brick already reserves port 7000
+    for its web server, and `app.yaml` listed it a second time. Fixed with
+    `ports: []` (the brick still opens 7000).
+  - *Redeploy worked* over Wi-Fi: the sketch compiled and flashed, and the
+    app started. At power-up the arm homed and locked.
+  - *Commands tested over Wi-Fi*, all as intended:
+    - status: "locked"
+    - wrong or missing secret: refused
+    - a GET to /unlock: not found (only POST works)
+    - UNLOCK: busy, then unlocked; a second UNLOCK was ignored
+    - LOCK: locked; a second LOCK was ignored
+  - *USB:* adb found no device although the board is plugged in. The Mac
+    lists only the webcam as a USB device, and the board's own USB port
+    reports "not attached" (its adb service is running). Both ends see
+    nothing, so the likely causes are a charge-only cable, a hub or dock,
+    or the port.
+  - *Wi-Fi as a fallback:* `Mohammed.local` answered in about 30 ms on home
+    Wi-Fi. Not tested on campus Wi-Fi.
+  - *Watched:* Mohammed watched an UNLOCK, a 3 s pause, then a LOCK sent from
+    the laptop. The arm moved correctly, and the box ended up locked.
+- **2026-11-08: USB data doesn't work; Wi-Fi fallback added.**
+  - *Two cables:* with two different USB-C cables, the Mac still lists no
+    Arduino device (nothing for arduino, uno, qualcomm or 2341), and adb
+    sees nothing. The board powers up from the cable, and its USB service
+    is running but reports "not attached". Not solved yet; the next
+    suspects are the Mac's ports or the board's USB setup.
+  - *Fallback:* `laptop_lock.py` now tries USB first, then
+    `Mohammed.local` over Wi-Fi (`WIFI_HOST` setting). The secret word is
+    still required, and the screen shows which link is in use.
+  - *Tested with stand-in boards on the laptop:* USB is preferred when both
+    answer; it falls back to Wi-Fi when USB is gone. A wrong secret is
+    refused without trying the other link. With both gone, it shows "not
+    connected".
+  - *Found:* after the cable swap restarted the board, no app was running.
+    The safe app has to be started again after every power cut.
+- **2026-11-08: the screen shows the board's real state; USB works now.**
+  - *Problem:* without the board, the screen still said LOCKED, but the
+    real arm could have been open.
+  - *Fix:* the big text now shows only what the board confirms: LOCKED,
+    UNLOCKED, MOVING... or "UNKNOWN - board not connected". A background
+    thread asks the board every second. In the stand-in test, the screen
+    switched to UNKNOWN on the next check after the board disappeared.
+  - *Sketch change:* the sketch now reports "busy" the moment it accepts a
+    move. Before, the laptop could read the old "locked" in the instant
+    before the move started, and wrongly think the board had locked itself
+    again. A repeated UNLOCK or LOCK is still ignored (checked: a LOCK while
+    locked returned "locked" and nothing moved).
+  - *Tests:* 24 simulation tests passed, including the new board-following
+    rules, plus 2 polling tests.
+  - *USB:* during these tests, adb found the board over USB (with the
+    second cable, after the board restarted), and the redeploy went over
+    USB. `system_profiler` still lists nothing for it, so that check was
+    misleading on this Mac; `adb devices` is the one to trust. Unknown why
+    it failed before: possibly the cable was only half seated, or the board
+    needed a restart with the new cable.

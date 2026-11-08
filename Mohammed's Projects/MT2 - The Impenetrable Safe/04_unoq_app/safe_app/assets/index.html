@@ -1,0 +1,17 @@
+<!doctype html>
+<!-- The web_ui brick serves this folder. The safe is controlled by laptop_lock.py,
+     not from here: this page only shows whether the latch is locked. -->
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
+<title>Impenetrable Safe</title></head>
+<body style="font-family:sans-serif;background:#1e1e1e;color:#eee;text-align:center;padding-top:3em">
+<h1>Impenetrable Safe</h1>
+<p>Latch: <b id="s">...</b></p>
+<script>
+  // Ask the board every second whether the latch is locked, unlocked or busy
+  async function poll() {
+    try { const r = await fetch("/status"); document.getElementById("s").textContent = (await r.json()).state; }
+    catch (e) { document.getElementById("s").textContent = "no answer"; }
+  }
+  poll(); setInterval(poll, 1000);
+</script>
+</body></html>

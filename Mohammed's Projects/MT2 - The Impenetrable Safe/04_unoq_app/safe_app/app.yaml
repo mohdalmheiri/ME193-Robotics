@@ -1,0 +1,12 @@
+# app.yaml: the app's "name tag" for Arduino App Lab and arduino-app-cli.
+name: Impenetrable Safe
+description: "Finger-code safe: swings the latch when the laptop (later: the board itself) says the code is right"
+icon: 🔐
+
+# Port 7000 is the small web server the laptop sends UNLOCK / LOCK to.
+# It is NOT listed here: the web_ui brick already declares port 7000 for
+# itself, and listing it again makes the deploy fail with "port 7000 is
+# declared by multiple sources".
+ports: []
+bricks:
+  - arduino:web_ui
