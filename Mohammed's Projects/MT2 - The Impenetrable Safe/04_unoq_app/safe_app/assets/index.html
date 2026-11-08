@@ -1,17 +1,57 @@
 <!doctype html>
-<!-- The web_ui brick serves this folder. The safe is controlled by laptop_lock.py,
-     not from here: this page only shows whether the latch is locked. -->
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
-<title>Impenetrable Safe</title></head>
-<body style="font-family:sans-serif;background:#1e1e1e;color:#eee;text-align:center;padding-top:3em">
-<h1>Impenetrable Safe</h1>
-<p>Latch: <b id="s">...</b></p>
+<!-- Demo page for the stop-action movie: the board's camera view, the network's
+     guess and the safe's state. It only watches; it has no buttons. -->
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Impenetrable Safe</title>
+<style>
+  :root { --bg:#16181d; --panel:#22252c; --text:#eceef2; --dim:#9aa0ab; --ok:#3fb950; --bad:#f85149; --warn:#d29922; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:system-ui,sans-serif; }
+  main { max-width:760px; margin:0 auto; padding:16px; display:flex; flex-wrap:wrap; gap:16px; }
+  img { width:100%; max-width:400px; border-radius:8px; background:#000; aspect-ratio:4/3; }
+  .panel { flex:1; min-width:240px; background:var(--panel); border-radius:8px; padding:16px; }
+  #latch { font-size:2.2em; font-weight:800; margin:0; }
+  #state { color:var(--dim); margin:4px 0 14px; }
+  .dots span { display:inline-block; width:26px; height:26px; border-radius:50%; border:3px solid var(--dim); margin-right:10px; }
+  .dots span.on { background:var(--text); border-color:var(--text); }
+  .bar { height:10px; background:#3a3f4a; border-radius:5px; margin:14px 0; overflow:hidden; }
+  .bar div { height:100%; background:var(--ok); width:0; }
+  #guess { font-size:3em; font-weight:800; }
+  .small { color:var(--dim); font-size:.9em; }
+</style></head>
+<body><main>
+  <img id="cam" alt="camera view from the board">
+  <div class="panel">
+    <p id="latch">...</p>
+    <p id="state"></p>
+    <div class="dots"><span></span><span></span><span></span></div>
+    <div class="bar"><div id="hold"></div></div>
+    <div><span id="guess">-</span> <span id="conf" class="small"></span></div>
+    <p id="msg"></p>
+    <p id="extra" class="small"></p>
+  </div>
+</main>
 <script>
-  // Ask the board every second whether the latch is locked, unlocked or busy
-  async function poll() {
-    try { const r = await fetch("/status"); document.getElementById("s").textContent = (await r.json()).state; }
-    catch (e) { document.getElementById("s").textContent = "no answer"; }
+  // Every 200 ms: a fresh camera picture and the safe's numbers from the board.
+  const $ = (id) => document.getElementById(id);
+  async function tick() {
+    try {
+      const s = await (await fetch("/status", {cache: "no-store"})).json();
+      const l = s.lock || {};
+      const latch = s.state;
+      $("latch").textContent = latch === "locked" ? "LOCKED" : latch === "unlocked" ? "UNLOCKED"
+                             : latch === "busy" ? "MOVING..." : "UNKNOWN";
+      $("latch").style.color = latch === "unlocked" ? "var(--ok)" : latch === "locked" ? "var(--bad)" : "var(--warn)";
+      $("state").textContent = l.state === "LOCKOUT" ? `LOCKOUT ${l.lockout_left} s` : (l.state || "");
+      document.querySelectorAll(".dots span").forEach((d, i) => d.classList.toggle("on", i < (l.digits || 0)));
+      $("hold").style.width = `${Math.round((l.hold || 0) * 100)}%`;
+      $("guess").textContent = l.guess ?? "-";
+      $("guess").style.color = l.sure ? "var(--ok)" : "var(--warn)";
+      $("conf").textContent = l.confidence != null ? `${Math.round(l.confidence * 100)}% sure` : "";
+      $("msg").textContent = l.message || "";
+      $("extra").textContent = `strikes ${l.strikes ?? 0} of 3` + (l.camera && l.camera !== "ok" ? ` · camera: ${l.camera}` : "");
+      $("cam").src = "/frame?t=" + Date.now();
+    } catch (e) { $("latch").textContent = "no answer"; }
   }
-  poll(); setInterval(poll, 1000);
+  setInterval(tick, 200); tick();
 </script>
 </body></html>

@@ -1,0 +1,13 @@
+{
+  "camera_index": 0,
+  "frame_width": 640,
+  "frame_height": 480,
+  "box": {
+    "x": 71,
+    "y": 3,
+    "size": 475
+  },
+  "image_size": 128,
+  "color_order": "BGR (OpenCV)",
+  "saved_at": "2026-11-08T13:42:25"
+}

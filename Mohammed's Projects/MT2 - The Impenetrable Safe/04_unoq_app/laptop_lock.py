@@ -20,31 +20,11 @@ the Latch class). It tries the USB cable first, then Wi-Fi (WIFI_HOST). The
 board must be running safe_app; without it the lock still runs, but nothing
 moves.
 
-THE LOCK POLICY, in plain words
--------------------------------
-The network makes a guess about 30 times a second. Single guesses are shaky
-(a hand moving into place can look like any number for a moment), so the
-lock never trusts one guess. It trusts a guess only when it STAYS the same
-and confident for a while:
-
-  IDLE       Asleep. The camera runs, but nothing counts until SPACE is pressed.
-  READY      Waiting for a digit. A digit 1-5 is accepted when the network
-             gives the same answer, at least 85% sure, on every frame for
-             about 1 second. ("0" is not a code digit, so it is ignored here.)
-  WAIT_ZERO  After each accepted digit, the hand must show "0" (a fist, or the
-             hand out of the box) for about 0.5 s before the next digit counts.
-             Without this, holding up 1 finger for 3 seconds would type 1-1-1,
-             and with it, repeated digits like 1-1-2 still work: 1, fist, 1, fist, 2.
-  (3 digits) The code is compared with the one in safe_code.txt.
-             Right -> UNLOCKED: the latch swings open.
-             Wrong -> a "strike", the digits are cleared and you try again.
-             3 strikes in a row -> LOCKOUT.
-  UNLOCKED   Open. Press L to swing the latch shut again (back to IDLE).
-  LOCKOUT    30 seconds where everything is ignored. This makes guessing
-             slow: trying all 125 codes would take over 20 minutes.
-  Timeout    If nothing happens for 15 s while entering a code (no digit and
-             no fist accepted), the lock gives up and goes back to IDLE, so a
-             half-typed code doesn't wait forever for the next person.
+THE LOCK POLICY: the rules live in safe_app/python/lock_logic.py, shared
+with the board app, so the laptop and the UNO Q always follow the same
+rules (read that file's notes for them in plain words). The laptop adds
+two keys: SPACE wakes the lock (like holding an open palm), and L locks it
+again while open (like holding an open palm while UNLOCKED).
 
 The digits are shown as dots, not numbers, like a PIN pad. (The current
 guess IS shown, as asked, so for now someone watching the screen can read
@@ -69,17 +49,16 @@ HERE = Path(__file__).resolve().parent
 PROJECT = HERE.parent
 sys.path.insert(0, str(PROJECT / "02_data_collection"))   # hand_crop.py: camera checks + photo preparation
 sys.path.insert(0, str(PROJECT / "03_training"))          # model.py: the network
+sys.path.insert(0, str(HERE / "safe_app" / "python"))     # lock_logic.py: the rules, shared with the board
 import hand_crop as hc                        # noqa: E402
 from model import CLASSES, load_trained       # noqa: E402
+from lock_logic import (LockLogic, read_code, SURE, MAX_STRIKES, IDLE_TIMEOUT_S,   # noqa: E402
+                        IDLE, READY, WAIT_ZERO, UNLOCKED, LOCKOUT)
 
 # ---- Settings (change these freely) ------------------------------------------
+# The rule settings (85%, 1 s, 0.5 s, 2 s palm, 3 strikes, 30 s, 15 s) are at the top of
+# safe_app/python/lock_logic.py, shared with the board.
 CODE_FILE = HERE / "safe_code.txt"   # the secret code, e.g. "3 1 4": 3 digits, each 1-5 (kept out of Git)
-SURE = 0.85               # a guess counts only if the network is at least this sure (0-1)
-HOLD_DIGIT_S = 1.0        # a digit must be held (same sure answer on every frame) this many seconds
-HOLD_ZERO_S = 0.5         # the fist / empty box between digits must be held this many seconds
-MAX_STRIKES = 3           # wrong codes in a row before the lockout
-LOCKOUT_S = 30.0          # how long the lockout lasts, in seconds
-IDLE_TIMEOUT_S = 15.0     # no progress for this long while entering a code -> back to IDLE
 SHOW_GUESS = True         # show the network's live guess on screen (handy now; hides the code poorly)
 
 # How the laptop reaches the UNO Q: USB first, then Wi-Fi (see the Latch class)
@@ -91,23 +70,9 @@ POLL_S = 1.0              # ask the board for the latch's real state this often 
 
 
 
-def read_code(path=CODE_FILE):
-    """The secret code from safe_code.txt: 3 digits from 1 to 5, with or
-    without spaces ("3 1 4" or "314"). The file is kept out of Git so the
-    code isn't public; without it the lock won't start (no default code)."""
-    if not path.exists():
-        sys.exit(f"No {path.name}: make one with your code, e.g.\n"
-                 f"    echo \"3 1 4\" > \"{path}\"\n(3 digits, each 1-5; the file stays out of Git)")
-    return [int(c) for c in path.read_text() if c.isdigit()]
-
-
 MODEL_PATH = PROJECT / "03_training" / "finger_cnn.pt"
 SECRET_FILE = HERE / "safe_app" / "python" / "link_secret.txt"
 WINDOW = "finger-code safe (SPACE start, L lock, q quit)"
-
-# The states, as plain names (shown on screen as-is)
-IDLE, READY, WAIT_ZERO, UNLOCKED, LOCKOUT = "IDLE", "READY", "WAIT_ZERO", "UNLOCKED", "LOCKOUT"
-
 
 # ---- The motor: a web request to the UNO Q, by USB cable or Wi-Fi ------------
 
@@ -236,144 +201,6 @@ class Latch:
         return self._request("POST", "/lock")
 
 
-# ---- The lock's brain (no camera, no screen: easy to test and to port) -------
-
-class LockLogic:
-    """The lock policy above, as a small state machine.
-
-    It is fed one network guess per camera frame (update) and the two keys
-    (press_button, press_lock). It never looks at the clock itself; the time
-    is passed in, so a test can feed made-up times and guesses.
-    """
-
-    def __init__(self, code, latch):
-        if len(code) != 3 or not all(1 <= d <= 5 for d in code):
-            raise ValueError(f"CODE must be 3 digits from 1 to 5, got {code}")
-        self.code = list(code)
-        self.latch = latch
-        self.state = IDLE
-        self.digits = []          # digits accepted so far in this attempt
-        self.strikes = 0          # wrong codes in a row
-        self.streak = None        # (answer, time it started) of the current run of identical sure guesses
-        self.last_progress = 0.0  # when something last happened (for the 15 s timeout)
-        self.lockout_until = 0.0
-        self.message = "Press SPACE to start"   # one line of feedback for the screen
-
-    # -- keys --
-    def press_button(self, now):
-        """SPACE: wake up (from IDLE), or start the code over (while entering one)."""
-        if self.state in (IDLE, READY, WAIT_ZERO):
-            self._start_entry(now, "Show the first digit")
-
-    def press_lock(self, now):
-        """L: swing the latch shut. Only while open, so the arm is never pushed past the locked spot."""
-        if self.state == UNLOCKED:
-            if self.latch.lock():
-                self.state = IDLE
-                self.message = "Locked. Press SPACE to start"
-            else:                                     # the board didn't confirm: don't pretend it's shut
-                self.message = "The UNO Q didn't answer: still open. Check USB / Wi-Fi, press L again"
-
-    def follow_board(self, board_state):
-        """Match the lock to what the board reports, if they disagree while nobody is typing.
-
-        Examples: the laptop connects to a board that was left open
-        (-> UNLOCKED, so L can shut it), or the board restarts, which homes
-        and locks the arm (-> back to IDLE). Ignored while a code is being
-        entered or during a lockout.
-        """
-        if board_state == "unlocked" and self.state == IDLE:
-            self.state = UNLOCKED
-            self.message = "The latch is open. Press L to lock"
-        elif board_state == "locked" and self.state == UNLOCKED:
-            self.state = IDLE
-            self.message = "The board says the latch is locked. Press SPACE to start"
-
-    # -- one camera frame --
-    def update(self, answer, confidence, now):
-        """Feed one network guess (answer = 0..5, confidence = 0..1) taken at time `now` (seconds)."""
-        if self.state == LOCKOUT:
-            if now >= self.lockout_until:
-                self.strikes = 0
-                self.state = IDLE
-                self.message = "Lockout over. Press SPACE to start"
-            return
-        if self.state not in (READY, WAIT_ZERO):
-            return                                    # IDLE and UNLOCKED ignore the camera
-
-        if now - self.last_progress > IDLE_TIMEOUT_S:  # nothing accepted for a while: give up
-            self.state = IDLE
-            self.digits = []
-            self.message = f"No progress for {IDLE_TIMEOUT_S:.0f} s. Press SPACE to start"
-            return
-
-        # Track how long the SAME sure answer has lasted. An unsure frame, or a
-        # different answer, breaks the run and the hold starts again from zero.
-        if confidence < SURE:
-            self.streak = None
-            return
-        if self.streak is None or self.streak[0] != answer:
-            self.streak = (answer, now)
-        held = now - self.streak[1]
-
-        if self.state == READY and answer != 0 and held >= HOLD_DIGIT_S:
-            self._accept_digit(answer, now)
-        elif self.state == WAIT_ZERO and answer == 0 and held >= HOLD_ZERO_S:
-            self.state = READY
-            self.streak = None
-            self.last_progress = now
-            self.message = f"Show digit {len(self.digits) + 1}"
-
-    def hold_progress(self, now):
-        """How far the current hold is toward being accepted (0..1), for the progress bar."""
-        if self.streak is None or self.state not in (READY, WAIT_ZERO):
-            return 0.0
-        answer, start = self.streak
-        if self.state == READY and answer != 0:
-            return min(1.0, (now - start) / HOLD_DIGIT_S)
-        if self.state == WAIT_ZERO and answer == 0:
-            return min(1.0, (now - start) / HOLD_ZERO_S)
-        return 0.0
-
-    # -- inside steps --
-    def _start_entry(self, now, message):
-        self.state = READY
-        self.digits = []
-        self.streak = None
-        self.last_progress = now
-        self.message = message
-
-    def _accept_digit(self, digit, now):
-        self.digits.append(digit)
-        self.streak = None
-        self.last_progress = now
-        if len(self.digits) < len(self.code):
-            self.state = WAIT_ZERO                    # make a fist before the next digit
-            self.message = "Got it. Make a fist (0)"
-            return
-        if self.digits == self.code:                  # the third digit: check the whole code
-            self.strikes = 0
-            self.digits = []
-            if self.latch.unlock():
-                self.state = UNLOCKED
-                self.message = "Correct! Press L to lock again"
-            else:                                     # right code, but the latch didn't move
-                self.state = IDLE
-                self.message = "Right code, but the UNO Q didn't answer. Check USB / Wi-Fi, then SPACE"
-            return
-        self.strikes += 1
-        self.digits = []
-        if self.strikes >= MAX_STRIKES:
-            self.state = LOCKOUT
-            self.lockout_until = now + LOCKOUT_S
-            self.message = f"{MAX_STRIKES} wrong codes: locked out"
-        else:
-            # The hand still shows the last digit, so ask for a fist first;
-            # otherwise that digit would be read again as the next try's first digit.
-            self.state = WAIT_ZERO
-            self.message = f"Wrong code (strike {self.strikes} of {MAX_STRIKES}). Make a fist, then try again"
-
-
 # ---- The network ---------------------------------------------------------------
 
 def guess(model, frame, box):
@@ -476,7 +303,7 @@ def main():
         sys.exit("No crop_config.json. Line up the box with capture.py first (f, then c).")
     model, info = load_trained(MODEL_PATH)
     latch = Latch()
-    code = read_code()
+    code = read_code(CODE_FILE)
     lock = LockLogic(code, latch)
     print(f"Loaded finger_cnn.pt (validation accuracy {info['val_accuracy']:.1%}). Code length {len(code)}.")
     # Ask the board how the latch is. Without an answer the lock still runs

@@ -58,8 +58,11 @@ the speed that swings the latch reliably without straining the motor.
 
 ## Hardware
 
-- Arduino UNO Q, plugged into the laptop by USB-C
-- USB webcam
+- Arduino UNO Q
+- Arduino USB-C hub: the webcam plugs into its USB-A port, and its PD
+  (power) port is fed by a 5 V / 2.4 A power bank, which powers the board
+  and the camera
+- USB webcam (icspring), looking down at the red square
 - Cytron Maker Drive (2-channel motor driver; only channel 1 is used)
 - TT gear motor driving the latch
 - Laser-cut box and latch arm
@@ -112,14 +115,22 @@ MT2 - The Impenetrable Safe/
     mistakes.png                the validation photos it gets wrong (made by train.py)
     feature_maps/overview.png   one row per class for this README (the 30 movie frames stay on the laptop)
   04_unoq_app/                  the lock itself
-    laptop_lock.py              the whole lock on the laptop first: camera, network, code, screen
-    safe_code.txt               the unlock code (laptop only, not in Git)
-    safe_app/                   UNO Q app: receives UNLOCK / LOCK and drives the latch
+    laptop_lock.py              the lock on the laptop (the first version): camera, network, code, screen
+    prepare_board_files.py      copies the camera code, crop box, code and trained network into safe_app
+    safe_code.txt               the unlock code (not in Git)
+    safe_app/                   the UNO Q app: runs the whole lock on the board
       app.yaml                  the app's name tag for App Lab (web server on port 7000)
-      python/main.py            small web server; passes moves to the sketch
-      python/link_secret.txt    secret word for commands (laptop and board only, not in Git)
-      sketch/sketch.ino         the tuned latch moves; homes and locks at power-up
-      assets/index.html         a status page (locked / unlocked)
+      python/main.py            camera -> network -> rules -> latch and LED matrix; demo page
+      python/lock_logic.py      the lock's rules, shared with laptop_lock.py
+      python/finger_net.py      the trained network in plain numpy (no PyTorch on the board)
+      python/matrix_patterns.py the LED matrix pictures for each state
+      python/hand_crop.py       copy of 02_data_collection/hand_crop.py (made by prepare_board_files.py)
+      python/crop_config.json   copy of the crop box (made by prepare_board_files.py)
+      python/finger_net.npz     the trained numbers from finger_cnn.pt (made by prepare_board_files.py)
+      python/safe_code.txt      copy of the code (made by prepare_board_files.py, not in Git)
+      python/link_secret.txt    secret word for the laptop's commands (not in Git)
+      sketch/sketch.ino         the tuned latch moves and the LED matrix
+      assets/index.html         the demo page: camera view, guess and state
   05_hardware_tests/
     latch_motor_test/           UNO Q app that spins the latch motor both ways
       app.yaml                  the app's name tag for App Lab
@@ -263,42 +274,87 @@ finger shapes.
 
 ### 04_unoq_app
 
-The lock is built on the laptop first (`laptop_lock.py`), then moved to the
-UNO Q. On the UNO Q, the Python side will read the camera, run the network
-and check the code, and the sketch side will drive the latch motor.
+The lock was built on the laptop first (`laptop_lock.py`). Now the UNO Q runs
+the whole lock by itself (`safe_app/`), with no laptop in the loop:
 
-`laptop_lock.py` uses the same camera checks, crop box and network as
-training. The lock's rules are kept in one small class (`LockLogic`) with
-no camera or window code, so it can move to the UNO Q unchanged.
+```
+webcam (USB-C hub) -> hand_crop.py: forced 640x480, every frame checked, the saved box, 128x128
+                   -> finger_net.py: the trained network, in numpy
+                   -> lock_logic.py: the rules
+                   -> Bridge -> sketch.ino: latch motor + LED matrix
+```
 
-**The lock policy.** The network guesses about 25 times a second, and single
-guesses are shaky: a hand moving into place can look like any number for a
-moment. So the lock only trusts an answer that stays the same and confident.
+**Running the network on the board.** PyTorch would be about a 1 GB
+install. The board's OpenCV can't run ONNX files: it was built without
+that part. But the app's base image already has numpy and OpenCV. The
+network is small (3 convolutions and one linear layer), so `finger_net.py`
+does the same maths in about 60 lines of numpy, using the trained numbers
+from `finger_cnn.pt`. `prepare_board_files.py` checks that it gives the
+same guess as PyTorch on all 144 validation photos. On the board, the
+camera, crop and network take about 41 ms per guess, with nothing installed.
 
-- **IDLE:** asleep. Nothing counts until SPACE (the "button") is pressed.
-- **READY:** a digit 1–5 is accepted when the network gives the same
-  answer, at least 85% sure, on every frame for 1 second. One unsure or
-  different frame starts the second over. "0" isn't a code digit.
-- **Between digits:** the hand must show "0" (a fist, or no hand) for
-  0.5 s. Without this, holding up 1 finger for 3 seconds would type 1-1-1.
-  With it, repeated digits work: 1, fist, 1, fist, 2.
+**Same pipeline as training.** The board only receives the `safe_app`
+folder, so `prepare_board_files.py` copies `hand_crop.py`, `crop_config.json`
+and the code into it from their one true source. Run it after retraining or
+moving the crop box, then deploy.
+
+**The lock's rules** live in `safe_app/python/lock_logic.py`. Both the
+board and `laptop_lock.py` import that one file, so they can't drift apart.
+The network guesses 10 times a second, and single guesses are shaky: a hand
+moving into place can look like any number for a moment. So an answer
+only counts if it stays the same, at least 85% sure, for a while.
+
+- **IDLE:** asleep. The "button" is an **open palm (5), held about 1 s**.
+  On the laptop, SPACE also works. The palm is judged more forgivingly than
+  a digit, because waking up (or locking) can't open anything. It counts
+  when at least 80% of the guesses in the last 1.2 s say "5", each at
+  least 70% sure. Digits need every guess for 1 s, each at least 85% sure.
+- **Wake-up pause:** then a fist (or no hand) for 0.5 s, so the open palm
+  isn't taken as the first digit 5.
+- **Digits:** a digit 1–5 is accepted when the same answer is held for
+  1 s. Between digits, a fist for 0.5 s again. That stops one held finger
+  from typing 1-1-1, and still allows repeated digits: 1, fist, 1, fist, 2.
 - **After 3 digits:** the right code unlocks the latch. A wrong code is a
-  strike; the digits are cleared, and a fist is needed before trying again.
+  strike; the digits are cleared, and a fist comes before the next try.
 - **3 strikes in a row:** a 30-second lockout where everything is ignored.
   Trying all 125 possible codes would take over 20 minutes.
-- **No progress for 15 s** while entering a code: back to IDLE, so a
-  half-typed code doesn't wait for the next person.
-- **UNLOCKED:** L swings the latch shut again. L does nothing while locked,
-  so the arm is never pushed past the locked position.
+- **No progress for 15 s** while entering a code: back to IDLE.
+- **UNLOCKED:** hold an open palm (same forgiving rule) to lock again. On
+  the laptop, L also works.
+- **The palm counts only after a fist or an empty box.** Without this, a
+  code ending in 5 would lock again at once, as the hand keeps holding the
+  5 after the latch opens. The same goes for waking straight after locking.
 
-All the numbers (85%, 1 s, 0.5 s, 3 strikes, 30 s, 15 s) are settings at
-the top of the file. The code itself is in `safe_code.txt`, kept out of Git
-so it isn't public; without that file the lock won't start, rather than
-fall back to a default code. The screen shows the camera, LOCKED or
-UNLOCKED, the state with its countdown, the digits as dots, a bar that
-fills while a digit is held, the live guess, and the strikes.
+All the numbers (85%, 1 s, 0.5 s; for the palm 1.2 s, 80%, 70%; 3 strikes,
+30 s, 15 s) are settings
+at the top of `lock_logic.py`. The code is in `safe_code.txt`, kept out of
+Git so it isn't public. Without that file the lock won't start; it never
+falls back to a default code.
 
-**The motor link.** When the code is right, the laptop sends UNLOCK to the
+**The LED matrix** (13 × 8) shows the state:
+
+| Pattern | Meaning |
+|---|---|
+| closed padlock | IDLE: asleep and locked. A bar along the bottom row fills while the open palm is held. |
+| three dim empty boxes | awake: ready for the code |
+| boxes fill in, bright | one box per digit entered (dots, never the digits themselves) |
+| bottom-row bar | fills while a digit or the fist is held; the step counts when it is full |
+| check mark (2 s), then open padlock | right code: unlocked. The bar fills while the palm is held to lock again. |
+| X (2 s) | wrong code: a strike |
+| seconds counting down, with a "!" flashing between | lockout |
+| "?" | the latch's state isn't known yet (the board is starting up) |
+| small camera | the webcam isn't working (unplugged, or not 640×480) |
+
+**The demo page** (`http://Mohammed.local:7000` on the same Wi-Fi) shows
+the board's camera view with the crop box, the guess and how sure it is,
+LOCKED/UNLOCKED, the state, the dots and the hold bar. It refreshes 5 times
+a second for the demo video. It has no buttons. Anyone on the same network
+can watch it, and it shows the live guess, so it would reveal the code
+while someone enters it.
+
+**The laptop link** (from the laptop version; still in the app as a
+backup: the laptop can open or shut the latch with the secret word, even
+while the board runs the lock). When the code is right, the laptop sends UNLOCK to the
 UNO Q app (`safe_app/`) as a web request, by USB cable first and by Wi-Fi
 if USB gets no answer:
 
@@ -457,6 +513,32 @@ runs without the board, but the latch won't move.
 The safe app does **not** start by itself after the board loses power.
 Start it again with the deploy command above. Within a few seconds the arm
 homes against the wall and then locks.
+
+The laptop's camera 0 is the webcam only when it is plugged into the
+laptop. With the webcam on the board, camera 0 is probably the Mac's
+built-in camera.
+
+### The lock on the UNO Q (no laptop)
+
+Webcam in the USB-C hub, hub powered by the power bank, board on Wi-Fi.
+Whenever the network, the crop box or the code changes:
+
+```
+source .venv/bin/activate
+cd "Mohammed's Projects/MT2 - The Impenetrable Safe/04_unoq_app"
+python prepare_board_files.py      # copies + checks numpy = PyTorch
+cd ~/Documents/GitHub/ArduinoApps
+python3 tools/deploy.py safe-app   # over Wi-Fi (Mohammed.local) or USB
+```
+
+About 3 s after the app starts, the arm homes and locks, and the matrix shows
+the padlock. Then: open palm for about 1 s, fist, digit, fist, digit, fist,
+digit. To lock again: fist, then open palm.
+
+To see what the network guessed (for tuning), the board keeps the last 10
+minutes of guesses: `curl "http://10.0.0.242:7000/guesses?secret=$(cat safe_app/python/link_secret.txt)"`
+(it needs the secret word, because it would reveal the code as it is entered). Demo page:
+`http://Mohammed.local:7000`.
 
 ### Latch motor test
 
@@ -843,3 +925,63 @@ A short running record of what was tried, what failed and what fixed it.
     misleading on this Mac; `adb devices` is the one to trust. Unknown why
     it failed before: possibly the cable was only half seated, or the board
     needed a restart with the new cable.
+- **2026-11-08: the UNO Q runs the whole lock.**
+  - *Setup:* the webcam is in the Arduino USB-C hub's USB-A port; the hub's
+    PD port is fed by a 5 V / 2.4 A power bank. The board is reached over
+    Wi-Fi.
+  - *Camera on the board:* the board lists it ("icspring camera",
+    `/dev/video0`) and offers 640×480. One test frame came back 640×480 and
+    framed the red square like the laptop did. App containers may use it
+    (they get the board's devices and the video group). OpenCV opens it
+    through GStreamer, and every frame so far has been 640×480.
+  - *Running the network:* see the 04_unoq_app section. PyTorch would be a
+    ~1 GB install, and the board's OpenCV 4.13 has no ONNX runner (no `dnn`
+    part). Plain numpy needs no install: 144 of 144 validation photos gave
+    the same guess as PyTorch (scores within 0.00001). Camera, crop and
+    network took 41 ms per guess on the board (24 per second).
+  - *Rules:* moved to `lock_logic.py`, shared by the board and the laptop.
+    New: an open palm held 2 s wakes the safe and locks it again, and only
+    counts after a fist or an empty box. 28 simulation tests pass,
+    including a code ending in 5 not re-locking at once.
+  - *LED matrix and demo page added* (see the 04_unoq_app section).
+  - *First run:* the board read the empty square as "1"/"2" at only
+    50–70%, because a cable was lying in the square. Below 85%, nothing
+    happens; with the cable gone, it should read "0".
+  - *CPU:* the first version kept all 4 cores busy (389% CPU). numpy spread
+    each guess over every core, and the loop guessed as fast as it could.
+    Limited to one core and 10 guesses per second: 79%. Less load also
+    means less current drawn from the power bank.
+  - *Power bank:* the board did not restart during three startup moves
+    (home, then lock) with the camera running; its boot time stayed the
+    same. Unlock and lock with a real hand are not tested yet.
+- **2026-11-08: a more forgiving open palm; measured on the board.**
+  - *Problem:* waking with the open palm was sometimes slow.
+  - *Measured:* the board now logs every guess, readable only with the
+    secret word. Mohammed did 9 palm wakes, 2 palm locks and 2 code entries
+    (about 8 guesses per second):
+    - The palm was often read as "4" (thumb cut off or hand tilted), and
+      the network was much less sure: 43% of palm guesses were below 85%,
+      29% below 70%.
+    - The longest unbroken run of sure "5"s in any hold was 0.0–1.5 s, so
+      the old rule (2 s of unbroken 85% guesses) would hardly ever have
+      woken the safe.
+  - *Change, for the palm only:* it now counts when at least 80% of the
+    guesses in the last 1.2 s say "5" at 70% or more. One bad guess no
+    longer starts the wait over. This is safe because the palm can only
+    wake or lock, never open.
+  - *Result with the new rule:* 8 of 9 wake holds worked, after 1.0–4.5 s
+    (most in 1–2.5 s); the one miss was read as "4" almost the whole
+    time. Both palm locks worked.
+  - *Tests:* 24 simulation tests pass. A steady palm wakes in about 1.1 s;
+    with one bad guess in five, about 1.3 s.
+  - *Digits, the same idea? Not recommended.* Replayed on the same
+    guesses, the "most guesses" rule would have accepted each digit only
+    about 0.3 s sooner. Slow digits aren't caused by single bad guesses:
+    the network saw the intended digit only 19–28% of the time in those
+    holds, and other digits came up at 85%+ up to 16 times in one hold. A
+    looser rule wouldn't help much, and would make it more likely to
+    accept a digit nobody meant, which costs a strike. Digits stay strict
+    (85%, every guess, 1 s). The real fix is more training photos taken
+    with the board's camera, especially open palms with the thumb near the
+    edge and the slow digits.
+  - *Power:* no board restarts through the two unlocks and two locks.

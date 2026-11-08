@@ -1,5 +1,6 @@
 /*
-  safe_app sketch: the latch, moved only when the Python side asks.
+  safe_app sketch: the latch (moved only when the Python side asks) and the
+  LED matrix (showing whatever picture the Python side sends).
 
   Every UNO Q app has two halves. The Python side (python/main.py) receives
   the laptop's UNLOCK / LOCK requests; this sketch, on the microcontroller,
@@ -17,7 +18,14 @@
 
   Wiring: Maker Drive M1A -> D9, M1B -> D10, GND -> UNO Q GND.
 */
+#include "Arduino_LED_Matrix.h"
 #include "Arduino_RouterBridge.h"
+
+// ---- LED matrix: 13 columns x 8 rows ----
+const int MATRIX_ROWS = 8;
+const int MATRIX_COLS = 13;
+Arduino_LED_Matrix matrix;
+uint8_t frame[MATRIX_ROWS * MATRIX_COLS];
 
 const int PIN_A = 9;    // Maker Drive M1A
 const int PIN_B = 10;   // Maker Drive M1B
@@ -88,13 +96,28 @@ int latch(int cmd) {
   return state;
 }
 
+// Called by Python through the Bridge with one character per LED, row by
+// row: '0' = off ... '7' = brightest. Python picks the picture
+// (matrix_patterns.py); this only lights it.
+void draw_frame(String levels) {
+  int count = MATRIX_ROWS * MATRIX_COLS;
+  for (int i = 0; i < count; i++) {
+    char ch = (i < (int)levels.length()) ? levels.charAt(i) : '0';
+    frame[i] = (ch >= '0' && ch <= '7') ? ch - '0' : 0;
+  }
+  matrix.draw(frame);
+}
+
 void setup() {
+  matrix.begin();
+  matrix.clear();
   pinMode(PIN_A, OUTPUT);
   pinMode(PIN_B, OUTPUT);
   stopMotor();                    // nothing moves at power-up
 
   Bridge.begin();
   Bridge.provide("latch", latch);
+  Bridge.provide("draw_frame", draw_frame);
 
   delay(STARTUP_WAIT_MS);         // hands clear
   unlockMove();                   // home: against the wall, a known spot

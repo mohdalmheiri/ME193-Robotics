@@ -59,3 +59,5 @@ Mohammed's Projects/MT2 - The Impenetrable Safe/03_training/feature_maps/*
 Mohammed's Projects/MT2 - The Impenetrable Safe/04_unoq_app/safe_app/python/link_secret.txt
 # MT2 unlock code (stays on the laptop, so the code isn't public)
 Mohammed's Projects/MT2 - The Impenetrable Safe/04_unoq_app/safe_code.txt
+# ...and its copy that goes to the board with the safe app (made by prepare_board_files.py)
+Mohammed's Projects/MT2 - The Impenetrable Safe/04_unoq_app/safe_app/python/safe_code.txt
