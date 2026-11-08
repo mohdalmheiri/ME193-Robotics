@@ -147,11 +147,25 @@ Python side says to.
 
 ### 05_hardware_tests/latch_motor_test
 
-A small UNO Q app that only spins the latch motor: forward for 300 ms at
-speed 150 (out of 255), wait 2 s, back for 300 ms, wait 2 s, repeat. The
-swings are kept short on purpose: the latch arm is attached, and a longer
-swing could turn it too far. `SPEED` and `MOVE_MS` at the top of
-`sketch/sketch.ino` are the two numbers to tune.
+A small UNO Q app that only swings the latch arm. UNLOCKED means the arm is
+folded back against the box wall; LOCKED means it sticks straight out
+(90°). The sketch first swings to the wall, then repeats: wait 3 s, LOCK,
+wait 3 s, UNLOCK.
+
+- **LOCK** runs 215 ms at speed 150 (out of 255).
+- **UNLOCK** runs 90 ms at speed 150, then 450 ms at speed 75. Slowing
+  down for the second half lets the arm reach the wall gently; the slow
+  part is deliberately long, so the arm always gets there and leans on it.
+
+The motor has no position sensor, so UNLOCK runs a little longer than
+needed and the arm presses gently on the wall. The wall stops it in the
+same spot every time, so small timing errors can't build up into drift.
+
+Numbers to tune at the top of `sketch/sketch.ino`:
+- `SPEED` and `LOCK_MS`
+- `UNLOCK_FAST_MS`, `SOFT_SPEED` and `UNLOCK_SOFT_MS`
+- `WALL_IS_M1A`: which motor pin turns the arm toward the wall
+- `DIRECTION_CHECK`: when `true`, the sketch makes one swing out and one back, then stops
 
 ### media
 
@@ -191,7 +205,8 @@ python3 tools/deploy.py latch-motor-test
 The `export` line lets the deploy tool find `adb` (the USB link to the
 board), which App Lab installed but didn't add to the terminal's search
 path. The board compiles the sketch itself, so nothing else is needed on
-the laptop. The motor starts moving 2 s after the app starts.
+the laptop. The motor starts moving 5 s after the app starts. Without USB,
+`deploy.py` uses the board's Wi-Fi address instead.
 
 To stop it:
 
@@ -269,3 +284,69 @@ A short running record of what was tried, what failed and what fixed it.
   timed out on the sandbox's file permission, then reported saves that
   never wrote a file. The check was done instead with the `formulas`
   Python package, which evaluates each cell's formula the way Excel does.
+- **2026-11-07: latch arm swung too far.** With the arm mounted in the box,
+  300 ms at speed 150 turned it about 135°. Changed the sketch:
+  - LOCK runs 200 ms (wall → straight out, about 90°).
+  - UNLOCK runs 250 ms back, slightly longer than needed, so the arm
+    presses gently on the wall and always stops in the same spot (the
+    wall is its "home", because the motor can't sense where it is).
+  - `LOCK_MS` and `UNLOCK_MS` can be tuned separately.
+
+  The sketch didn't say which pin turns the arm toward the wall, so a
+  direction check was deployed over Wi-Fi (`DIRECTION_CHECK = true`,
+  guessing M1A). The first version made one 250 ms swing toward the wall
+  5 s after starting. Twice, nobody saw anything move. That fits the arm
+  already resting on the wall (pushing into it shows no movement), but
+  "the motor didn't run" would look the same.
+
+  The check was changed to wait 15 s, then do one LOCK and one UNLOCK. The
+  arm swung out from the wall, then back to it. So **M1A = toward the
+  wall** (`WALL_IS_M1A = true`). The normal lock/unlock loop was then
+  deployed.
+- **2026-11-07: latch timings tuned.** At LOCK 200 ms / UNLOCK 250 ms, the
+  arm stopped a bit short of 90° and hit the wall hard on the way back
+  (50 ms of extra push was too much). Changed to LOCK 220 ms / UNLOCK 235 ms,
+  only 15 ms extra, and deployed.
+- **2026-11-07: soft landing on the wall.** At 220 ms the arm went a bit
+  past 90°, and it still hit the wall hard even with only 15 ms of extra
+  push. So the problem was speed, not time: the arm reached the wall
+  going full speed. Changes, then deployed:
+  - LOCK is now 210 ms (between the 200 ms that was short and the
+    220 ms that was over).
+  - UNLOCK is now two parts: 160 ms at speed 150, then 100 ms at speed
+    100, so the arm slows down before reaching the wall.
+- **2026-11-07: slower return.** At 210 ms the arm stopped short of 90°,
+  and it still hit the wall: 160 ms at full speed probably carried it
+  nearly all the way back before the slow part began. Changes, then
+  deployed:
+  - LOCK is now 215 ms.
+  - UNLOCK is now 110 ms at speed 150 (about half the way), then 180 ms
+    at speed 90.
+- **2026-11-07: drift seen, slow part lengthened.** The arm no longer hit
+  the wall, but it stopped with a gap that grew a little every cycle, and
+  LOCK went past 90°. This is the drift the wall was supposed to prevent:
+  each return fell short, so the next LOCK started further out.
+
+  Speed 90 moves the arm more slowly than estimated. The slow part was
+  raised from 180 ms to 350 ms so the arm always reaches the wall. Extra
+  time there is harmless: at that low speed the arm just leans on the
+  wall. LOCK is left at 215 ms until the return reliably reaches the wall,
+  because the earlier overshoot came from starting out of place.
+- **2026-11-07: drift fixed, softer landing.** With the 350 ms slow part,
+  the arm reaches the wall every cycle and LOCK now always ends at 90°.
+  That confirms the earlier overshoot came from the arm starting out of
+  place. The wall contact was a bit more than a light tap, so the fast
+  part of UNLOCK was cut from 110 ms to 90 ms and deployed.
+- **2026-11-07: tap comes from the slow speed.** Cutting the fast part made
+  no visible difference to the tap. So the arm is already in the slow part
+  when it reaches the wall, and the slow speed sets how hard it lands. The
+  slow speed was lowered from 90 to 75, with its time raised from 350 ms to
+  450 ms to cover the distance, and deployed. Risk: at 75 the motor may be
+  too weak to push the arm all the way (it would hum and stop short).
+- **2026-11-07: latch timings settled.** At speed 75 the tap is fine and the
+  arm still reaches the wall. Final numbers:
+  - LOCK: 215 ms at speed 150.
+  - UNLOCK: 90 ms at speed 150, then 450 ms at speed 75.
+  - `WALL_IS_M1A = true`.
+
+  These go into the real safe sketch later.
