@@ -101,6 +101,16 @@ MT2 - The Impenetrable Safe/
     data/0 ... data/5           the photos (kept on the laptop only, not in Git)
     data_old_640x360/           80 early class-2 photos taken in the wrong camera mode (kept aside, not in Git)
   03_training/                  PyTorch CNN training (runs on the laptop)
+    model.py                    the network (3 conv layers + 1 linear), shared by everything below
+    train.py                    trains it: split, augmentation, early stopping, plots
+    live_test.py                live webcam window with the network's guess and confidence
+    feature_maps.py             pictures of what each layer "sees" (for the stop-action movie)
+    requirements.txt            Python packages for the scripts above
+    finger_cnn.pt               the trained network (made by train.py)
+    loss.png, accuracy.png      training curves (made by train.py)
+    confusion_matrix.png        which counts get mixed up (made by train.py)
+    mistakes.png                the validation photos it gets wrong (made by train.py)
+    feature_maps/               5 movie frames per class + overview.png (made by feature_maps.py)
   04_unoq_app/                  the final app that runs on the UNO Q
   05_hardware_tests/
     latch_motor_test/           UNO Q app that spins the latch motor both ways
@@ -172,7 +182,76 @@ hands); a sample strip goes in `media/` (`capture.py --samples`).
 ### 03_training
 
 The PyTorch code that trains the finger-counting CNN on the laptop and
-saves the trained model file that the UNO Q app loads.
+saves the trained network (`finger_cnn.pt`) that the UNO Q app will load.
+
+**The network** (`model.py`) follows the professor's hint: three
+convolution layers, each followed by ReLU and 2x2 max pooling, then one
+linear layer with 6 outputs.
+
+- **Convolution:** each filter is a 3x3 pattern detector that slides over
+  the whole photo.
+- **Max pooling:** halves the picture after each layer.
+- **Filter counts:** 8, then 16, then 32, while the picture shrinks
+  128 → 64 → 32 → 16.
+- **Final layer:** weighs the last 32x16x16 = 8,192 numbers into six
+  scores.
+
+It has 55,190 parameters (about 216 KB) and takes about 13 million
+multiply-adds per photo: 5 ms per guess on the laptop, light enough for the
+UNO Q.
+
+**Training** (`train.py`):
+
+- **Split:** 80% training and 20% validation, the same share of every
+  class and of every capture session (daylight and evening), with a fixed
+  seed. Photos were taken in bursts of near copies, so each session of each
+  class is cut in time order into 10 blocks, and 2 whole blocks go to
+  validation. Otherwise nearly every validation photo would have a twin in
+  training, and validation would test memory rather than understanding.
+- **Augmentation, training photos only:** each time a training photo is
+  used, it is randomly rotated (±15°), shifted (±8%), brightened or darkened
+  (×0.8–1.2), and mirrored half the time. Real hands are never at exactly
+  the same angle, spot or lighting, and mirroring teaches left hands from
+  right-hand photos. Validation photos are never changed, because they
+  stand in for the real camera: changing them would measure the network on
+  pictures the safe will never see.
+- **Loss and optimizer:** cross-entropy loss (it punishes confident wrong
+  guesses the most), and Adam at a step size of 0.001.
+- **When to stop:** training stops when validation accuracy hasn't
+  improved for 30 epochs, and the best epoch is kept.
+- **Starting values:** "Kaiming" starting weights with a small positive
+  bias, so no filter starts out dead (see the build log).
+
+**Prepared the same way everywhere:** photos are turned into network input
+by `hand_crop.to_network_input`, the same function that `live_test.py` and
+the UNO Q app use. Live frames go through `hand_crop.frame_to_network_input`,
+which checks the 640x480 size, crops the saved box and shrinks it.
+
+**Results** (721 photos of one person's hand, in daylight and evening
+light with finger shadows; 144 for validation):
+
+![training curves](03_training/accuracy.png)
+![confusion matrix](03_training/confusion_matrix.png)
+
+- **Best epoch:** 95.8% on validation (138 of 144).
+- **Typical:** about 91% (average of the last 10 epochs, 86–94%). The
+  best epoch is partly luck; expect the typical number on new photos.
+- **By lighting:** 94.8% on daylight photos and 97.9% on evening photos.
+  The daylight-only network scored just 58% on the evening photos, so the
+  evening session is what fixed the shadow mistakes.
+- **Mistakes:** 4 of the 6 are one burst of the same pose: 3 fingers lying
+  flat from the side with the top finger partly out of the box, called 2.
+  The other two are 1 → 0 (one finger poking in from the edge) and 0 → 1
+  (a fist at the edge of the box, in evening light).
+- **Not tested on other hands:** every photo is the same hand, so friends'
+  hands will probably do worse.
+
+**What each layer sees** (`feature_maps.py`): for each class, the photo and
+the most active map of each layer. Layer 1 still looks like the photo,
+layer 2 cuts out the fingers, and layer 3 is a blocky outline of the
+finger shapes.
+
+![feature maps overview](03_training/feature_maps/overview.png)
 
 ### 04_unoq_app
 
@@ -242,6 +321,23 @@ Keys (click the preview window first): `w a s d` move the box (Shift for
 bigger steps), `[ ]` shrink and grow it (`{ }` for bigger steps), `f` fits
 it to the red square, `c` saves it, `0`-`5` save photos, `q` or Esc quits.
 Number keys are refused while the box has unsaved changes.
+
+### Training and live test (laptop)
+
+From the repo root, with the shared virtual environment. Training takes
+about 3 minutes on the laptop's processor; the live test needs the webcam
+and a saved crop box.
+
+```
+source .venv/bin/activate
+cd "Mohammed's Projects/MT2 - The Impenetrable Safe/03_training"
+python train.py            # trains and saves finger_cnn.pt and the plots
+python live_test.py        # live window: guess + confidence (q or Esc quits)
+python feature_maps.py     # movie frames in feature_maps/
+```
+
+The same seed gives the same network every time. In the live window the
+guess is green when the network is at least 80% sure, orange when it isn't.
 
 ### Latch motor test
 
@@ -469,3 +565,81 @@ A short running record of what was tried, what failed and what fixed it.
   Still possible: if the webcam ever crops its sensor while keeping the
   same 640x480 size, the size check can't see that. Check the preview
   against the red square at the start of each session.
+- **2026-11-08: finger-counting network trained.**
+
+  *Data.* 481 photos, all of Mohammed's hand, all with the new
+  475-pixel box:
+
+  | Class | 0 | 1 | 2 | 3 | 4 | 5 |
+  |---|---|---|---|---|---|---|
+  | Photos | 80 | 81 | 80 | 80 | 80 | 80 |
+
+  Each class was recorded in under 2 minutes, in 7 to 18 bursts. So the
+  80/20 split moves whole time-blocks to validation, not single photos. One
+  class-1 photo shows only a fingertip at the edge (practically an empty
+  square).
+
+  *Model.* The network has 55,190 parameters.
+
+  *First run* (Adam, step 0.001, stop after 15 epochs without
+  improvement): best epoch 93.8%. But validation accuracy jumped between
+  45% and 94% from epoch to epoch, and the training accuracy sometimes
+  dropped suddenly too.
+
+  *What didn't help:*
+  - A smaller step (0.0003): 75%.
+  - Halving the step whenever validation stalled: 72%. It shrank too early
+    and training stalled around 60%.
+  - Batch normalization after each convolution: typical 80%.
+  - Twice the filters (16/32/64): typical 86%.
+
+  All versions reach a lucky best epoch of 94–97% but average 80–86% over
+  their last 10 epochs. The jumps come from the small, clumpy validation
+  set: about 2 bursts per class, so 8 photos flip together. The data is the
+  limit, not the network.
+
+  *Dead filters.* 1 of 8, 2 of 16 and **18 of 32** filters never switched
+  on for any photo. These are the warm-up's dead neurons again: with no
+  gradient, they never learned. Kaiming starting weights plus a 0.1
+  starting bias fixed it: 0 dead filters, with the same accuracy.
+
+  *Final result:* best epoch 60, **94.8% (91 of 96)**, typical about 83%.
+  - Mistakes: 1→0 once; 2→1 twice and 2→3 twice.
+  - The confusion matrix shows no 4/5 mix-ups, but the best class-5 photo
+    of the old run was only 69% sure when the thumb was cut off.
+
+  *Live test.* The live window was checked on real webcam frames: the
+  empty square gives "0" at 88–91%, and one guess takes 5 ms on the
+  laptop. It has not been tried with a hand in front of the camera yet.
+
+  *Not tested:* other people's hands and other lighting.
+- **2026-11-08: retrained with evening photos.** In the live test, one
+  finger was called "2" because of a finger shadow: the first session was
+  daylight only. Mohammed took about 40 more photos per class in the
+  evening, with shadows.
+
+  *Data.* 721 photos (120 per class; 0: 80 + 40, 1: 81 + 39, and so on).
+
+  *Split change.* With two sessions, 2 random blocks out of 10 could both
+  land in one session, and the evening photos might not be tested. Now
+  each session of each class is split on its own: 2 of 10 blocks go to
+  validation. The daylight session is split first with the same seed, so
+  its 96 validation photos are exactly the old ones. 48 evening photos are
+  added (8 per class), which makes 144 in total.
+
+  *Result:* best epoch 47, **95.8% (138 of 144)**, typical about **91%**
+  (was 83%). Still 0 dead filters.
+
+  | Validation photos | Daylight-only network | New network |
+  |---|---|---|
+  | Daylight (96) | 94.8% | 94.8% |
+  | Evening (48) | **58.3%** | **97.9%** |
+
+  - The old network's evening mistakes were mostly 3/4/5 mix-ups (5 → 4
+    seven times, 3 → 4 five times): shadows look like extra or missing
+    fingers.
+  - The new network's daylight mistakes changed: 2 → 1/3 (4 times) is
+    gone, and 3 → 2 (4 times, one burst of one sideways pose) is new. The
+    daylight score is the same, but the mistakes are different.
+
+  *Not tested yet:* the live test with a hand, and other people's hands.

@@ -85,6 +85,28 @@ def crop_and_resize(frame, box, size=IMAGE_SIZE):
     return cv2.resize(crop, (size, size), interpolation=cv2.INTER_AREA)
 
 
+def to_network_input(photo):
+    """Turn a 128x128 photo (as saved by capture.py) into the numbers the network reads.
+
+    - Checks the size, so a wrong-sized picture can never slip in.
+    - Keeps OpenCV's blue-green-red color order (the photos on disk use it too).
+    - Divides by 255, so each color value is 0.0 to 1.0 instead of 0 to 255:
+      small numbers keep training steady, the same idea as rescaling the V data.
+    - Reorders to channels-first (3 x 128 x 128), the layout PyTorch expects.
+    Training, live_test.py and the UNO Q app all call this, so the network
+    always gets its numbers prepared in exactly the same way.
+    """
+    if photo.shape != (IMAGE_SIZE, IMAGE_SIZE, 3):
+        raise ValueError(f"expected a {IMAGE_SIZE}x{IMAGE_SIZE} color photo, got shape {photo.shape}")
+    return (photo.astype("float32") / 255.0).transpose(2, 0, 1)
+
+
+def frame_to_network_input(frame, box):
+    """Camera frame -> checked size -> crop and shrink -> network numbers. The live path in one call."""
+    check_frame_size(frame)
+    return to_network_input(crop_and_resize(frame, box))
+
+
 def save_config(camera_index, frame_w, frame_h, box, path=CONFIG_PATH):
     """Write the crop box to crop_config.json, with the picture size it belongs to.
 

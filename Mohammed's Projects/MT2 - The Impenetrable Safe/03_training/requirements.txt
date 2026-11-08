@@ -1,0 +1,4 @@
+torch==2.14.1          # the network and its training
+numpy==2.5.3           # arrays
+opencv-python==5.0.0.93  # reading photos, augmentation, the live camera window
+matplotlib==3.11.2     # plots and feature-map pictures

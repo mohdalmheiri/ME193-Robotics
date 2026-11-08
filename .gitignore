@@ -52,3 +52,6 @@ Mohammed's Projects/HW7 - How Many Steps/data/phone_raw/original_zips/*GPS*
 Mohammed's Projects/MT2 - The Impenetrable Safe/02_data_collection/data/
 # MT2 photos taken while the webcam was (wrongly) in 640x360 mode, kept aside, not in Git
 Mohammed's Projects/MT2 - The Impenetrable Safe/02_data_collection/data_old_640x360/
+# MT2 stop-action movie frames (8 MB): kept on this laptop only; only the overview goes in Git
+Mohammed's Projects/MT2 - The Impenetrable Safe/03_training/feature_maps/*
+!Mohammed's Projects/MT2 - The Impenetrable Safe/03_training/feature_maps/overview.png
