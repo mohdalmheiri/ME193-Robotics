@@ -93,7 +93,13 @@ MT2 - The Impenetrable Safe/
     two_neurons.py              hidden layer of 2 ReLU neurons, in PyTorch
     requirements.txt            Python packages for the scripts above
     *.png                       the data and the fits (made by the scripts)
-  02_data_collection/           script that takes labeled photos of hands
+  02_data_collection/
+    capture.py                  webcam tool that takes labeled 0-5 finger photos
+    hand_crop.py                the crop box and 128x128 resize, shared with training and the UNO Q
+    crop_config.json            the saved crop box (created by capture.py)
+    requirements.txt            Python packages for capture.py
+    data/0 ... data/5           the photos (kept on the laptop only, not in Git)
+    data_old_640x360/           80 early class-2 photos taken in the wrong camera mode (kept aside, not in Git)
   03_training/                  PyTorch CNN training (runs on the laptop)
   04_unoq_app/                  the final app that runs on the UNO Q
   05_hardware_tests/
@@ -131,8 +137,37 @@ x' = (x − 60)/40 and y' = y/100, so the numbers are small and centered on 0.
 
 ### 02_data_collection
 
-A script that opens the webcam and saves photos labeled with how many
-fingers are up, building the training set for the network.
+The external webcam hangs off the laptop screen, looking down at a red
+square taped on the desk. `capture.py` shows its live picture with a crop
+box, which is lined up with the red square once and saved to
+`crop_config.json`. Then each press of a number key 0-5 saves the inside of
+the box, shrunk to 128x128 pixels, as `data/<number>/<person>_<number>_<time>.png`.
+Holding the key saves about 5 photos per second, so the hand can move a
+little between shots. The side panel counts each class's photos toward a
+goal of 80 per class per person, so the classes stay balanced. Class 0 is a
+fist **or** an empty square; the lock will use it as the pause between
+code digits.
+
+Two rules shape the tool:
+
+- **The same camera for training and for the safe.** Each camera sees
+  color, brightness and sharpness a little differently, so `--list`
+  helps pick the external webcam and tells it apart from the laptop's
+  built-in camera and from iPhones (Continuity Camera).
+- **The same crop for training and for the safe.** `hand_crop.py` is the
+  only code that cuts and shrinks the picture, and the training code and
+  the UNO Q app will import it too, with the same `crop_config.json`. A
+  network only recognizes the kind of picture it practiced on; a box a few
+  pixels off on the safe would quietly make it guess worse.
+- **The same picture size, always 640x480.** The webcam shows a different
+  slice of the desk at a different picture shape, so the tool forces
+  640x480 and checks every single frame. If the size is ever different, it
+  stops with an error instead of saving photos. `crop_config.json` records
+  the picture size its box was made for, and the tool refuses a box saved
+  for any other size. The UNO Q app must force and check 640x480 the same way.
+
+The photos stay out of Git (hundreds of pictures, including friends'
+hands); a sample strip goes in `media/` (`capture.py --samples`).
 
 ### 03_training
 
@@ -189,6 +224,24 @@ Each takes a few seconds; the plots are rewritten in the same folder. The
 Excel file needs nothing installed: open it in Excel, which recalculates
 it on opening. (Previewers that don't calculate, like Quick Look, show the
 formula cells empty.)
+
+### Data collection (laptop)
+
+From the repo root, with the shared virtual environment, and the external
+webcam plugged in:
+
+```
+source .venv/bin/activate
+cd "Mohammed's Projects/MT2 - The Impenetrable Safe/02_data_collection"
+python capture.py --list                              # find the webcam's number
+python capture.py --camera 1 --person mohammed        # 1 = the number from --list
+python capture.py --samples --person mohammed         # sample strip for media/
+```
+
+Keys (click the preview window first): `w a s d` move the box (Shift for
+bigger steps), `[ ]` shrink and grow it (`{ }` for bigger steps), `f` fits
+it to the red square, `c` saves it, `0`-`5` save photos, `q` or Esc quits.
+Number keys are refused while the box has unsaved changes.
 
 ### Latch motor test
 
@@ -284,6 +337,11 @@ A short running record of what was tried, what failed and what fixed it.
   timed out on the sandbox's file permission, then reported saves that
   never wrote a file. The check was done instead with the `formulas`
   Python package, which evaluates each cell's formula the way Excel does.
+- **2026-11-07: data-collection tool written.** `capture.py` and
+  `hand_crop.py`, tested on a made-up desk picture (red square found,
+  crop and resize, file names, counts, the window drawing). Not yet tried
+  with the real webcam: it was not plugged in (macOS listed only the
+  built-in FaceTime camera and two iPhones).
 - **2026-11-07: latch arm swung too far.** With the arm mounted in the box,
   300 ms at speed 150 turned it about 135°. Changed the sketch:
   - LOCK runs 200 ms (wall → straight out, about 90°).
@@ -350,3 +408,64 @@ A short running record of what was tried, what failed and what fixed it.
   - `WALL_IS_M1A = true`.
 
   These go into the real safe sketch later.
+- **2026-11-08: webcam view too zoomed in; resolution is not the fix.**
+  The capture tool works with the real webcam (camera 0). At 640x480, two
+  fingers filled most of the red square, so five spread fingers wouldn't
+  fit. Some webcams crop their sensor at low resolutions, so camera 0 was
+  tested at 640x480, 1280x720 and 1920x1080, using the engraved square
+  inside the red tape as a ruler:
+
+  | Setting | Square's width / frame | Square's height / frame |
+  |---|---|---|
+  | 640x480 | 67% | 76% |
+  | 1280x720 | 50% | 77% |
+  | 1920x1080 | 50% | 77% |
+
+  The two 16:9 settings show the same area, and all three show the same
+  desk from top to bottom. 640x480 only trims the left and right edges
+  (4:3 is a narrower shape), so it is not a zoom.
+
+  The crop box is square, so it can be at most as tall as the frame, and
+  that height covers the same desk at every setting. A higher resolution
+  would give more pixels of the same spot, not a wider view. It would
+  also cost the UNO Q 3x (720p) or 6.75x (1080p) more pixels per frame to
+  grab and shrink; 1080p would very likely be too slow to run live.
+
+  Even now, the camera can't see the whole red square from top to bottom.
+  Decision: keep 640x480 (no code change). Fix the view physically
+  instead: raise or tilt the camera, or use a smaller square, so a spread
+  hand fits inside the box. The UNO Q app must still use 640x480, the
+  same as training.
+- **2026-11-08: the camera switched picture shape partway through a
+  session.** The first real session saved a crop box of size 360 at y=0
+  and 80 class-2 photos. The next session gave 640x480 pictures, and the
+  saved box no longer matched: the old photos show the whole engraved
+  square with room around it, while the same box now shows only part of it.
+
+  The cause: `capture.py` checked the picture size only on the first frame.
+  That first frame was 640x480, so the config recorded 640x480. The camera
+  then switched to a wide 640x360 picture, which shows more desk side to
+  side. The giveaway is the box itself: auto-fit sized it to the live
+  pictures, and size 360 at y=0 is exactly the full height of a 360-tall
+  picture. So the photos and the saved box both belong to the 640x360 view.
+
+  Fixes:
+  - `hand_crop.py` now forces 640x480 and checks every frame
+    (`check_frame_size`). `capture.py` stops with a clear error if the
+    size is ever different, at startup or partway through.
+  - `crop_config.json` keeps its picture size, and a box saved for any
+    other size is refused (`box_from_config`). The old "stretch the box to
+    the new size" fallback was removed, because a stretched box cuts out a
+    different slice of the desk.
+  - The 80 class-2 photos and the old `crop_config.json` were moved, not
+    deleted, to `data_old_640x360/`. Git ignores that folder. The config
+    went too because it was labelled 640x480 but its box was fitted to the
+    640x360 view, so the new check would have wrongly accepted it.
+
+  Checked: fake 640x360 and 1280x720 pictures are refused; a config saved
+  for 640x360 is refused; the real camera sent only 640x480 for 3 s. The
+  UNO Q app must force and check 640x480 the same way.
+
+  Still possible: if the webcam ever crops its sensor while keeping the
+  same 640x480 size, the size check can't see that. Check the preview
+  against the red square at the start of each session.
