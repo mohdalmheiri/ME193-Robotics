@@ -32,7 +32,9 @@ const int PIN_B = 10;   // Maker Drive M1B
 
 // ---- tuned moves (copied from latch_motor_test) ----
 const int SPEED = 150;           // 0-255
-const int LOCK_MS = 215;         // wall -> straight out (90 degrees)
+const int LOCK_MS = 240;         // wall -> straight out (90 degrees). Was 215, tuned while the board ran
+                                 // on the laptop's USB power. On the power bank (through the hub) the motor
+                                 // is a little slower, and 215 ms only reached about 70-85 degrees.
 const int UNLOCK_FAST_MS = 90;   // back toward the wall, fast part
 const int SOFT_SPEED = 75;       // ...then slow, so it taps the wall gently
 const int UNLOCK_SOFT_MS = 450;  // long enough to reach and lean on the wall

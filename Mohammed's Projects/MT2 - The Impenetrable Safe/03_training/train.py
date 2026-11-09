@@ -135,6 +135,34 @@ def split(per_class, rng):
     return train, val
 
 
+def session_labels(per_class):
+    """Which capture session each photo came from, as {photo path: "session 2 (from 16:41)"}.
+
+    Used to report validation accuracy per session (daylight, evening, ...),
+    so a new session can be judged on its own instead of hiding in the total.
+    """
+    groups = [sessions(photos) for photos in per_class]
+    n = max(len(g) for g in groups)
+    starts = [min(photo_time(g[s][0][0]) for g in groups if s < len(g)) for s in range(n)]
+    return {path: f"session {s + 1} (from {starts[s]:%H:%M})"
+            for g in groups for s, sess in enumerate(g) for path, _ in sess}
+
+
+def report_by_session(items, guess, labels):
+    """Validation accuracy and mistakes for each capture session separately."""
+    print("\nBy capture session (validation photos):")
+    for name in sorted(set(labels[p] for p, _, _ in items)):
+        idx = [i for i, (p, _, _) in enumerate(items) if labels[p] == name]
+        right = sum(int(guess[i]) == items[i][2] for i in idx)
+        wrong = {}
+        for i in idx:
+            if int(guess[i]) != items[i][2]:
+                key = f"{items[i][2]}->{int(guess[i])}"
+                wrong[key] = wrong.get(key, 0) + 1
+        print(f"  {name}: {right / len(idx):6.1%} ({right} of {len(idx)})"
+              + (f"  mistakes: {', '.join(f'{k} x{v}' for k, v in sorted(wrong.items()))}" if wrong else ""))
+
+
 # ---- 3. Augmentation (training photos only) ----------------------------------
 
 def augment(img, rng):
@@ -328,6 +356,7 @@ def main():
     # Filters that never switch on for any photo have stopped learning (see model.py)
     dead = count_dead_filters(model, to_batch([im for _, im, _ in train_items + val_items]))
     print(f"Dead filters (never switch on for any photo), layer 1/2/3: {dead[0]}/8, {dead[1]}/16, {dead[2]}/32")
+    report_by_session(val_items, guess, session_labels(per_class))
     for i, c in enumerate(CLASSES):
         print(f"  {c} fingers: {cm[i, i]} of {cm[i].sum()} right"
               + "".join(f", {cm[i, j]} called {CLASSES[j]}" for j in range(len(CLASSES)) if j != i and cm[i, j]))

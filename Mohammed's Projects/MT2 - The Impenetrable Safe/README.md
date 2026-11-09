@@ -246,22 +246,30 @@ by `hand_crop.to_network_input`, the same function that `live_test.py` and
 the UNO Q app use. Live frames go through `hand_crop.frame_to_network_input`,
 which checks the 640x480 size, crops the saved box and shrinks it.
 
-**Results** (721 photos of one person's hand, in daylight and evening
-light with finger shadows; 144 for validation):
+**Results** (1,020 photos of one person's hand from three sessions:
+daylight, evening with finger shadows, and an evening session aimed at the
+poses the board struggled with; 204 for validation):
 
 ![training curves](03_training/accuracy.png)
 ![confusion matrix](03_training/confusion_matrix.png)
 
-- **Best epoch:** 95.8% on validation (138 of 144).
-- **Typical:** about 91% (average of the last 10 epochs, 86–94%). The
-  best epoch is partly luck; expect the typical number on new photos.
-- **By lighting:** 94.8% on daylight photos and 97.9% on evening photos.
-  The daylight-only network scored just 58% on the evening photos, so the
-  evening session is what fixed the shadow mistakes.
-- **Mistakes:** 4 of the 6 are one burst of the same pose: 3 fingers lying
-  flat from the side with the top finger partly out of the box, called 2.
-  The other two are 1 → 0 (one finger poking in from the edge) and 0 → 1
-  (a fist at the edge of the box, in evening light).
+- **Best epoch:** 91.2% on validation (186 of 204).
+- **Typical:** about 87% (average of the last 10 epochs, 86–89%). The best
+  epoch is partly luck; expect the typical number on new photos.
+- **By session** (`train.py` prints this):
+
+  | Validation photos | Network before session 3 | Current network |
+  |---|---|---|
+  | Daylight (96) | 94.8% | 93.8% |
+  | Evening (48) | 97.9% | 97.9% |
+  | Session 3, hard poses (60) | 66.7% | **81.7%** |
+
+- **Fixed by session 3:** the open palm read as 4 (5 mistakes before, 0
+  now), and 4 read as 2 or 3.
+- **Still hard:** a single fingertip just poking in at the edge (read as
+  0), and 2 fingers pointing down from the top edge with the other
+  knuckles showing (read as 3 or 0, confidently). That pose was only in
+  validation, never in training, so it was a fair but tough test.
 - **Not tested on other hands:** every photo is the same hand, so friends'
   hands will probably do worse.
 
@@ -985,3 +993,46 @@ A short running record of what was tried, what failed and what fixed it.
     with the board's camera, especially open palms with the thumb near the
     edge and the slow digits.
   - *Power:* no board restarts through the two unlocks and two locks.
+- **2026-11-08: third photo session, aimed at the board's weak spots.**
+  - *Why:* the board's guess log showed the slow digits. The palm was read
+    as 4. Digit 2 was read as 3 or 4. Digit 1 was sometimes read as 2.
+  - *Photos:* the same webcam and stand, with the cable moved from the hub
+    to the laptop. The camera hadn't moved: the red tape sat in the same
+    place as in the board's view (0-pixel shift), and the crop box was
+    unchanged. New photos per class 0–5: 40, 40, 60, 50, 50, 60 (300), in
+    9–13 bursts each with a different pose (thumb near the edge, tilts,
+    hand high and low, fingers spread and together). Total 1,020.
+  - *Training:* `train.py` now also reports accuracy per session. The 144
+    earlier validation photos stay in validation, plus 60 new ones.
+    - Best: 91.2% (186 of 204). Typical: 87%, lower than before only
+      because validation now includes the harder new photos.
+    - On the new photos: 66.7% → 81.7%. The palm-read-as-4 mistakes went
+      from 5 to 0. Daylight and evening are unchanged (93.8%, 97.9%).
+    - Still wrong: fingertips at the very edge (1 → 0) and 2 fingers
+      pointing down from the top edge (2 → 3 or 0).
+  - *Board files:* `prepare_board_files.py` re-exported the network; numpy
+    and PyTorch agree on all 204 validation photos. The movie overview was
+    remade for the new network.
+- **2026-11-08: the retrained network on the board, and a longer lock move.**
+  - *Deploy:* the webcam went back to the hub without the camera moving:
+    the board's view had a 0-pixel shift from before. The empty square
+    read "0" at 96%.
+  - *Same test as before* (palm wakes, code entries, palm locks), with the
+    guess log:
+    - Palm wakes: 9 worked, median 1.1 s (was 1.6 s).
+    - Code entries: 5 attempts, 3 right. Accepted digits mostly took
+      1–5 s (were 2–11 s), with one slow "2" at 13 s. Attempt 3 was a
+      wrong code on purpose, and the strike worked.
+    - **One real misread:** in attempt 2 the code's 5 was read as 4, at
+      85%+ for a full second, which cost a strike. Session 3 fixed the
+      open palm being read as 4, but a 5 held like a code digit can now
+      tip the other way. To watch.
+  - *Arm short of 90°:* the lock stopped at about 70–85°. LOCK_MS = 215 was
+    tuned while the board ran on the laptop's USB power. On the power bank
+    (through the hub) the motor is a bit slower. The safe app's LOCK_MS is
+    now 240 ms; Mohammed confirmed about 90°. Unlock still reaches the wall
+    (it runs long on purpose). The latch test sketch keeps 215 ms (laptop
+    power). If the power source changes again, the lock angle will change
+    too: the lock has no wall to stop against.
+  - *Power bank:* no board restarts through this whole test (3 unlocks, 3
+    locks, 2 deploys).
