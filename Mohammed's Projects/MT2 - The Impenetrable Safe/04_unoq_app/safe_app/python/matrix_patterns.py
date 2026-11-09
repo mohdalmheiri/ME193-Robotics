@@ -16,6 +16,8 @@ lights the LEDs (brightness 0-7).
   number             during the lockout: the seconds left, blinking "!" in
                      between
   "?"                the latch's state isn't known yet (board starting up)
+  flashing warning   TAMPER: the locked box was knocked, shaken or pried
+                     (a warning triangle, blinking 4 times a second)
   camera icon        the camera isn't working (unplugged or wrong picture size)
 """
 from lock_logic import IDLE, LOCKOUT, UNLOCKED, READY, WAIT_ZERO
@@ -83,6 +85,16 @@ CAMERA = [   # a little camera: shown when the webcam isn't working
     ".##########..",
     ".............",
 ]
+WARNING = [   # tamper alarm: a warning triangle with "!" (flashes)
+    "......#......",
+    ".....#.#.....",
+    ".....###.....",
+    "....##.##....",
+    "....##.##....",
+    "...#######...",
+    "...###.###...",
+    "..#########..",
+]
 QUESTION = [
     ".....###.....",
     "....#...#....",
@@ -141,8 +153,10 @@ def number(n):
     return g
 
 
-def pattern_for(lock, now, board_state, camera_ok):
+def pattern_for(lock, now, board_state, camera_ok, tamper=False):
     """The picture for this moment, as a list of 8 rows of 13 characters."""
+    if tamper:                                        # tamper beats everything: flash the warning
+        return WARNING if int(now * 8) % 2 == 0 else [["."] * COLS for _ in range(ROWS)]
     if not camera_ok:
         return CAMERA
     event, when = lock.event

@@ -10,6 +10,8 @@
 # Also served on port 7000 (the web_ui brick):
 #   /              a demo page: camera view, guess, state (no buttons)
 #   GET  /status   the latch's state, as before
+#   GET  /motion?secret=...   the last 10 minutes of motion-sensor readings,
+#        for calibrating the tamper alarm
 #   GET  /guesses?secret=...  the last 10 minutes of guesses, for tuning the
 #        rules (protected: it would reveal the code as it is entered)
 #   POST /unlock?secret=...  and  POST /lock?secret=...   emergency
@@ -45,6 +47,7 @@ from arduino.app_bricks.web_ui import WebUI
 
 import hand_crop as hc
 import matrix_patterns as mp
+from tamper import TamperWatch
 from finger_net import FingerNet
 from lock_logic import LockLogic, read_code, SURE
 
@@ -113,6 +116,12 @@ last_guess_at = 0.0             # when the network last ran
 # Every guess, for tuning: (seconds since start, guess, its confidence, the chance
 # it gave "5", the lock's state). 6000 guesses at 10 per second = the last 10 minutes.
 guess_log = deque(maxlen=6000)
+# Every motion reading (10 per second): (seconds since start, peak shake mg,
+# peak turn deg/s, the latch's state, quiet because the motor moved?).
+motion_log = deque(maxlen=6000)
+MOTION_EVERY_S = 0.1      # ask the sketch for the movement peaks 10 times a second
+last_motion_at = 0.0
+tamper = TamperWatch()
 started_at = time.monotonic()
 web = {"jpeg": None, "at": 0.0, "status": {}}       # what the demo page shows
 web_lock = threading.Lock()                          # the web server reads it from another thread
@@ -120,7 +129,8 @@ web_lock = threading.Lock()                          # the web server reads it f
 
 def show_on_matrix(now):
     global last_bits
-    bits = mp.to_bits(mp.pattern_for(lock, now, latch.board_state, camera_problem is None))
+    bits = mp.to_bits(mp.pattern_for(lock, now, latch.board_state, camera_problem is None,
+                                     tamper.active(now)))
     if bits != last_bits:
         try:
             Bridge.notify("draw_frame", bits)
@@ -149,6 +159,8 @@ def update_web(frame, best, conf, now):
         "latch": latch.board_state, "camera": camera_problem or "ok",
         "message": lock.message, "hold": round(lock.hold_progress(now), 2),
         "lockout_left": max(0, round(lock.lockout_until - now)) if lock.state == "LOCKOUT" else 0,
+        "tamper": round(tamper.seconds_left(now), 1),
+        "sensor": {True: "ok", False: "not found", None: "no answer"}[tamper.sensor_ok],
     }
     jpeg = None
     if frame is not None and now - web["at"] >= WEB_FRAME_EVERY_S:
@@ -165,10 +177,29 @@ def update_web(frame, best, conf, now):
 
 # ---- The main loop: one camera frame per call --------------------------------------
 
+def check_motion(now):
+    """Ask the sketch for the movement peaks (10 times a second) and run the tamper rule."""
+    global last_motion_at
+    if now - last_motion_at < MOTION_EVERY_S:
+        return
+    last_motion_at = now
+    try:
+        reading = list(Bridge.call("motion"))
+    except Exception as e:
+        print(f"motion: {e}")
+        reading = None
+    result = tamper.update(reading, latch.board_state, now)
+    if result is not None:
+        shake, turn, quiet = result
+        motion_log.append((round(now - started_at, 2), round(shake, 1), round(turn, 1),
+                           latch.board_state, quiet))
+
+
 def loop():
     global camera, camera_problem, last_guess_at
     now = time.monotonic()
     latch.refresh(now)
+    check_motion(now)
     lock.follow_board(latch.board_state)
 
     if camera is None:
@@ -243,6 +274,13 @@ def http_guesses(secret: str = ""):
     return {"ok": True, "columns": ["t", "guess", "confidence", "p5", "state"], "rows": list(guess_log)}
 
 
+def http_motion(secret: str = ""):
+    if not SECRET or not hmac.compare_digest(secret.encode(), SECRET.encode()):
+        return {"ok": False, "error": "wrong secret"}
+    return {"ok": True, "sensor": tamper.sensor_ok, "alarms": tamper.alarms,
+            "columns": ["t", "shake_mg", "turn_dps", "latch", "quiet"], "rows": list(motion_log)}
+
+
 def http_unlock(secret: str = ""):
     return move(CMD_UNLOCK, "UNLOCK", secret)
 
@@ -254,6 +292,7 @@ def http_lock(secret: str = ""):
 ui.expose_api("GET", "/status", http_status)
 ui.expose_api("GET", "/frame", http_frame)
 ui.expose_api("GET", "/guesses", http_guesses)
+ui.expose_api("GET", "/motion", http_motion)
 ui.expose_api("POST", "/unlock", http_unlock)
 ui.expose_api("POST", "/lock", http_lock)
 

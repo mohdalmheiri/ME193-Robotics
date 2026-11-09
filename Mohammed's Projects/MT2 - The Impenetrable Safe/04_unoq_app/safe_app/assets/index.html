@@ -17,8 +17,17 @@
   .bar div { height:100%; background:var(--ok); width:0; }
   #guess { font-size:3em; font-weight:800; }
   .small { color:var(--dim); font-size:.9em; }
+  /* TAMPER ALERT: a red banner across the top that blinks while the alarm is on */
+  #tamper { display:none; width:100%; background:var(--bad); color:#fff; font-weight:800; font-size:1.6em;
+            text-align:center; padding:12px; border-radius:8px; animation:blink .5s steps(2) infinite; }
+  @keyframes blink { 50% { opacity:.35; } }
+  /* The sound note: browsers only allow sound after the page has been clicked */
+  #sound { width:100%; text-align:center; color:var(--dim); font-size:.9em; cursor:pointer; }
+  #sound.on { color:var(--ok); }
 </style></head>
 <body><main>
+  <div id="sound">Click anywhere on the page to enable the alarm sound</div>
+  <div id="tamper">TAMPER ALERT</div>
   <img id="cam" alt="camera view from the board">
   <div class="panel">
     <p id="latch">...</p>
@@ -33,6 +42,43 @@
 <script>
   // Every 200 ms: a fresh camera picture and the safe's numbers from the board.
   const $ = (id) => document.getElementById(id);
+
+  // ---- Alarm sound, made in the browser (no sound file) ----
+  // Browsers block sound until the person clicks the page, so the first
+  // click creates the "audio context" (the browser's sound maker).
+  let audio = null;
+  document.addEventListener("click", () => {
+    if (!audio) audio = new (window.AudioContext || window.webkitAudioContext)();
+    audio.resume();
+    $("sound").textContent = "Alarm sound on";
+    $("sound").classList.add("on");
+  });
+
+  // One short beep: a tone that fades in and out quickly (no clicking noise).
+  function beep(freq, seconds) {
+    const osc = audio.createOscillator(), gain = audio.createGain(), t = audio.currentTime;
+    osc.type = "square";                       // harsh, alarm-like tone
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(0.25, t + 0.01);
+    gain.gain.setValueAtTime(0.25, t + seconds - 0.02);
+    gain.gain.linearRampToValueAtTime(0, t + seconds);
+    osc.connect(gain).connect(audio.destination);
+    osc.start(t);
+    osc.stop(t + seconds);
+  }
+
+  // While the alarm is on: high-low beeps every 0.3 s, like a siren.
+  // It stops by itself when the board's 5 s alarm ends.
+  let siren = null, high = true;
+  function alarmSound(on) {
+    if (on && !siren && audio) {
+      siren = setInterval(() => { beep(high ? 1000 : 750, 0.18); high = !high; }, 300);
+    } else if (!on && siren) {
+      clearInterval(siren);
+      siren = null;
+    }
+  }
   async function tick() {
     try {
       const s = await (await fetch("/status", {cache: "no-store"})).json();
@@ -48,9 +94,13 @@
       $("guess").style.color = l.sure ? "var(--ok)" : "var(--warn)";
       $("conf").textContent = l.confidence != null ? `${Math.round(l.confidence * 100)}% sure` : "";
       $("msg").textContent = l.message || "";
-      $("extra").textContent = `strikes ${l.strikes ?? 0} of 3` + (l.camera && l.camera !== "ok" ? ` · camera: ${l.camera}` : "");
+      $("extra").textContent = `strikes ${l.strikes ?? 0} of 3` + (l.camera && l.camera !== "ok" ? ` · camera: ${l.camera}` : "")
+                             + (l.sensor && l.sensor !== "ok" ? ` · motion sensor: ${l.sensor}` : "");
+      // The tamper alarm: show the banner while the board says it is on
+      $("tamper").style.display = (l.tamper || 0) > 0 ? "block" : "none";
+      alarmSound((l.tamper || 0) > 0);
       $("cam").src = "/frame?t=" + Date.now();
-    } catch (e) { $("latch").textContent = "no answer"; }
+    } catch (e) { $("latch").textContent = "no answer"; alarmSound(false); }
   }
   setInterval(tick, 200); tick();
 </script>

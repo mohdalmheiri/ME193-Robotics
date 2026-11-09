@@ -65,6 +65,8 @@ the speed that swings the latch reliably without straining the motor.
 - USB webcam (icspring), looking down at the red square
 - Cytron Maker Drive (2-channel motor driver; only channel 1 is used)
 - TT gear motor driving the latch
+- MPU-6050 motion sensor, stuck flat on the floor of the box away from the
+  motor (tamper alarm)
 - Laser-cut box and latch arm
 
 ### Wiring
@@ -76,6 +78,8 @@ the speed that swings the latch reliably without straining the motor.
 | Maker Drive GND | UNO Q GND | shared ground so the signals make sense |
 | Maker Drive VB+ / VB- | UNO Q 5V / GND | motor power |
 | Motor wires | Maker Drive M1A / M1B (output terminals) | the motor itself |
+| MPU-6050 VCC / GND | UNO Q 3.3V / GND | sensor power |
+| MPU-6050 SCL / SDA | UNO Q SCL / SDA | I2C: the sketch reads the sensor |
 
 How the driver is told what to do: when D9 sends a speed signal and D10 is
 off, the motor turns one way; swap them and it turns the other way; both
@@ -124,12 +128,13 @@ MT2 - The Impenetrable Safe/
       python/lock_logic.py      the lock's rules, shared with laptop_lock.py
       python/finger_net.py      the trained network in plain numpy (no PyTorch on the board)
       python/matrix_patterns.py the LED matrix pictures for each state
+      python/tamper.py          the tamper alarm rule and its calibrated thresholds
       python/hand_crop.py       copy of 02_data_collection/hand_crop.py (made by prepare_board_files.py)
       python/crop_config.json   copy of the crop box (made by prepare_board_files.py)
       python/finger_net.npz     the trained numbers from finger_cnn.pt (made by prepare_board_files.py)
       python/safe_code.txt      copy of the code (made by prepare_board_files.py, not in Git)
       python/link_secret.txt    secret word for the laptop's commands (not in Git)
-      sketch/sketch.ino         the tuned latch moves and the LED matrix
+      sketch/sketch.ino         the tuned latch moves, the LED matrix, and the motion sensor
       assets/index.html         the demo page: camera view, guess and state
   05_hardware_tests/
     latch_motor_test/           UNO Q app that spins the latch motor both ways
@@ -351,11 +356,42 @@ falls back to a default code.
 | X (2 s) | wrong code: a strike |
 | seconds counting down, with a "!" flashing between | lockout |
 | "?" | the latch's state isn't known yet (the board is starting up) |
+| flashing warning triangle | **tamper alarm**: the locked box was knocked, shaken or pried (5 s) |
 | small camera | the webcam isn't working (unplugged, or not 640×480) |
+
+**The tamper alarm.** An MPU-6050 motion sensor sits on the floor of the
+box. The sketch reads it 100 times a second and turns each reading into two
+movement numbers:
+- **shake:** how far the acceleration jumps from its recent average, in mg
+  (thousandths of gravity). A still box reads about 10.
+- **turn:** how fast the box rotates, in degrees per second.
+
+The sketch keeps the biggest value of each, and Python reads them 10 times
+a second (`tamper.py`). The alarm goes off when **shake ≥ 80 mg or turn ≥
+12°/s**, but only while the board reports the latch **locked**. The matrix
+then flashes a warning and the demo page shows TAMPER ALERT for 5 s. It only
+warns; it doesn't change the lock's rules.
+
+The safe's own motor never sets it off: the sketch ignores all movement
+while the latch moves and for 1 s after.
+
+The thresholds come from calibrating the real box:
+
+| What happened | Shake (mg) | Turn (°/s) | Alarm? |
+|---|---|---|---|
+| Box still | ≤ 25 | ≤ 2 | no |
+| Gentle taps | 31–64 | ≤ 11 | no (a tap isn't prying) |
+| Lifting the locked lid | 71–251 | 15–38 | yes |
+| Firm knocks, sliding, shaking | 47–2,800 | 6–140 | yes |
+| Hand resting on the locked lid | ~70 | ~15 | yes (can't be told apart from the gentlest lid try) |
 
 **The demo page** (`http://Mohammed.local:7000` on the same Wi-Fi) shows
 the board's camera view with the crop box, the guess and how sure it is,
-LOCKED/UNLOCKED, the state, the dots and the hold bar. It refreshes 5 times
+LOCKED/UNLOCKED, the state, the dots and the hold bar. During a tamper
+alarm it shows a blinking TAMPER ALERT banner and plays a high-low beep.
+The beep is made by the browser itself (Web Audio), so there is no sound
+file. Browsers block sound until the page is clicked, so the page says
+"Click anywhere on the page to enable the alarm sound" until it is. It refreshes 5 times
 a second for the demo video. It has no buttons. Anyone on the same network
 can watch it, and it shows the live guess, so it would reveal the code
 while someone enters it.
@@ -1036,3 +1072,44 @@ A short running record of what was tried, what failed and what fixed it.
     too: the lock has no wall to stop against.
   - *Power bank:* no board restarts through this whole test (3 unlocks, 3
     locks, 2 deploys).
+- **2026-11-09: tamper alarm with the MPU-6050.**
+  - *Wiring:* VCC → 3.3V, GND → GND, SCL → SCL, SDA → SDA; the sensor is
+    stuck flat on the floor of the box, away from the motor. The board
+    restarted at 00:44, during the wiring.
+  - *Reading it:* the sensor is on the microcontroller's I2C pins, so the
+    sketch reads it, as in HW7's step-recorder. It checks both I2C buses.
+    At 100 readings a second it keeps the peak "shake" (mg away from the
+    recent average) and "turn" (°/s); Python asks for the peaks 10 times a
+    second and keeps a 10-minute log (`/motion?secret=...`). The sketch
+    ignores movement while the latch moves and for 1 s after.
+  - *Calibration* (still, knocks, sliding/lifting/shaking, then trying the
+    locked lid, a hand over the box and a hand on the lid): see the table
+    in the 04_unoq_app section.
+    - Threshold: shake ≥ 80 mg or turn ≥ 12°/s, about 3× and 6× the still
+      box's noise. The gentlest lid try only reached 71 mg of shake but
+      24°/s of turn, which is why rotation counts too.
+    - Replaying the whole calibration log through the rule gave alarms for
+      the firm knocks, sliding, shaking, every lid try and the resting
+      hand, and none for the still box, gentle taps, the latch's own moves,
+      or closing the lid while unlocked.
+  - *Hiccups:*
+    - The box was open when a deploy locked the latch, so the arm swung out
+      under the open lid. Unlocked, closed the lid, locked again from the
+      laptop.
+    - After one restart the sketch didn't find the sensor (it looked only
+      once, right at startup). It now waits 0.5 s first and retries every
+      2 s until the sensor answers.
+    - The web page didn't show the alarm the first time, because it was
+      loaded before the update. After a reload it did. The board's status
+      carried the 5 s countdown the whole time (checked by recording it).
+      Reload the page after every deploy.
+  - *Lock rules and network:* unchanged.
+- **2026-11-09: alarm sound on the demo page.** While TAMPER ALERT shows,
+  the page plays a short square-wave beep every 0.3 s, alternating
+  1000 Hz and 750 Hz like a siren, and stops when the board's 5 s alarm
+  ends. The sound is generated in the browser, with no file to download.
+  Browsers allow sound only after a click, so a note asks for one and turns
+  green ("Alarm sound on") once it's done. Only the page changed. It was
+  copied onto the board in place, so the app didn't restart and the latch
+  didn't move. Tested on the real box: a firm knock gave the banner and
+  the beeping.
