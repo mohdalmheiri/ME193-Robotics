@@ -554,9 +554,8 @@ digit. The panel shows "UNO Q by USB: locked" or "UNO Q by Wi-Fi: locked"
 when the board answers, and "not connected" when it doesn't. The lock still
 runs without the board, but the latch won't move.
 
-The safe app does **not** start by itself after the board loses power.
-Start it again with the deploy command above. Within a few seconds the arm
-homes against the wall and then locks.
+The safe app starts by itself whenever the board powers on (see "The lock
+on the UNO Q" below).
 
 The laptop's camera 0 is the webcam only when it is plugged into the
 laptop. With the webcam on the board, camera 0 is probably the Mac's
@@ -583,6 +582,39 @@ To see what the network guessed (for tuning), the board keeps the last 10
 minutes of guesses: `curl "http://10.0.0.242:7000/guesses?secret=$(cat safe_app/python/link_secret.txt)"`
 (it needs the secret word, because it would reveal the code as it is entered). Demo page:
 `http://Mohammed.local:7000`.
+
+**Starting by itself at power-on.** App Lab starts one "default" app when the
+board boots. That is now the safe:
+
+```
+python3 tools/deploy.py --cmd "arduino-app-cli properties set default /home/arduino/ArduinoApps/safe-app"
+python3 tools/deploy.py --cmd "arduino-app-cli properties get default"   # check
+```
+
+So the power bank alone runs the whole lock. About a minute after power-on,
+the board has booted, the arm homes and locks, and the padlock shows. This
+replaced HW7's Step Recorder as the power-up app; set the default back to
+`/home/arduino/ArduinoApps/step-recorder` to record steps again. The setting
+lives on the board, not in this repo.
+
+**Finding the demo page on another Wi-Fi network.** The board joins the
+first network it knows, in this order: home ("Mohammed"), the iPhone
+hotspot, then the campus networks Tufts_Robot and tufts_eecs. The page is
+always port 7000 at the board's address:
+
+1. **Try `http://Mohammed.local:7000`** from a phone or laptop on the same
+   network. It works at home and usually on a phone hotspot. Campus Wi-Fi
+   often blocks these `.local` names.
+2. **On campus, the most reliable way is the iPhone hotspot.** Turn the
+   hotspot on before powering the board. The board prefers it over the
+   campus networks (priority 5 vs 0), and a phone or laptop on the hotspot
+   can open `http://Mohammed.local:7000`.
+3. **Ask the board over USB:** plug it into the laptop and run
+   `python3 tools/deploy.py --cmd "ip -4 addr show wlan0"`. USB always
+   reaches this board, so the address it prints is certainly its own.
+4. **Check it's your safe:** campus addresses change and get reused by
+   classmates' UNO Qs, which also serve pages on port 7000. The right page
+   has the title "Impenetrable Safe" and shows your box's red square.
 
 ### Latch motor test
 
@@ -1113,3 +1145,14 @@ A short running record of what was tried, what failed and what fixed it.
   copied onto the board in place, so the app didn't restart and the latch
   didn't move. Tested on the real box: a firm knock gave the banner and
   the beeping.
+- **2026-11-09: the safe starts by itself at power-on.** App Lab starts
+  the board's "default" app at boot. It was still HW7's Step Recorder; it is
+  now the safe app (`arduino-app-cli properties set default ...`).
+  - *Power test:* unplugged the power bank for 10 s, then plugged it back
+    in. The board booted from scratch (new boot time 01:49) and started the
+    safe app by itself. 60 s after power-on it answered "locked", with
+    camera OK, motion sensor OK and the empty square read as "0" (95%). The
+    arm homed and locked on its own.
+  - *Finding the page elsewhere:* see "The lock on the UNO Q" (Mohammed.local,
+    the iPhone hotspot on campus, or asking over USB). The board's known
+    networks, in order: home, iPhone hotspot, Tufts_Robot, tufts_eecs.
