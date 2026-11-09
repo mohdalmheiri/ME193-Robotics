@@ -1,0 +1,14 @@
+Scene start times for the voiceover (minutes:seconds).
+Each scene opens with a 2-second title card; 'content' is when its pictures start.
+
+ 0:00.0  The photo            (content from 0:02.0)
+ 0:10.0  A photo is numbers   (content from 0:12.0)
+ 0:22.0  Convolution          (content from 0:24.0)
+ 0:38.0  ReLU                 (content from 0:40.0)
+ 0:46.0  Pooling              (content from 0:48.0)
+ 0:56.0  Going deeper         (content from 0:58.0)
+ 1:08.0  The answer           (content from 1:10.0)
+ 1:18.0  How it learned       (content from 1:20.0)
+ 1:28.0  Unlocked             (content from 1:30.0)
+
+ 1:35.0  end  (total 95 s)

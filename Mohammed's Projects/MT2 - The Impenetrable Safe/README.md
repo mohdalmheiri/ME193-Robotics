@@ -141,6 +141,18 @@ MT2 - The Impenetrable Safe/
       app.yaml                  the app's name tag for App Lab
       sketch/sketch.ino         the motor test code (runs on the microcontroller)
       python/main.py            empty Linux side that just keeps the app running
+  06_movie/                    the computer-made stop-motion movie of how the network works
+    make_stopmotion.py          the paper-cutout stop-motion version (12 fps), using make_movie.py's real data
+    make_movie.py               the real data from the network, and the first smooth version
+    clean_background.py         cleans the desk photo into background_paper.png
+    background_paper.png        the cleaned paper-on-desk photo behind every scene
+    source_frame.png            the real 640x480 webcam frame (2 fingers) the movie follows
+    safe_photo.jpg              a real photo of the safe, for the ending
+    training_loss.csv           the real loss of every epoch of the training run
+    how_the_network_works.mp4   the stop-motion movie: 1920x1080, 12 fps, 95 s, no sound
+    how_the_network_works_smooth.mp4   the first, smooth version (same scenes and timing; laptop only, not in Git)
+    contact_sheet.png           two frames per scene, for reviewing (laptop only, not in Git)
+    scene_times.txt             when each scene starts, for the voiceover
   media/                        photos, videos and screenshots
 ```
 
@@ -466,6 +478,82 @@ Numbers to tune at the top of `sketch/sketch.ino`:
 - `UNLOCK_FAST_MS`, `SOFT_SPEED` and `UNLOCK_SOFT_MS`
 - `WALL_IS_M1A`: which motor pin turns the arm toward the wall
 - `DIRECTION_CHECK`: when `true`, the sketch makes one swing out and one back, then stops
+
+### 06_movie
+
+A 95-second computer-made **stop-motion "paper cutout"** animation of how the
+network turns one photo into "2", for the stop-action movie (approved by the
+professor). The voiceover is recorded separately, and real safe footage is
+added after it in iMovie.
+
+```
+python make_stopmotion.py        # how_the_network_works.mp4 + contact_sheet.png (about 3 minutes)
+python make_stopmotion.py --test conv   # a 5-second test of the convolution scene
+python make_movie.py             # the first, smooth version: how_the_network_works_smooth.mp4
+```
+
+**The stop-motion look:**
+- **12 frames per second, each pose held for 2 frames**, so pieces move in
+  visible jumps 6 times a second, never gliding.
+- **Every piece is a paper cutout:** a white border, a soft shadow on the
+  desk, and a tiny random tilt and shift that changes every frame, like a
+  piece nudged by hand between photos.
+- **The desk:** a real photo of paper on a desk (`background_paper.png`)
+  with a vignette and a slight light flicker. Only the desk gets these; the
+  photo and map cutouts keep their true colours.
+- **Words:** marker writing (Marker Felt) on taped paper notes, with the tape
+  only on the corners, never over letters. **Numbers:** handwriting
+  (Noteworthy) on index cards.
+- **The filter** is a cardboard window that hops one cell at a time over a
+  close-up of the fingertip edge. A matching close-up of the output fills in
+  one cell per hop, beside it.
+- **Score bars** are paper strips that grow in steps. **Training** is a
+  paper ball hopping down the real loss curve. **The ending** is a real
+  photo of the safe, then three code dots and UNLOCKED. No digits are shown.
+- **Same scenes, same lengths:** the stop-motion version keeps every scene
+  at the same start time as the smooth one, so `scene_times.txt` is
+  unchanged.
+
+**The background** (`clean_background.py`): the phone photo of a sheet of
+paper, cleaned up:
+- the paper edge on the left cropped off
+- the faint printing showing through from the back removed, keeping the
+  paper grain
+- faint vertical bands smoothed out
+- the left-to-right light reduced to a quarter
+- tinted a light cream, darker than the cutouts' white borders so they
+  stand out
+
+**Everything shown is real:**
+- **The photo** is one real frame from the safe's webcam on the UNO Q, with
+  2 fingers. It's cropped with the same `hand_crop.py`, and the trained
+  network reads it as 2 at 98%.
+- **The numbers:** every number on screen comes from `finger_cnn.pt`
+  running on that photo: the pixel values, filter 3's 27 weights and bias,
+  the worked multiply-and-add (checked against the network's own output
+  before rendering), the ReLU and pooling values, the 8 / 16 / 32 feature
+  maps and the six final confidences.
+- **The training curve** is the real loss of each of the 86 epochs.
+- **The ending** shows the code as dots only, never digits.
+
+| Scene | Shows |
+|---|---|
+| The photo | the 640 × 480 frame, the saved box, the crop shrinking to 128 × 128 |
+| A photo is numbers | zoom to a fingertip edge; each pixel's 3 numbers; 3 grids = 49,152 numbers; ÷ 255 |
+| Convolution | filter 3 (3 × 3 weights per colour) sliding; one spot worked out = +0.38; the map filling in |
+| ReLU | the map's negatives (63% of it) fading from red to white |
+| Pooling | 2 × 2 blocks, keep the biggest; 128 × 128 → 64 × 64 |
+| Going deeper | layer 1 (8 maps) → layer 2 (16) → layer 3 (32) |
+| The answer | 8,192 numbers → six score bars; 2 wins at 98% |
+| How it learned | a ball rolling down the real training-loss curve |
+| Unlocked | three code dots fill, UNLOCKED |
+
+**Choices:** each scene opens with a 2-second title card, so there is room
+to talk. Captions are short and change every 2–4 s. The colours mean the
+same thing in every scene (blue,
+green and red for the three colour channels; red for negative, blue for
+positive). Real pixels are enlarged blocky on purpose, so it's clear the
+network sees only 128 × 128.
 
 ### media
 
@@ -1156,3 +1244,51 @@ A short running record of what was tried, what failed and what fixed it.
   - *Finding the page elsewhere:* see "The lock on the UNO Q" (Mohammed.local,
     the iPhone hotspot on campus, or asking over USB). The board's known
     networks, in order: home, iPhone hotspot, Tufts_Robot, tufts_eecs.
+- **2026-11-09: the network movie (06_movie).**
+  - *Photo:* the movie needed a real full camera frame, but only the
+    128 × 128 crops had been saved. The safe app was stopped over Wi-Fi.
+    Then 49 frames were taken on the board with the same `hand_crop.py`
+    (640 × 480 forced and checked) while Mohammed held up 2 fingers, and the
+    app was restarted. The network read all 49 as "2"; the most confident
+    and sharpest frame (98.3%) is `source_frame.png`.
+  - *Making it:* Pillow draws each frame, and OpenCV writes the H.264 MP4.
+    No new installs (there is no ffmpeg on the laptop). 2,850 frames, 95 s,
+    3.4 MB, rendered in about a minute.
+  - *Choices:* filter 3 was picked because on this photo its output is 63%
+    negative, so ReLU visibly removes something. The worked spot is the
+    filter's strongest answer on a finger edge. Edge spots, where the window
+    hangs over the border, and the red tape were avoided.
+  - *Fixed while checking stills:* Helvetica has no "→" (arrows now use the
+    system font); a few labels overlapped; the maps looked washed out
+    (colours now scale to the 99th percentile); and in the zoom, the
+    enlarged pixels sat half a cell off the grid lines.
+- **2026-11-09: the movie restyled as paper-cutout stop-motion.** The smooth
+  version looked like slides, so the same 9 scenes and real numbers were
+  redrawn as digital stop-motion (`make_stopmotion.py`), keeping every scene
+  start time. The smooth version is kept as `how_the_network_works_smooth.mp4`.
+  - *Background:* Mohammed's photo of paper on the desk was cleaned
+    (`clean_background.py`):
+    - cropped the left edge
+    - removed the show-through printing, keeping the grain
+    - smoothed the faint vertical bands (to std 0.39)
+    - light left/right from 132/203 to 162/179
+    - a light cream tint (average 227/218/198), darker than the white
+      cutout borders
+  - *Fonts:* Marker Felt and Noteworthy come with the Mac, so nothing was
+    downloaded. Marker Felt has no × or →, so marker text writes "x" and
+    the arrows are drawn by hand.
+  - *Test first:* a 5-second convolution test. Fixed after looking at its
+    stills:
+    - crowded numbers (wider cells)
+    - tape too long
+    - the bias note covering a row of weights
+  - *Mohammed's three tweaks:*
+    - tape only on the corners, never over letters
+    - true colours on the photo cutouts (the vignette and flicker now apply
+      to the desk only)
+    - the output visibly filling as the window hops: a matching output
+      close-up fills one cell per hop, the newest cell outlined
+  - *Final:* 1,140 frames at 12 fps = 95.0 s, 20.5 MB. On the contact sheet
+    (two frames from every scene, taken from the finished MP4), the
+    best-epoch flag overlapped the graph's legend; it was moved and the
+    movie re-rendered.
