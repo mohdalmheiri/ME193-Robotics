@@ -8,9 +8,26 @@ box. Show the wrong code and the latch stays shut. The project runs the whole
 chain a robot needs, from seeing (camera), to deciding (neural network and
 code check), to acting (motor and latch), on one small board.
 
-> **Status:** in progress. The folder layout, the motor wiring and the motor
-> test app are set up; the camera code and trained model are still to come. See the
-> [build log](#build-log) at the bottom.
+## Demo and highlights
+
+![The finished safe, closed](media/safe_closed.jpg)
+
+**Demo video and project page:** [The Impenetrable Safe on Notion](https://app.notion.com/p/Mohammed-The-Impenetrable-Safe-4132f91361d380d881aefd8343ee0e6d)
+
+- **The whole lock runs on the UNO Q by itself.** The network was rewritten
+  in about 60 lines of numpy: 41 ms per guess, with the same answer as
+  PyTorch on all 204 validation photos.
+- **The box wall is the latch's "home".** The motor has no position sensor,
+  so unlocking runs a little long and leans the arm gently on the wall,
+  which wipes out any drift.
+- **Evening shadows fooled the network, and evening photos fixed it.** The
+  daylight-only network scored 58.3% on evening photos; one evening session
+  of training photos brought that to 97.9%.
+- **A tamper alarm.** An MPU-6050 motion sensor on the box floor sets off a
+  warning when the locked box is knocked, shaken or pried, and the latch's
+  own motor never sets it off.
+- **A new hand opened it first try.** Mohammed's roommate, whose hand was
+  never in the training photos, opened the safe on his first try.
 
 ## How it works
 
@@ -45,9 +62,11 @@ motor. The two talk over the board's built-in Bridge.
 A camera network does not give one clean answer: it guesses every frame,
 and the guess can flicker while your hand moves. The safe only accepts a
 number once the guess stays the same for a set time, and it needs a pause
-(no hand) between numbers, so a code with a repeated number like 3-3-1 can
-still be entered. The exact timings will be tuned once the network is
-trained.
+(a fist or no hand) between numbers, so a code with a repeated number like
+3-3-1 can still be entered. The timings (in `04_unoq_app/safe_app/python/lock_logic.py`):
+a digit counts after the same answer, at least 85% sure, for 1 second; the
+pause needs 0.5 seconds; the open palm that wakes the safe needs about
+1 second.
 
 ### A latch with no position sensor
 
@@ -153,11 +172,8 @@ MT2 - The Impenetrable Safe/
     how_the_network_works_smooth.mp4   the first, smooth version (same scenes and timing; laptop only, not in Git)
     contact_sheet.png           two frames per scene, for reviewing (laptop only, not in Git)
     scene_times.txt             when each scene starts, for the voiceover
-  media/                        photos, videos and screenshots
+  media/                        photos of the finished safe and its LED matrix (see the media section)
 ```
-
-Empty folders hold a `.gitkeep` file only so Git keeps them; delete it once
-the folder has real files.
 
 ### 01_warmup_gradient_descent
 
@@ -191,7 +207,7 @@ the box, shrunk to 128x128 pixels, as `data/<number>/<person>_<number>_<time>.pn
 Holding the key saves about 5 photos per second, so the hand can move a
 little between shots. The side panel counts each class's photos toward a
 goal of 80 per class per person, so the classes stay balanced. Class 0 is a
-fist **or** an empty square; the lock will use it as the pause between
+fist **or** an empty square; the lock uses it as the pause between
 code digits.
 
 Two rules shape the tool:
@@ -201,8 +217,9 @@ Two rules shape the tool:
   helps pick the external webcam and tells it apart from the laptop's
   built-in camera and from iPhones (Continuity Camera).
 - **The same crop for training and for the safe.** `hand_crop.py` is the
-  only code that cuts and shrinks the picture, and the training code and
-  the UNO Q app will import it too, with the same `crop_config.json`. A
+  only code that cuts and shrinks the picture. The training code imports
+  it, and the UNO Q app uses an exact copy (made by `prepare_board_files.py`)
+  with the same `crop_config.json`. A
   network only recognizes the kind of picture it practiced on; a box a few
   pixels off on the safe would quietly make it guess worse.
 - **The same picture size, always 640x480.** The webcam shows a different
@@ -213,12 +230,13 @@ Two rules shape the tool:
   for any other size. The UNO Q app must force and check 640x480 the same way.
 
 The photos stay out of Git (hundreds of pictures, including friends'
-hands); a sample strip goes in `media/` (`capture.py --samples`).
+hands). `capture.py --samples` makes a sample strip of the photos (not in `media/`).
 
 ### 03_training
 
 The PyTorch code that trains the finger-counting CNN on the laptop and
-saves the trained network (`finger_cnn.pt`) that the UNO Q app will load.
+saves the trained network (`finger_cnn.pt`); the UNO Q app runs a numpy
+copy of it (`finger_net.npz`, see 04_unoq_app).
 
 **The network** (`model.py`) follows the professor's hint: three
 convolution layers, each followed by ReLU and 2x2 max pooling, then one
@@ -287,8 +305,9 @@ poses the board struggled with; 204 for validation):
   0), and 2 fingers pointing down from the top edge with the other
   knuckles showing (read as 3 or 0, confidently). That pose was only in
   validation, never in training, so it was a fair but tough test.
-- **Not tested on other hands:** every photo is the same hand, so friends'
-  hands will probably do worse.
+- **Other hands:** every training photo is Mohammed's hand, but his roommate,
+  whose hand was never in the training photos, tried the safe and opened it
+  on his first try. Very different hands are still untested.
 
 **What each layer sees** (`feature_maps.py`): for each class, the photo and
 the most active map of each layer. Layer 1 still looks like the photo,
@@ -315,7 +334,7 @@ that part. But the app's base image already has numpy and OpenCV. The
 network is small (3 convolutions and one linear layer), so `finger_net.py`
 does the same maths in about 60 lines of numpy, using the trained numbers
 from `finger_cnn.pt`. `prepare_board_files.py` checks that it gives the
-same guess as PyTorch on all 144 validation photos. On the board, the
+same guess as PyTorch on all 204 validation photos. On the board, the
 camera, crop and network take about 41 ms per guess, with nothing installed.
 
 **Same pipeline as training.** The board only receives the `safe_app`
@@ -454,8 +473,9 @@ laptop_lock.py --(web request, USB cable or Wi-Fi)--> safe_app/python/main.py
   The safe always starts LOCKED, but it is open for about half a second
   during startup.
 
-This link is only for the laptop stage. Once the webcam and the network run
-on the UNO Q, the board checks the code itself.
+This link was for the laptop stage. The webcam and the network now run on
+the UNO Q, and the board checks the code itself; the link is kept as a
+backup, for opening or locking the safe from the laptop.
 
 ### 05_hardware_tests/latch_motor_test
 
@@ -484,7 +504,9 @@ Numbers to tune at the top of `sketch/sketch.ino`:
 A 95-second computer-made **stop-motion "paper cutout"** animation of how the
 network turns one photo into "2", for the stop-action movie (approved by the
 professor). The voiceover is recorded separately, and real safe footage is
-added after it in iMovie.
+added after it in iMovie. The finished movie, with Mohammed's voiceover, is
+on his Notion page (see [Demo and highlights](#demo-and-highlights)); the
+MP4 in this folder has no sound.
 
 ```
 python make_stopmotion.py        # how_the_network_works.mp4 + contact_sheet.png (about 3 minutes)
@@ -557,7 +579,20 @@ network sees only 128 × 128.
 
 ### media
 
-Photos and videos of the build and the safe opening.
+Photos of the finished safe (the demo video is on the Notion page linked at
+the top):
+
+| Photo | Shows |
+|---|---|
+| `safe_closed.jpg` | the finished safe, closed |
+| `box_open.jpg` | the lid open, showing the electronics |
+| `box_inside.jpg` | inside the box from above: the UNO Q, the motor driver and the wiring |
+| `setup.jpg` | the whole setup: the laptop, the webcam stand over the red square, and the safe |
+| `led_locked.jpg` | the LED matrix asleep and locked: a closed padlock |
+| `led_awake.jpg` | awake after the open palm: three empty boxes for the code |
+| `led_right_code.jpg` | the right code: a check mark |
+| `led_unlocked.jpg` | unlocked: an open padlock |
+| `led_wrong_code.jpg` | a wrong code: an X (a strike) |
 
 ## Setup and run
 
@@ -588,7 +623,7 @@ source .venv/bin/activate
 cd "Mohammed's Projects/MT2 - The Impenetrable Safe/02_data_collection"
 python capture.py --list                              # find the webcam's number
 python capture.py --camera 1 --person mohammed        # 1 = the number from --list
-python capture.py --samples --person mohammed         # sample strip for media/
+python capture.py --samples --person mohammed         # a sample strip of the photos
 ```
 
 Keys (click the preview window first): `w a s d` move the box (Shift for
@@ -727,8 +762,6 @@ To stop it:
 ```
 python3 tools/deploy.py --cmd "arduino-app-cli app stop /home/arduino/ArduinoApps/latch-motor-test"
 ```
-
-The rest will be filled in as each part is finished.
 
 ## Tuning and notes
 
