@@ -1,0 +1,79 @@
+<mujoco model="mjlab scene">
+  <compiler meshdir="../../cad/assets" angle="radian"/>
+
+  <option timestep="0.002" cone="elliptic" integrator="implicitfast" solver="Newton" iterations="20" ls_iterations="10" tolerance="1e-08" ls_tolerance="0.01" impratio="1" ccd_iterations="50" gravity="0 0 -9.81"/>
+
+  <size nkey="1"/>
+
+  <visual>
+    <global azimuth="135" elevation="-25" offwidth="1920" offheight="1080"/>
+    <quality shadowsize="8192"/>
+    <headlight ambient="0.3 0.3 0.3" diffuse="0.6 0.6 0.6" specular="0 0 0"/>
+    <scale forcewidth="0.25" contactwidth="0.4" contactheight="0.15" framelength="5" framewidth="0.3"/>
+    <rgba haze="0.15 0.25 0.35 1" force="1 0 0 1"/>
+  </visual>
+
+  <statistic meansize="0.03"/>
+
+  <default>
+    <default class="robot/main">
+      <default class="robot/silly_walker">
+        <joint armature="0.005" frictionloss="0.1"/>
+        <general biastype="affine" gainprm="50" biasprm="0 -50 1"/>
+        <default class="robot/visual">
+          <geom type="mesh" contype="0" conaffinity="0" group="2"/>
+        </default>
+        <default class="robot/collision">
+          <geom group="3"/>
+        </default>
+      </default>
+    </default>
+  </default>
+
+  <asset>
+    <texture type="2d" colorspace="auto" name="groundplane" builtin="checker" mark="edge" rgb1="0.2 0.3 0.4" rgb2="0.1 0.2 0.3" markrgb="0.8 0.8 0.8" width="300" height="300"/>
+    <material name="groundplane" texture="groundplane" texuniform="true" texrepeat="4 4" reflectance="0.2"/>
+    <material name="robot/body_material" rgba="0.615686 0.811765 0.929412 1"/>
+    <material name="robot/leg_right_material" rgba="0.647059 0.647059 0.647059 1"/>
+    <material name="robot/leg_left_material" rgba="0.647059 0.647059 0.647059 1"/>
+    <mesh name="robot/leg_right" file="leg_right.stl"/>
+    <mesh name="robot/leg_left" file="leg_left.stl"/>
+    <mesh name="robot/body" file="body.stl"/>
+  </asset>
+
+  <worldbody>
+    <light name="sun" pos="0 0 1.5" dir="0 0 -1" type="directional"/>
+    <body name="terrain">
+      <geom name="terrain" size="0 0 0.01" type="plane" material="groundplane"/>
+    </body>
+    <body name="robot/body" childclass="robot/silly_walker">
+      <inertial pos="0 -0.0234044 0" quat="0.5 0.5 -0.5 0.5" mass="0.100006" diaginertia="7.69302e-05 6.11874e-05 3.02849e-05"/>
+      <joint name="robot/free" type="free" armature="0" frictionloss="0" damping="0"/>
+      <geom class="robot/visual" material="robot/body_material" mesh="robot/body"/>
+      <geom name="robot/body_box" size="0.024 0.04 0.015" pos="0 -0.025 0" type="box" group="3" priority="1" friction="0.6" solref="0.004"/>
+      <geom name="robot/hub_right" size="0.0125 0.004" pos="0.028 0 0" quat="0.707107 0 0.707107 0" type="cylinder" group="3" priority="1" friction="0.6" solref="0.004"/>
+      <geom name="robot/hub_left" size="0.0125 0.004" pos="-0.028 0 0" quat="0.707107 0 0.707107 0" type="cylinder" group="3" priority="1" friction="0.6" solref="0.004"/>
+      <body name="robot/leg_right" pos="0.0398 0 0" quat="0.5 0.5 0.5 0.5">
+        <inertial pos="0.0164855 0 -0.0039" quat="0 0.707107 0 0.707107" mass="0.00284977" diaginertia="1.00173e-06 9.93755e-07 3.6874e-08"/>
+        <joint name="robot/right" pos="0 0 0" axis="0 0 1" armature="1e-05" frictionloss="0.002"/>
+        <geom class="robot/visual" pos="0 0 -0.0398" quat="0.5 -0.5 -0.5 -0.5" material="robot/leg_right_material" mesh="robot/leg_right"/>
+        <geom name="robot/leg_right_box" size="0.032 0.0048 0.0039" pos="0.016 0 -0.0039" type="box" group="3" priority="1" friction="0.6" solref="0.004"/>
+      </body>
+      <body name="robot/leg_left" pos="-0.032 0 0" quat="0.5 0.5 0.5 0.5">
+        <inertial pos="0.0164855 0 -0.0039" quat="0 0.707107 0 0.707107" mass="0.00284977" diaginertia="1.00173e-06 9.93755e-07 3.6874e-08"/>
+        <joint name="robot/left" pos="0 0 0" axis="0 0 1" armature="1e-05" frictionloss="0.002"/>
+        <geom class="robot/visual" pos="0 0 0.032" quat="0.5 -0.5 -0.5 -0.5" material="robot/leg_left_material" mesh="robot/leg_left"/>
+        <geom name="robot/leg_left_box" size="0.032 0.0048 0.0039" pos="0.016 0 -0.0039" type="box" group="3" priority="1" friction="0.6" solref="0.004"/>
+      </body>
+    </body>
+  </worldbody>
+
+  <actuator>
+    <general name="robot/right" joint="robot/right" ctrllimited="false" forcelimited="true" forcerange="-0.1 0.1" biastype="affine" gainprm="0.05" biasprm="0 0 -0.05"/>
+    <general name="robot/left" joint="robot/left" ctrllimited="false" forcelimited="true" forcerange="-0.1 0.1" biastype="affine" gainprm="0.05" biasprm="0 0 -0.05"/>
+  </actuator>
+
+  <keyframe>
+    <key name="init_state" qpos="0 0 0.017 1 0 0 0 0 0"/>
+  </keyframe>
+</mujoco>

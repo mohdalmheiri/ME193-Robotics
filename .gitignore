@@ -77,3 +77,5 @@ Mohammed's Projects/MT2 - The Impenetrable Safe/06_movie/contact_sheet.png
 Mohammed's Projects/HW8 - Silly Walks Simulated/train/logs/
 Mohammed's Projects/HW8 - Silly Walks Simulated/train/wandb/
 Mohammed's Projects/HW8 - Silly Walks Simulated/train/**/*.pt
+# HW8 robot-side run logs (one CSV per run, real or FakeRobot); cited runs are copied to docs/data/
+Mohammed's Projects/HW8 - Silly Walks Simulated/robot/runs/

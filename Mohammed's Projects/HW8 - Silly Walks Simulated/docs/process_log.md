@@ -415,10 +415,147 @@ Plus sensor noise, gyro yaw drift (±0.5°/s) and leg calibration error (±2°).
 - **Remaining drift:** the policy cannot sense sideways position, only heading. A small, steady heading error early on therefore turns into sideways offset that it never removes. That is why drift (about 6 cm) did not shrink to zero, as expected when heading was made the main term.
 - **Not tested yet:** the real robot. Sim-to-real gaps (real motor speed/torque, the real IMU update rate, table friction) are still unknown.
 
+## 2026-11-13: Pushed; longer training run started
+
+- Pushed commit `ab772b5` to GitHub; `main` matched `origin/main` afterwards.
+- `train/train.py` gained `--resume <run> --checkpoint <file>`. It continues a run through MJLab's own resume (weights, optimizer state, round counter), saving into a new run folder.
+  - The checkpoint name must be given explicitly. MJLab's default pattern picks the alphabetically last file, which would be `model_50.pt`, not `model_299.pt`.
+- Started 17:19: `--envs 256 --iters 500 --name longer_run --resume 2026-11-12_22-50-21_first_check --checkpoint model_299.pt` (rounds 300 → 799).
+  - caffeinate is attached to the training process.
+  - It loaded round 299 correctly: the round counter continued at 300, and the action std was still 0.08.
+  - About 29 s per round while other tests share the CPU. Round 374 reached mean reward +8.3 (the first run ended at +7.7).
+
+## 2026-11-13: Robot-side control code, tested against a fake robot
+
+**Folder `robot/`** (runs in the main `.venv`; no MJLab needed):
+
+| File | What it does |
+|---|---|
+| `config.py` | Every real-robot assumption, each with its default and the calibration that measures it: which LEGO side is the right leg, upright direction sign, encoder sign and zero, rpm-per-percent table, IMU axis mapping, angle unit, pitch/roll/yaw/gyro signs, leg-speed source, safety limits |
+| `robot_interface.py` | The interface: `connect / read / send(right %, left %) / stop / close`, plus a clock. Readings are always in the hub's units |
+| `units.py` | The ONLY conversion between hub units and the policy's 16 inputs, and from policy output to whole percents (with clipping report and the speed-limit warning) |
+| `real_robot.py` | LEGO Double Motor via `legoeducation`, the same calls as MT1. A notification callback timestamps every sensor message so stale data can be detected |
+| `fake_robot.py` | The training simulator pretending to be the hub (details below) |
+| `policy.py` | The trained network in plain numpy |
+| `run_policy.py` | The 20 Hz control loop with safety stops and a CSV log per run (`robot/runs/`, ignored by git) |
+| `check_fake_vs_eval.py` | 100 fake robots through the real loop vs `evaluate.py`'s table |
+| `sim_hand_tests.py` | Julian's hand tests in simulation |
+| `tests/` | `test_units.py`, `test_policy.py`, `test_safety.py`, `test_real_robot_dryrun.py`, plus reference data |
+| `model/` | Exported policy and physics model (committed, as agreed) |
+
+**Policy export** (`train/export_policy.py`, run once in `.venv-mjlab`)
+- Writes `policy.pt` (TorchScript), `policy_weights.npz`, `scene.xml` and `policy_meta.json` (all shared numbers, written from `walk_straight_task.py`), plus reference data recorded in the real training environment with noise switched off.
+- The network is `action = MLP((obs − mean)/(std + 0.01))`, 16 → 64 → 64 → 2, ELU. The numpy version matches MJLab's output to 6e-7 on 800 recorded inputs.
+- TorchScript also matches, but PyTorch warns it "is not supported on Python 3.14", so the robot side uses numpy.
+
+**Making the fake robot's physics identical to training: three bugs found and fixed**
+1. MJLab applies the solver settings after building the model, so the saved XML had no `<option>`. Plain MuJoCo would have used its defaults, **pyramidal friction** (the turning artifact). The export now copies time step, elliptic cone, implicitfast, Newton, iterations 20/10, tolerances and gravity from the compiled training model.
+2. Read back from a file, the free joint inherited the exporter's default **frictionloss 0.1 / armature 0.005** (a big drag on the whole body); in training it had 0/0. It is now pinned explicitly.
+3. A dump of every MuJoCo option found `ccd_iterations` 50 vs MuJoCo 4's default 35; this is now pinned too.
+- Also: MuJoCo 4 rejects an empty `<default/>` that MuJoCo 3.11 writes; it is now removed.
+- The export now reloads the file and **refuses to finish unless 45 physics fields match MJLab's compiled model**, including elliptic friction and the contact settings (addition b).
+
+**Units: what the LEGO hub reports** (from the library source and MT1's recorded data)
+- Accelerometer: milli-g. At rest it reads ≈ +1000 on "up" (MT1: median 1009, z up when flat).
+- Gyro: almost certainly °/s (MT1's hardest swings peaked around 1,100).
+- Messages: every 31 ms (MT1).
+- Pitch/roll/yaw: int16, unit unknown (degrees or tenths); it is a config value, measured by `calibration/imu_axes.py`.
+- Design choices in `units.py`:
+  - **Tilt from the hub's filtered pitch/roll**, not the raw accelerometer. Training's tilt is pure gravity, while a real accelerometer also feels every jolt of the gait. Accelerometer mode is kept as a fallback.
+  - The accelerometer's "+1 g up" sign is handled: gravity = −reading.
+
+**Unit test** (`tests/test_units.py`, 25/25 pass)
+- Recorded training states → FakeRobot → hub units → `units.py` → compared with the 16 inputs the policy saw in training.
+  - Tilt, gyro, heading and leg angle match within whole-degree rounding (≤ 0.0087).
+  - Last command matches exactly.
+- The same holds for a deliberately different hub setup (axes swapped, all signs flipped, tenths of a degree), so the config values are really used.
+- Command path: action → percent → fake motor equals training's −120 rpm·(a+1)/2 within whole-percent rounding (0.6 rpm).
+- Speed-limit warning (addition a): a 100 rpm motor triggers the warning, and a full-speed action is clipped to 100% and reported.
+- Two findings along the way:
+  - Each robot's first recorded decision has leg angles about 1° off. This is an MJLab quirk right after reset, before the first physics step; the other 796 match exactly, so the first decision is skipped.
+  - Building the PPO runner resets the robots, which redrew the sensor errors I had zeroed. They are now zeroed after it.
+
+**Gap found: leg speed**
+- Training gave the policy the simulator's *instantaneous* leg speed, which turned out very spiky (−1.44 … +0.09 of full speed between consecutive decisions).
+- A real robot can give:
+  - the encoder average over 0.05 s (smooth): median difference from training 0.078 of full speed, 90th percentile 0.69; or
+  - the hub's speed report (filtering unknown).
+- Via the hub-speed path, the conversion matches training within whole-percent rounding. 7.8% of training's values were beyond what a hub can even report (over 127%).
+- Both are selectable (`LEG_SPEED_SOURCE`); default is "encoder".
+
+**Cause of the spikes: the simulated motor vibrates (leg chatter)**
+- The leg + motor rotating inertia is tiny (armature 1e-5 from `sim/settings.py`). At the 0.1 N·m torque limit the leg's speed changes about 23 rad/s in one 2 ms step, so the speed controller overshoots back and forth every step.
+- While the policy drives: leg speed flips sign between consecutive physics steps **16.8%** of the time, and the torque sits at its limit **35.5%** of the time. A stopped leg in the air vibrates at ±10 rad/s while its angle stays put (±0.6°).
+- At a *steady* command there is almost none (0%, 0.6%). It is triggered by the policy's speed changes every 0.05 s.
+- Armature experiment (FakeRobot, no training), policy driving, 10 robots:
+
+  | Armature (kg·m²) | Sign flips | Torque at limit |
+  |---|---|---|
+  | 1e-5 | 16.8% | 35.5% |
+  | 5e-5 | 0.0% | 2.6% |
+  | 1e-4 | 0.0% | 3.3% |
+  | 2e-4 | 0.0% | 4.5% |
+  | 5e-4 | 0.0% | 9.0% |
+
+  The gait's natural rocking (34° peak tilt) is unchanged. A geared LEGO motor's real reflected inertia is very likely in this higher range.
+
+**FakeRobot** (`fake_robot.py`)
+- Loads `robot/model/scene.xml`. Draws one lopsided robot from the training ranges: friction per leg and for the body, mass and inertia, center-of-mass shift, motor strength and speed per side.
+- Same command delay model as MJLab: per physics step, keep the lag with 95% probability, otherwise draw 0–20 steps.
+- A sensor message every 31 ms, with the same noise amounts as training, rounded to whole numbers like the hub:
+  - accelerometer = specific force (gravity + the body's acceleration);
+  - encoders: absolute 0..359 plus a counted position.
+- Test hooks: `disconnect`, `freeze_sensors`, `tip_over`. If MuJoCo blows up and resets its clock, it raises an error instead of waiting forever.
+
+**Safety** (`tests/test_safety.py`, 17/17 pass)
+- Ctrl-C, frozen sensors (stopped 0.30 s after the freeze), tip-over, time limit, and a crash inside the loop all end with the motors stopped: legs turn under 1 rpm on average 0.4 s later.
+- Lost connection ends the loop at once. The laptop cannot send a stop over a dead link; the hub's own behaviour must be checked at the session, on a stand.
+- Bugs found while writing these:
+  - the first tip-over shove (3 N) blew up the simulation, and MuJoCo's clock reset made FakeRobot wait forever; it is now a twist about the robot's front-to-back axis plus a clock check;
+  - FakeRobot's `stop()` now fails when disconnected, as the real one would.
+
+**RealRobot dry run** (`tests/test_real_robot_dryrun.py`, 19/19 pass)
+- Every library call exists with the parameter names used.
+- A stand-in device built from the library's own message classes runs the real loop: ~20 decisions/s, whole percents, (LEGO left, LEGO right) order for both side mappings, stop then disconnect.
+- Dropped and silent links are caught.
+
+**Real-time rehearsal** (`run_policy.py --fake --realtime`)
+- 20.3 s wall time, decisions exactly 50 ms apart, sensor data 15 ms old on median (max 30), 400-row CSV with 45 columns.
+
+**Does FakeRobot reproduce the evaluation?** (`check_fake_vs_eval.py` → `docs/fake_robot_check.md`, `docs/media/fake_robot_paths.png`)
+- Medians match:
+
+  | Driver | Heading (FakeRobot vs eval) | Drift | Forward |
+  |---|---|---|---|
+  | Policy | 6° vs 5° | 64 / 55 mm vs 58 mm | ~1050 vs 1090 mm |
+  | Baseline | 75° vs 65° | 444 vs 448 mm | 599 vs 614 mm |
+
+- No commands were clipped.
+- **Flips do not match:** the policy tipped **6–9 of 100** fake robots, vs 0 of 100 in `evaluate.py`.
+- Diagnosis:
+  - The flips are real: all went past 90°.
+  - Fresh sensors every 2 ms instead of 31 ms changed nothing (7 flips).
+  - All MuJoCo settings now match.
+  - Replaying MJLab's recorded robots open-loop in plain MuJoCo, the paths agree within 1 mm for the first 0.35–1.5 s, then drift apart (normal for impacts: tiny numerical differences grow).
+- **500-robot MJLab check: 0 flips, and not a single robot past 45°.** In FakeRobot, 12 of 100 passed 45°.
+- Conclusion: the policy is reliably upright only in the exact physics it trained in. Slightly different (equally valid) physics tips 6–9%. The real robot differs far more, so **the policy keeps too little margin from tipping**.
+
+**Julian's hand tests in simulation** (`robot/sim_hand_tests.py` → `docs/hand_tests_sim.md`, `docs/data/hand_tests_sim.csv`, `docs/media/hand_tests_sim_paths.png`)
+- Model values: mass 106 g; axle 15.0 mm above the table at rest, legs forward; full speed 120 rpm (assumed).
+- The other spin direction flips (as before).
+- 10 s at 120 rpm, no policy:
+
+  | | Nominal robot | 20 lopsided robots |
+  |---|---|---|
+  | Legs in step | 410 mm, straight | median 559 mm; **4 of 20 flipped** |
+  | Legs 180° out of step | 388 mm, turned +56° | **2 of 20 flipped** |
+
+- So at top speed the robot is near tipping even without a policy.
+- When Julian's numbers arrive: rerun with `--rpm <his value>` and fill in the empty column.
+
 ## Open questions / next steps
-- Measure the real motor speed (rpm) and, if possible, its torque.
-- Check on the real robot: does + speed really flip it, and does − speed walk toward the leg tips?
-- Measure the real robot's drift, then compare it with the randomization ranges used in training.
+- Julian's hand measurements (weight, axle height, rpm at full speed, walking direction, 10 s runs in/out of step): fill in `docs/hand_tests_sim.md`; use them for v2's motor speed and randomization ranges.
+- v2 training setup (proposed, waiting for OK): realistic armature, leg-speed input as the robot measures it, tilt margin. See the proposal in the conversation; to be logged here once decided.
+- Calibration scripts (step 3), the sim fixed-speed test (step 4, partly covered by `sim_hand_tests.py`), and the simple-controller comparison (step 5) are still to do.
 - ~~Decide the training step size.~~ Done: trained at 0.002 s, and the policy holds up at 0.001 s.
-- Possible next run (waiting for review; not started): more rounds (the reward was still rising slowly), and maybe a small sideways-offset term, if the real robot can estimate it.
-- Export the policy for the real robot (actor network, 16 inputs → 2 leg speeds) and write the code that reads the Double Motor's sensors at 20 Hz.
+- ~~Export the policy for the real robot~~ Done (`robot/`).

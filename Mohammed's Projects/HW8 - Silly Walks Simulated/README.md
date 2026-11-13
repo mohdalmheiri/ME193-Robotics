@@ -2,7 +2,7 @@
 
 A LEGO robot with no wheels: one LEGO Education Double Motor with a 1x8 Technic brick "leg" on each motor, so spinning the motors makes it shuffle and flop across the table. The goal is to build a physics model of this robot in MuJoCo, exported straight from its Onshape CAD, check that the model matches the real robot, and later use MJLab to train a policy that makes it walk straight. The interesting part is that this robot's walking comes entirely from contact: the legs reach 48 mm below the axle but the table is only 15 mm below it, so every turn they dig in, lever the body up and throw it forward. The robot only gets anywhere through contact with the table, which makes it a good test of whether the simulator handles contact and friction correctly before any training happens.
 
-*Status: the CAD-to-MuJoCo model is built and checked, and the walk-straight training task is built and checked. The first training run (300 rounds) is finished: over 100 lopsided test robots, the policy cut the median heading error from 65° to 5° and the median sideways drift from 448 mm to 58 mm, with no flips (see `docs/process_log.md`).*
+*Status: the CAD-to-MuJoCo model is built and checked. The first training run (v1, 300 rounds) cut the median heading error of 100 lopsided robots from 65° to 5° in MJLab, but a check in a slightly different simulator (`robot/check_fake_vs_eval.py`) tipped 6–9 % of robots over, and the simulated motor vibrated ("leg chatter"). A fixed v2 training setup ([train/walk_straight_v2_task.py](train/walk_straight_v2_task.py)) is training. The laptop-side code for the real robot (`robot/`) is built and tested against a simulated "fake robot"; the real robot has not been driven yet. Details in [docs/process_log.md](docs/process_log.md).*
 
 ![Six frames of the simulated robot walking toward its leg tips](docs/media/walk_test_frames_-60rpm.png)
 
@@ -58,8 +58,9 @@ HW8 - Silly Walks Simulated/
 ├── .env                 Onshape API keys (only on this laptop, never committed)
 ├── cad/                 Onshape export: settings, connection test, robot model, meshes
 ├── sim/                 simulation: settings, scene builder, checks, walking test, viewer
-├── train/               MJLab training (own Python 3.12 environment): task, speed test
-└── docs/                process log + media/ (screenshots, plots, videos)
+├── train/               MJLab training (own Python 3.12 environment): tasks, training, evaluation, export
+├── robot/               laptop-side code that drives the robot with the trained policy (shared .venv)
+└── docs/                process log, result tables, data/ and media/ (plots, videos)
 ```
 
 | File | What it does |
@@ -79,15 +80,32 @@ HW8 - Silly Walks Simulated/
 | **train/** | Runs in `.venv-mjlab` (MuJoCo 3.11), not the shared `.venv` |
 | [requirements-mjlab.txt](train/requirements-mjlab.txt) | The MJLab install, version pinned (see Setup) |
 | [robot_spec.py](train/robot_spec.py) | The robot for MJLab: the CAD export plus a free joint and the same simple collision shapes as `sim/` |
-| [walk_straight_task.py](train/walk_straight_task.py) | **The training task:** upright-only leg speeds, sensor-only inputs, the reward, and the left/right randomization. All tunable numbers are at the top. |
+| [walk_straight_task.py](train/walk_straight_task.py) | **v1 training task:** upright-only leg speeds, sensor-only inputs, the reward, and the left/right randomization. All tunable numbers are at the top. |
 | [reward_check.py](train/reward_check.py) | Scores scripted behaviors (walking straight, standing still, off course, lopsided, jerky) to check the reward before training |
-| [train.py](train/train.py) | Starts a PPO training run |
+| [walk_straight_v2_task.py](train/walk_straight_v2_task.py) | **v2 training task:** realistic motor inertia (no leg chatter), random motor top speed (80–140 rpm), wider mass range, physics randomization, encoder-average leg-speed input, tilt penalty and random pushes. Each change is explained at the top |
+| [train.py](train/train.py) | Starts a PPO training run (`--task v1/v2`; `--resume <run> --checkpoint <file>` continues a run) |
+| [export_policy.py](train/export_policy.py) | Writes the trained policy, the exact training physics model and the shared numbers into `robot/model/`, and reference data for the robot-side tests; refuses to finish unless the physics model matches MJLab's in 45 fields |
 | [plot_training.py](train/plot_training.py) | Turns a run's log into reward and drift curves |
 | [evaluate.py](train/evaluate.py) | **Main result:** baseline (equal motor speeds) vs. trained policy on the same 100 lopsided robots: table, path plot, videos |
 | [speedtest_task.py](train/speedtest_task.py) | Minimal placeholder task used only by the speed test |
 | [speed_test.py](train/speed_test.py) | Measures simulation and training speed on this computer |
 | `logs/` | Training logs and checkpoints (ignored by git) |
+| **robot/** | Runs in the shared `.venv`; no MJLab needed |
+| [config.py](robot/config.py) | **Every real-robot assumption** (motor sides and signs, encoder zero, rpm table, motion-sensor axes and units, leg-speed source, safety limits), each with the calibration that measures it |
+| [robot_interface.py](robot/robot_interface.py) | The one interface both robots offer: connect, read sensors (in the hub's units), send two speeds, stop |
+| [units.py](robot/units.py) | **The only unit conversion:** hub readings → the policy's 16 inputs, policy output → whole percents |
+| [real_robot.py](robot/real_robot.py) | The LEGO Double Motor over Bluetooth (same library calls as MT1) |
+| [fake_robot.py](robot/fake_robot.py) | The training simulator pretending to be the hub: same physics, randomization, delay, noise and units |
+| [policy.py](robot/policy.py) | The trained network in plain numpy |
+| [run_policy.py](robot/run_policy.py) | **The control loop**, 20 decisions/s, with safety stops (Ctrl-C, lost link, stale sensors, tipping, time limit) and a CSV log per run (`robot/runs/`, not committed) |
+| [check_fake_vs_eval.py](robot/check_fake_vs_eval.py) | 100 fake robots through the real loop, compared with `evaluate.py` |
+| [sim_hand_tests.py](robot/sim_hand_tests.py) | Julian's hand tests (weight, axle height, rpm, walking direction, 10 s runs in and out of step) in simulation |
+| `tests/` | `test_units.py`, `test_policy.py`, `test_safety.py`, `test_real_robot_dryrun.py` (PASS/FAIL scripts) and their reference data |
+| `model/` | The exported policy (`policy_weights.npz`, `policy.pt`), the training physics model (`scene.xml`) and `policy_meta.json`. **Generated by export_policy.py** |
 | **docs/** | |
+| [fake_robot_check.md](docs/fake_robot_check.md) | FakeRobot vs evaluation table |
+| [hand_tests_sim.md](docs/hand_tests_sim.md) | Julian's tests, simulated, with an empty column for his real numbers |
+| `data/` | Numbers behind the tables and real runs cited in the log |
 | [process_log.md](docs/process_log.md) | What was tried, what failed and what fixed it |
 | `media/` | `rest_pose.png`, plus `walk_test_*.mp4`, `walk_test_frames_*.png` and `walk_trajectory_*.png` for +60 and −60 rpm |
 
@@ -145,6 +163,20 @@ cd "Mohammed's Projects/HW8 - Silly Walks Simulated"
 ../../.venv-mjlab/bin/python train/train.py --envs 256 --iters 300 --name my_run   # about 2.5 h
 ../../.venv-mjlab/bin/python train/plot_training.py
 ../../.venv-mjlab/bin/python train/evaluate.py            # newest checkpoint; --timestep 0.001 for the robustness check
+../../.venv-mjlab/bin/python train/export_policy.py --checkpoint <model_N.pt>   # -> robot/model/
+```
+
+### Robot side (shared `.venv`)
+
+```bash
+../../.venv/bin/python robot/tests/test_units.py           # unit conversion matches training
+../../.venv/bin/python robot/tests/test_policy.py          # exported policy matches MJLab
+../../.venv/bin/python robot/tests/test_safety.py          # every stop works
+../../.venv/bin/python robot/tests/test_real_robot_dryrun.py
+../../.venv/bin/python robot/run_policy.py --fake --realtime   # rehearsal with the simulated robot
+../../.venv/bin/python robot/run_policy.py --real              # the real Double Motor
+../../.venv/bin/python robot/check_fake_vs_eval.py
+../../.venv/bin/python robot/sim_hand_tests.py --rpm <measured rpm>
 ```
 
 ## Tuning and notes
