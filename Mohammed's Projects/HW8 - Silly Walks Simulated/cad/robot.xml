@@ -1,0 +1,52 @@
+<?xml version="1.0" ?>
+<!-- Generated using onshape-to-robot -->
+<!-- Onshape document_id: c2d51f0d948908e24e9a3ad3 / workspace_id: 05cb44dceb699dcff0cec69b -->
+<mujoco model="silly_walker">
+  <compiler angle="radian" meshdir="assets" autolimits="true"/>
+  <default>
+    <default class="silly_walker">
+      <joint frictionloss="0.1" armature="0.005"/>
+      <position kp="50" dampratio="1"/>
+      <default class="visual">
+        <geom type="mesh" contype="0" conaffinity="0" group="2"/>
+      </default>
+      <default class="collision">
+        <geom group="3"/>
+      </default>
+    </default>
+  </default>
+  <worldbody>
+    <!-- Link body -->
+    <body name="body" pos="0 0 0" quat="1 0 0 0" childclass="silly_walker">
+      <inertial pos="0 -0.0234044 -0" mass="0.100006" fullinertia="6.11874e-05 3.02849e-05 7.69302e-05 0 0 0"/>
+      <!-- Part body -->
+      <geom type="mesh" class="visual" pos="0 0 0" quat="1 0 0 0" mesh="body" material="body_material"/>
+      <!-- Link leg_right -->
+      <body name="leg_right" pos="0.0398 0 0" quat="0.5 0.5 0.5 0.5">
+        <!-- Joint from body to leg_right -->
+        <joint axis="0 0 1" name="right" type="hinge"/>
+        <inertial pos="0.0164855 -0 -0.0039" mass="0.00284977" fullinertia="3.6874e-08 9.93755e-07 1.00173e-06 0 0 0"/>
+        <!-- Part leg_right -->
+        <geom type="mesh" class="visual" pos="0 -0 -0.0398" quat="0.5 -0.5 -0.5 -0.5" mesh="leg_right" material="leg_right_material"/>
+      </body>
+      <!-- Link leg_left -->
+      <body name="leg_left" pos="-0.032 0 0" quat="0.5 0.5 0.5 0.5">
+        <!-- Joint from body to leg_left -->
+        <joint axis="0 0 1" name="left" type="hinge"/>
+        <inertial pos="0.0164855 -0 -0.0039" mass="0.00284977" fullinertia="3.6874e-08 9.93755e-07 1.00173e-06 0 0 0"/>
+        <!-- Part leg_left -->
+        <geom type="mesh" class="visual" pos="0 -0 0.032" quat="0.5 -0.5 -0.5 -0.5" mesh="leg_left" material="leg_left_material"/>
+      </body>
+    </body>
+  </worldbody>
+  <asset>
+    <mesh file="leg_right.stl"/>
+    <mesh file="leg_left.stl"/>
+    <mesh file="body.stl"/>
+    <material name="body_material" rgba="0.615686 0.811765 0.929412 1"/>
+    <material name="leg_right_material" rgba="0.647059 0.647059 0.647059 1"/>
+    <material name="leg_left_material" rgba="0.647059 0.647059 0.647059 1"/>
+  </asset>
+  <actuator/>
+  <equality/>
+</mujoco>

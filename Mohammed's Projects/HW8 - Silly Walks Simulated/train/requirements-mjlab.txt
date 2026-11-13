@@ -1,0 +1,7 @@
+# MJLab training environment for HW8. NOT the shared .venv: MJLab 1.6.0 needs
+# Python 3.10-3.13, and the shared .venv is 3.14. In a 3.14 environment pip
+# silently picks the old placeholder mjlab 0.0.4 instead, so the version is pinned.
+# Setup, from the repo root:
+#   /Library/Frameworks/Python.framework/Versions/3.12/bin/python3.12 -m venv .venv-mjlab
+#   .venv-mjlab/bin/python -m pip install -r "Mohammed's Projects/HW8 - Silly Walks Simulated/train/requirements-mjlab.txt"
+mjlab==1.6.0   # brings mujoco 3.11, mujoco-warp 3.11, warp-lang, torch, rsl-rl-lib

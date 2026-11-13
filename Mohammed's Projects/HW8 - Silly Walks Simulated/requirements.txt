@@ -1,0 +1,5 @@
+# HW8 - Silly Walks Simulated. Install into the repo's shared .venv:
+#   pip install -r "Mohammed's Projects/HW8 - Silly Walks Simulated/requirements.txt"
+onshape-to-robot   # exports the Onshape assembly to a MuJoCo robot model (reads keys from .env)
+mujoco             # the physics simulator: loads the model, steps physics, renders video
+# opencv-python (already in the main requirements.txt) is used to write the test video

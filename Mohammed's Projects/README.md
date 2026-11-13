@@ -21,6 +21,7 @@ comes from someone else.
 | [`HW6 - Gait Identifier/`](./HW6%20-%20Gait%20Identifier) | Gait Identifier (HW6) | Wearable MPU-6050 on an Arduino UNO Q that tells standing, walking, running and biking apart live, with a threshold model and a decision tree trained on the laptop |
 | [`HW7 - How Many Steps/`](./HW7%20-%20How%20Many%20Steps) | How many steps? (HW7) | Ankle-worn IMU on an Arduino UNO Q that counts steps and estimates distance with a PyTorch neural net (in progress: practice net on the HW6 data) |
 | [`MT2 - The Impenetrable Safe/`](./MT2%20-%20The%20Impenetrable%20Safe) | The Impenetrable Safe (MT2) | A box that unlocks when a PyTorch CNN counts the right 3-number finger code on a webcam, with an Arduino UNO Q swinging the latch through a Cytron Maker Drive |
+| [`HW8 - Silly Walks Simulated/`](./HW8%20-%20Silly%20Walks%20Simulated) | Silly Walks Simulated (HW8) | A wheel-less LEGO Double Motor robot with brick legs, exported from Onshape to a MuJoCo model and checked against the real robot (in progress: MJLab training next) |
 
 ## Setup
 
@@ -53,6 +54,12 @@ How Many Steps uses PyTorch for its neural net:
 
 ```
 pip install -r "Mohammed's Projects/HW7 - How Many Steps/training/requirements.txt"
+```
+
+Silly Walks Simulated uses onshape-to-robot and MuJoCo (it also needs Onshape API keys in a `.env` file; see its README):
+
+```
+pip install -r "Mohammed's Projects/HW8 - Silly Walks Simulated/requirements.txt"
 ```
 
 The `ArduinoApps` in Door-to-door Service, the `unoq_scoreboard` app in A Little

@@ -64,3 +64,16 @@ Mohammed's Projects/MT2 - The Impenetrable Safe/04_unoq_app/safe_app/python/safe
 # MT2 movie: the first smooth version and the review contact sheet stay on this laptop only
 Mohammed's Projects/MT2 - The Impenetrable Safe/06_movie/how_the_network_works_smooth.mp4
 Mohammed's Projects/MT2 - The Impenetrable Safe/06_movie/contact_sheet.png
+
+# Secret keys (e.g. HW8's Onshape API keys) live in .env files: never pushed, in any folder.
+# This rule must stay below the "!Mohammed's Projects/**" line above, because in
+# .gitignore the last matching rule wins.
+**/.env
+
+# HW8 MJLab training: its own Python 3.12 environment (already ignored by "*" at the
+# root, listed here so it's explicit) plus training logs, checkpoints (*.pt),
+# TensorBoard event files, videos and any Weights & Biases folders. All large.
+.venv-mjlab/
+Mohammed's Projects/HW8 - Silly Walks Simulated/train/logs/
+Mohammed's Projects/HW8 - Silly Walks Simulated/train/wandb/
+Mohammed's Projects/HW8 - Silly Walks Simulated/train/**/*.pt

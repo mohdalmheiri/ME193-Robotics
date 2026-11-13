@@ -1,0 +1,28 @@
+// onshape-to-robot settings for HW8 (comments are allowed in this file).
+// Run from the HW8 folder:   onshape-to-robot cad
+// It reads the API keys from ../.env, downloads "Assembly 1", and writes
+// cad/robot.xml (MuJoCo model) + cad/assets/ (3D meshes of each part).
+// Nothing in robot.xml is edited by hand: sim/build_scene.py adds the floor,
+// free joint, simple collision shapes and motors on top of it.
+{
+    // IDs from the document URL (/documents/<document_id>/w/<workspace_id>/...).
+    // No element_id: the assembly is found by its tab name instead, so the
+    // export can't accidentally pick up the Part Studio tab.
+    "document_id": "c2d51f0d948908e24e9a3ad3",
+    "workspace_id": "05cb44dceb699dcff0cec69b",
+    "assembly_name": "Assembly 1",
+
+    "output_format": "mujoco",
+    "output_filename": "robot",
+    "robot_name": "silly_walker",
+
+    // Collision shapes: drop the detailed mesh collisions. The meshes stay as
+    // visuals only; sim/build_scene.py adds simple boxes/cylinders for contact.
+    "no_collision_meshes": true,
+
+    // Motors: don't let the exporter make its default *position* servos.
+    // sim/build_scene.py adds velocity motors, with speed set in sim/settings.py.
+    "joint_properties": {
+        "*": { "actuated": false }
+    }
+}
