@@ -13,8 +13,9 @@ How it works:
   - The library updates dm.imu_device / dm.motor in the background whenever a sensor
     message arrives. We also register a notification callback that only notes the arrival
     time and counts messages: that is how the control loop can tell FRESH data from stale.
-  - LEGO's left/right are mapped to the ROBOT's right/left with config.ROBOT_RIGHT_IS_LEGO,
-    so everything above this file speaks in robot sides.
+  - read_lego()/send_lego() use the library's own left/right (le.MOTOR_LEFT = 0,
+    le.MOTOR_RIGHT = 1); read()/send() (from RobotInterface) map them to the ROBOT's legs
+    with config.ROBOT_RIGHT_IS_LEGO, so the control loop speaks in robot legs.
   - Commands are sent without waiting for the hub's reply (blocking=False), so a slow
     reply cannot stall the 20 Hz loop; the stop command DOES wait (blocking=True) so we
     know it arrived.
@@ -37,10 +38,7 @@ class RealRobot(RobotInterface):
         self.dm = device_factory()
         self.msg_time = None
         self.msg_count = 0
-        # robot side -> LEGO motor index
-        lego_right = C.ROBOT_RIGHT_IS_LEGO == "right"
-        self.index = {"right": le.MOTOR_RIGHT if lego_right else le.MOTOR_LEFT,
-                      "left": le.MOTOR_LEFT if lego_right else le.MOTOR_RIGHT}
+        self.index = {"left": le.MOTOR_LEFT, "right": le.MOTOR_RIGHT}    # LEGO side -> list index
 
     def _on_message(self, _data):
         """Called by the library's Bluetooth thread for every sensor message."""
@@ -76,12 +74,12 @@ class RealRobot(RobotInterface):
         if dt > 0:
             time.sleep(dt)
 
-    def read(self) -> Reading:
+    def read_lego(self) -> Reading:
         if not self.dm.connected:
             raise ConnectionError("Double Motor disconnected")
         imu = self.dm.imu_device
         motors = {}
-        for side in ("right", "left"):
+        for side in ("right", "left"):                 # LEGO sides
             mn = self.dm.motor[self.index[side]]
             motors[side] = MotorReading(absolute_deg=int(mn.absolutePosition),
                                         position_deg=int(mn.position), speed_pct=int(mn.speed))
@@ -90,12 +88,11 @@ class RealRobot(RobotInterface):
                        gyro_dps=(imu.gyroscopeX, imu.gyroscopeY, imu.gyroscopeZ),
                        yaw=imu.yaw, pitch=imu.pitch, roll=imu.roll, motors=motors)
 
-    def send(self, right_pct: int, left_pct: int):
+    def send_lego(self, lego_left_pct: int, lego_right_pct: int):
         if not self.dm.connected:
             raise ConnectionError("Double Motor disconnected")
-        pct = {"right": int(max(-100, min(100, right_pct))), "left": int(max(-100, min(100, left_pct)))}
-        lego = {self.index[s]: pct[s] for s in pct}          # LEGO index -> percent
-        self.dm.movement_move_tank(lego[le.MOTOR_LEFT], lego[le.MOTOR_RIGHT], blocking=False)
+        clamp = lambda x: int(max(-100, min(100, x)))
+        self.dm.movement_move_tank(clamp(lego_left_pct), clamp(lego_right_pct), blocking=False)
 
     def stop(self):
         if not self.dm.connected:

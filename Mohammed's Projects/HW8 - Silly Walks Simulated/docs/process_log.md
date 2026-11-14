@@ -553,9 +553,112 @@ Plus sensor noise, gyro yaw drift (±0.5°/s) and leg calibration error (±2°).
 - So at top speed the robot is near tipping even without a policy.
 - When Julian's numbers arrive: rerun with `--rpm <his value>` and fill in the empty column.
 
+## 2026-11-13 evening: v2 started; calibration scripts, session checklist, sim drift test
+
+**v2 training**
+- Approved with changes:
+  - start tonight (Julian's numbers come Monday);
+  - randomize the motor top speed 80–140 rpm;
+  - widen the mass range (×0.6–1.6);
+  - use the encoder-average leg speed;
+  - stop the old long run (stopped at round ~450; its checkpoints remain in `train/logs/`).
+- `train/walk_straight_v2_task.py`; every change and its reason is listed at the top of the file:
+  - motor armature 2e-4 nominal, randomized 5e-5–5e-4 per leg;
+  - joint friction ×0.5–2.5;
+  - contact stiffness 0.004–0.008 s;
+  - top speed 80–140 rpm per robot (then ±10% per side);
+  - mass ×0.6–1.6;
+  - leg-speed input = leg turn during the last decision / 0.05 s / 120 rpm, plus noise 0.02;
+  - tilt penalty: 0 below 40°, rising to −1/s at 70°;
+  - flip penalty 100, so the worst continuing episode (−71.2) stays above it;
+  - random pushes every 3–6 s, up to ±5 rad/s about each horizontal world axis;
+  - the critic also sees the top speed.
+- **Action meaning changed:** it is now a fraction of the robot's top speed, so on the hub percent = 100·(a+1)/2, whatever the real top speed is.
+- **Push size came from a FakeRobot experiment** (nominal robot walking at 60 rpm, kicked at 4 points in the stride, both directions):
+  - a sideways (roll) kick up to 20 rad/s never tipped it;
+  - a front-back (pitch) kick tipped it 1 of 8 times at 15 rad/s and 2 of 8 at 20.
+  - So the robot is hard to push over sideways; its flips come from pitching over its own legs.
+- Pre-flight checks:
+  - The randomization only takes effect after `env.reset()`. It then varied as intended across 4 robots: armature 6e-5–4.9e-4, mass 101–155 g, top speed 81–102 rpm.
+  - The leg-speed input matched "half of each robot's top speed / 120 rpm".
+  - A 2-round smoke run worked; it was deleted.
+- Started 18:36: `train/train.py --task v2 --envs 256 --iters 800 --name v2` (logs in `train/logs/rsl_rl/walk_straight_v2/`), caffeinate attached.
+  - About 20 s per round; round 40 had full 400-decision episodes.
+  - Expected end about 23:20.
+  - **The Mac was on battery (59%, about 2 h 20 min left) when last checked.**
+- `train/train.py` gained `--task v1/v2`.
+
+**Committed** the robot-side work and the v2 task as `445323c` (29 files; `.env`, environments, logs, checkpoints and run CSVs checked to be excluded). Not pushed.
+
+**Robot interface: two levels**
+- `read_lego()` / `send_lego(left, right)`: the LEGO library's own motor sides, no assumptions. Used by calibration.
+- `read()` / `send(right, left)`: robot legs, mapped with `config.py`. Used by the control loop. RealRobot and FakeRobot only implement the LEGO level.
+
+**FakeRobot now has a hidden "true hub"**
+- Wiring, motor and encoder directions, leg zeros, rpm table, sensor axes, units, signs and pitch/roll field order are all settable, independently of `config.py`. The laptop side still uses `config.py`, i.e. what it believes, as on the real robot.
+- New "hands" for calibration tests:
+  - `on_stand()`: the body is clamped in place before every physics step;
+  - `pose_legs()`;
+  - `hold_pose()` / `hold_turn()`: physics paused, time passing, sensor messages from the held pose;
+  - `armature=` override;
+  - `turn_unwrapped_deg`.
+- **Bug found and fixed:** the first stand made the body 10⁶× heavier. That left MuJoCo's equations so badly scaled that a leg's angle advanced while its speed read 0. Replaced by the clamp.
+
+**Chatter, seen again and worse:** with v1's armature (1e-5), an UNLOADED leg on the stand alternates between −17 rad/s and 0 on every physics step, at the torque limit. It averages about 81 rpm *whatever the command* (20%, 25% and 100% all gave about 80 rpm). The calibration rehearsals therefore use v2's armature 2e-4, which gives 29.6 / 59.6 / 89.6 / 119.6 rpm for 25 / 50 / 75 / 100% (true values 30 / 60 / 90 / 120).
+
+**Calibration scripts** (`robot/calibration/`, each with `--fake` to rehearse)
+- Each computes its results from raw hub readings only and prints the lines to paste into `config.py`.
+
+| Script | What it measures |
+|---|---|
+| `motor_direction.py` | Each LEGO motor at +20% alone. The person says which leg and whether it turned the walking way. Gives `ROBOT_RIGHT_IS_LEGO`, `UPRIGHT_PERCENT_SIGN`, and `ENCODER_SIGN` = sign(encoder change) × (−1 if walking way, else +1) |
+| `leg_zero.py` | Legs set by hand to forward/flat; circular mean of the absolute encoder. Gives `LEG_ZERO_DEG`, plus a quarter-turn check |
+| `measure_rpm.py` | 25/50/75/100% on the stand, rpm from the counted encoder over 3 s. Gives `RPM_AT_PERCENT`. Also reports the left/right difference, what the hub's speed report means (actual or target), and warns if the top speed is outside the policy's trained range (addition a; 3% allowance for rounding) |
+| `imu_axes.py` | Poses flat / front down / right side down / quarter turn left. Up axis from the resting accelerometer, front axis from the forward lean, right = front × up. The pitch/roll convention is the one of all 16 combinations (swapped, unit, two signs) that best reproduces the accelerometer's gravity through `units.py`'s formula. Yaw sign from the turn; gyro sign and unit from the gyro summed over the turn |
+| `drift_test.py` | Both legs at a fixed percent for 10 s, legs in step or out of step (left leg a quarter turn ahead). Logs heading (counting whole turns) and leg angles, then takes the hand measurements |
+
+- **New config setting:** `PITCH_ROLL_SWAPPED`. The hub's own axis naming depends on how the motor sits in the robot.
+
+**Calibration test** (`robot/tests/test_calibration.py`, 34/34 pass)
+- Two hidden hubs, each different from every default guess:
+  1. LEGO sides swapped, one motor reversed, encoders mixed, zeros 200°/37°, 95 rpm, sensor turned 90°, tenths of a degree, pitch/yaw/gyro signs flipped, pitch/roll swapped;
+  2. sensor upside down, both motors reversed, 130 rpm, zeros 355°/90°.
+- Every value is recovered: leg zeros within 0.2°, rpm within 0.5%.
+- **With the calibrated config, the v1 policy walks both oddly wired robots** (heading −5° / −9°, 581 / 634 mm in 10 s). With the default config both tip over.
+- **The test caught a real bug in `imu_axes.py`.** It compared the hub's pitch field with the robot's forward lean, but the hub reports pitch/roll about its own axes. With a turned sensor it chose the wrong sign, and the "calibrated" robot still veered 32°. This led to the 16-combination fit.
+- **A second mismatch was in FakeRobot.** The fake hub applied pitch/roll signs after swapping the fields, while `units.py` reads them before swapping. Both now use the `units.py` meaning.
+
+**Other robot-side changes**
+- `run_policy.py --constant PCT`: a baseline at a fixed percent through the same loop, safety stops and log (checked: 54% sent on every decision).
+- `units.action_for_percent()`.
+
+**Session checklist:** `docs/real_robot_checklist.md` — the steps in order, with what to paste after each:
+- before the session: tests and set-up;
+- calibration;
+- safety checks on a stand, including what the hub does when Bluetooth drops;
+- drift tests, baseline and policy runs, filmed and measured by hand;
+- afterwards.
+
+**Step 4, the sim drift test**
+- `robot/sim_hand_tests.py` now also saves every robot's heading over time (`docs/data/hand_tests_sim_heading.csv`) and takes `--armature`.
+- `robot/compare_drift.py --real <drift_test csv>` overlays the real heading curve on the simulated nominal + 20 lopsided ones, and tabulates the hand measurements against them (inside the lopsided range or not).
+- Tested end to end with FakeRobot drift runs. Those demo outputs were deleted so they cannot be mistaken for real results.
+- Headings now count whole turns: before, a −184° turn showed as +176°.
+
+**Effect of v2's armature on Julian's tests, simulated** (`--armature 2e-4`, 120 rpm, 10 s)
+
+| | Nominal robot | 20 lopsided robots (median) | Flipped |
+|---|---|---|---|
+| In step | 477 mm, 0° | 598 mm | 0 of 20 (v1 armature: 4) |
+| Out of step | 455 mm, turned −184° | 563 mm | 1 of 20 (v1: 2) |
+
+- The chatter was making the simulated robot tip over more.
+- `docs/hand_tests_sim.md` currently shows these armature-2e-4 numbers. It will be regenerated from the v2 export.
+
 ## Open questions / next steps
 - Julian's hand measurements (weight, axle height, rpm at full speed, walking direction, 10 s runs in/out of step): fill in `docs/hand_tests_sim.md`; use them for v2's motor speed and randomization ranges.
 - v2 training setup (proposed, waiting for OK): realistic armature, leg-speed input as the robot measures it, tilt margin. See the proposal in the conversation; to be logged here once decided.
-- Calibration scripts (step 3), the sim fixed-speed test (step 4, partly covered by `sim_hand_tests.py`), and the simple-controller comparison (step 5) are still to do.
+- ~~Calibration scripts (step 3), sim fixed-speed test (step 4)~~ Done. Simple-controller comparison (step 5) still to do.
+- When v2 finishes: plot, evaluate (MJLab), FakeRobot check (target: at most 1 flip in 100), export to `robot/model/`, and update `units.py` for v2's action meaning (percent = 100·(a+1)/2); rerun `sim_hand_tests.py`.
 - ~~Decide the training step size.~~ Done: trained at 0.002 s, and the policy holds up at 0.001 s.
 - ~~Export the policy for the real robot~~ Done (`robot/`).

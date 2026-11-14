@@ -5,6 +5,8 @@ second. The same loop drives the real LEGO robot and the simulator's FakeRobot.
   python robot/run_policy.py --fake                 FakeRobot (fast, no waiting)
   python robot/run_policy.py --fake --realtime      FakeRobot at real speed (a rehearsal)
   python robot/run_policy.py --real                 the real Double Motor over Bluetooth
+  python robot/run_policy.py --real --constant 65   BASELINE: both legs at 65 % the whole time,
+                                                    through the same loop, safety stops and log
   options: --seconds 20  --seed 0 (fake robot number)  --name label-for-the-log
 
 How one decision works (every 0.05 s on the robot's clock):
@@ -172,6 +174,8 @@ def main():
     p.add_argument("--seed", type=int, default=0, help="which random fake robot")
     p.add_argument("--realtime", action="store_true", help="FakeRobot at real speed")
     p.add_argument("--name", default="", help="label added to the log file name")
+    p.add_argument("--constant", type=float, default=None, metavar="PCT",
+                   help="baseline: both legs at this percent instead of the policy")
     a = p.parse_args()
     if a.seconds > C.MAX_RUN_S:
         sys.exit(f"--seconds {a.seconds} is above the safety limit config.MAX_RUN_S = {C.MAX_RUN_S}")
@@ -181,9 +185,15 @@ def main():
     else:
         from real_robot import RealRobot
         robot, kind = RealRobot(), "real"
+    policy = None
+    if a.constant is not None:
+        # the action that units.command() turns into exactly this percent on both legs
+        c = U.action_for_percent(a.constant)
+        policy = lambda obs: np.array([c, c])              # noqa: E731
+        kind += f"_constant{a.constant:g}"
     stamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     log = RUNS_DIR / f"{stamp}_{kind}{'_' + a.name if a.name else ''}.csv"
-    s = run(robot, a.seconds, log)
+    s = run(robot, a.seconds, log, policy=policy)
     if "truth" in s:
         t = s["truth"]
         print(f"Fake robot truth: heading {t['heading_deg']:+.1f} deg, sideways {t['side_mm']:+.0f} mm, "

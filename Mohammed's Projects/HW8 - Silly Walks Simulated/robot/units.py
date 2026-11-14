@@ -41,16 +41,16 @@ OBS_SIZE = sum(n for _, n, _ in META["observation_layout"])     # 16
 
 
 # ------------------------------------------------------------------ axes
-def _axis_map():
-    """config.BODY_FROM_HUB as a 3x3 matrix M with body_vector = M @ hub_vector."""
+def axis_map(body_from_hub: dict) -> np.ndarray:
+    """A BODY_FROM_HUB setting as a 3x3 matrix M with body_vector = M @ hub_vector."""
     M = np.zeros((3, 3))
     for row, body_axis in enumerate("xyz"):
-        spec = C.BODY_FROM_HUB[body_axis]            # e.g. "+y" or "-x"
+        spec = body_from_hub[body_axis]              # e.g. "+y" or "-x"
         M[row, "xyz".index(spec[1])] = 1.0 if spec[0] == "+" else -1.0
     return M
 
 
-BODY_FROM_HUB = _axis_map()
+BODY_FROM_HUB = axis_map(C.BODY_FROM_HUB)
 HUB_FROM_BODY = BODY_FROM_HUB.T                      # a signed permutation: inverse = transpose
 
 
@@ -78,8 +78,9 @@ def pitch_roll_from_gravity(g_hub: np.ndarray):
 def tilt(reading) -> np.ndarray:
     """The policy's 'tilt' input: unit gravity direction in BODY axes."""
     if C.TILT_SOURCE == "pitch_roll":
-        p = math.radians(C.PITCH_SIGN * reading.pitch * C.ANGLE_UNIT_DEG)
-        r = math.radians(C.ROLL_SIGN * reading.roll * C.ANGLE_UNIT_DEG)
+        hub_p, hub_r = (reading.roll, reading.pitch) if C.PITCH_ROLL_SWAPPED else (reading.pitch, reading.roll)
+        p = math.radians(C.PITCH_SIGN * hub_p * C.ANGLE_UNIT_DEG)
+        r = math.radians(C.ROLL_SIGN * hub_r * C.ANGLE_UNIT_DEG)
         g_hub = gravity_from_pitch_roll(p, r)
     else:
         # An accelerometer at rest reads +1 g pointing UP (it feels the table pushing),
@@ -196,9 +197,15 @@ def command(action: np.ndarray):
     return pct, info
 
 
+def action_for_percent(pct: float) -> float:
+    """Inverse of command(): the action (-1..1) that gives this percent (for baselines)."""
+    rpm = percent_to_rpm(pct)
+    return float(np.clip(2 * rpm / MAX_RPM - 1, -1, 1))
+
+
 def speed_limit_warning():
     """Text warning if the motor can't reach the policy's top speed, else None."""
-    if RPM_AT_100 + 1e-9 < MAX_RPM:
+    if RPM_AT_100 < 0.97 * MAX_RPM:                     # 3 % allowance for measurement rounding
         return (f"WARNING: the motor reaches only {RPM_AT_100:.0f} rpm at 100 %, but the policy "
                 f"was trained for up to {MAX_RPM:.0f} rpm. Commands above {RPM_AT_100:.0f} rpm "
                 "will be clipped, so the robot cannot do everything the policy learned. "

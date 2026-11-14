@@ -31,6 +31,12 @@ How it works
             recent message, like the real library.
   Clock     Simulated time. wait_until(t) runs the physics up to t; with realtime=True it
             also sleeps so 1 simulated second takes 1 real second.
+  The hub's wiring and sensor conventions (which LEGO motor drives which leg, motor
+            and encoder directions, leg zero, motion-sensor axes/units/signs, rpm per percent)
+            are a hidden "true hub" (FakeRobot(hub={...}); default = config.py). The laptop side
+            (read()/send(), units.py) uses config.py, i.e. what it BELIEVES - exactly like the
+            real robot. The calibration tests give the fake hub a different truth and check
+            that the calibration scripts find it.
   Test hooks (for the safety tests): disconnect(), freeze_sensors(), tip_over().
 """
 
@@ -46,24 +52,47 @@ from robot_interface import MotorReading, Reading, RobotInterface
 
 SENSOR_PERIOD_S = 0.031
 JOINT = {"right": "robot/right", "left": "robot/left"}
+LEGS = ("right", "left")
+HUB_KEYS = ("ROBOT_RIGHT_IS_LEGO", "UPRIGHT_PERCENT_SIGN", "ENCODER_SIGN", "LEG_ZERO_DEG",
+            "RPM_AT_PERCENT", "BODY_FROM_HUB", "ANGLE_UNIT_DEG", "PITCH_SIGN", "ROLL_SIGN",
+            "YAW_SIGN", "GYRO_SIGN", "PITCH_ROLL_SWAPPED")
 
 
 class FakeRobot(RobotInterface):
     def __init__(self, seed: int = 0, realtime: bool = False, randomize: bool = True,
                  noise: bool = True, legs_in_step: bool = False, start_q=None,
-                 start_yaw: float | None = None):
+                 start_yaw: float | None = None, hub: dict | None = None,
+                 armature: float | None = None):
+        # the fake hub's TRUE wiring/conventions (default: exactly what config.py assumes)
+        self.hub = {k: getattr(C, k) for k in HUB_KEYS}
+        self.hub.update(hub or {})
+        self.hub_from_body = U.axis_map(self.hub["BODY_FROM_HUB"]).T
+        self._pct_tbl = np.array([p for p, _ in self.hub["RPM_AT_PERCENT"]], dtype=float)
+        self._rpm_tbl = np.array([r for _, r in self.hub["RPM_AT_PERCENT"]], dtype=float)
+        same = self.hub["ROBOT_RIGHT_IS_LEGO"] == "right"
+        self.leg_of_lego = {"right": "right" if same else "left", "left": "left" if same else "right"}
+        self.lego_of_leg = {leg: lego for lego, leg in self.leg_of_lego.items()}
         self.rng = np.random.default_rng(seed)
         self.realtime, self.randomize, self.noise = realtime, randomize, noise
         self.m = mujoco.MjModel.from_xml_path(str(U.MODEL_DIR / "scene.xml"))
         self.d = mujoco.MjData(self.m)
         self.dt = self.m.opt.timestep
+        self.g_world = self.m.opt.gravity.copy()   # what the fake accelerometer feels, always
         self.body = self.m.body("robot/body").id
         self.qadr = {s: self.m.jnt_qposadr[self.m.joint(j).id] for s, j in JOINT.items()}
         self.vadr = {s: self.m.jnt_dofadr[self.m.joint(j).id] for s, j in JOINT.items()}
         self.act = {s: self.m.actuator(j).id for s, j in JOINT.items()}
+        if armature is not None:
+            # motor inertia override. v1's model has 1e-5, which makes the simulated speed
+            # controller chatter; an unloaded leg then averages ~81 rpm WHATEVER the command
+            # (docs/process_log.md). v2 trains with 2e-4 nominal.
+            for s in LEGS:
+                self.m.dof_armature[self.vadr[s]] = armature
         self._connected = False
         self._sensors_frozen = False
         self._tip_until = -1.0
+        self._held = False                    # hold_pose(): physics paused, body held by "hand"
+        self._turn = None                     # hold_turn(): (t0, degrees, seconds)
         self._randomize_robot(legs_in_step, start_q, start_yaw)
 
     # ------------------------------------------------------------ one random robot
@@ -135,6 +164,11 @@ class FakeRobot(RobotInterface):
                 "heading_deg": math.degrees(math.atan2(math.sin(h), math.cos(h))),
                 "tilt_deg": math.degrees(math.acos(max(-1.0, min(1.0, self.d.xmat[self.body][8]))))}
 
+    @property
+    def turn_unwrapped_deg(self) -> float:
+        """True heading change since the start, counting whole turns (+ = left)."""
+        return math.degrees(getattr(self, "_turn_rad", 0.0))
+
     # ------------------------------------------------------------ the interface
     def connect(self):
         self._connected = True
@@ -150,16 +184,19 @@ class FakeRobot(RobotInterface):
     def now(self) -> float:
         return self.d.time
 
-    def read(self) -> Reading:
+    def read_lego(self) -> Reading:
         if not self._connected:
             raise ConnectionError("FakeRobot: not connected")
-        return self.last
+        return self.last                      # motors keyed by LEGO side
 
-    def send(self, right_pct: int, left_pct: int):
+    def send_lego(self, lego_left_pct: int, lego_right_pct: int):
+        """The fake hub's movement_move_tank: each LEGO motor drives the leg the TRUE wiring
+        connects it to. (read()/send() per robot leg come from RobotInterface, via config.)"""
         if not self._connected:
             raise ConnectionError("FakeRobot: not connected")
-        self.wanted = np.array([self._pct_to_joint_speed("right", right_pct),
-                                self._pct_to_joint_speed("left", left_pct)])
+        for lego, pct in (("left", lego_left_pct), ("right", lego_right_pct)):
+            leg = self.leg_of_lego[lego]
+            self.wanted[LEGS.index(leg)] = self._pct_to_joint_speed(leg, int(pct))
 
     def stop(self):
         # Like the real robot: a stop can only be sent over a working link, and it also
@@ -202,14 +239,94 @@ class FakeRobot(RobotInterface):
         released once the robot is past 100 deg or after duration_s."""
         self._tip_until = self.d.time + duration_s
 
+    # ------------------------------------------------------------ "hands" for calibration tests
+    def on_stand(self):
+        """Clamp the robot on a stand, legs spinning freely in the air: the body is lifted
+        10 cm and put back in that exact pose, motionless, before every physics step (like
+        a clamp). Normal physics otherwise, gravity included."""
+        self.d.qpos[2] = 0.10
+        self.d.qvel[:6] = 0.0
+        mujoco.mj_forward(self.m, self.d)
+        self._stand_pose = self.d.qpos[:7].copy()
+
+    def pose_legs(self, q_right: float, q_left: float):
+        """Someone turns the legs by hand to these simulator angles (rad) and lets go."""
+        self.d.qpos[self.qadr["right"]], self.d.qpos[self.qadr["left"]] = q_right, q_left
+        self.d.qvel[self.vadr["right"]] = self.d.qvel[self.vadr["left"]] = 0.0
+        mujoco.mj_forward(self.m, self.d)
+        self._take_sensor_message()
+
+    def hold_pose(self, pitch_deg: float = 0.0, roll_deg: float = 0.0, yaw_deg: float = 0.0,
+                  spin_dps: float = 0.0, message: bool = True):
+        """Someone holds the body still in this orientation (pitch + = front UP, roll + = right
+        side DOWN, yaw + = turned LEFT from the start), optionally turning it about the vertical
+        at spin_dps (deg/s, + = to the LEFT). Physics is paused: the next sensor message is
+        taken directly from this pose (the accelerometer then reads exactly -gravity)."""
+        yaw = self.start_yaw + math.radians(yaw_deg)
+        p, r = math.radians(pitch_deg), math.radians(roll_deg)
+        cz, sz = math.cos(yaw / 2), math.sin(yaw / 2)
+        cx, sx = math.cos(p / 2), math.sin(p / 2)
+        cy, sy = math.cos(r / 2), math.sin(r / 2)
+        qz, qx, qy = np.array([cz, 0, 0, sz]), np.array([cx, sx, 0, 0]), np.array([cy, 0, sy, 0])
+        q = np.zeros(4)
+        tmp = np.zeros(4)
+        mujoco.mju_mulQuat(tmp, qz, qx)        # same order as units.gravity_from_pitch_roll:
+        mujoco.mju_mulQuat(q, tmp, qy)         # yaw about z, then pitch about x, then roll about y
+        self.d.qpos[3:7] = q
+        self.d.qvel[:] = 0.0
+        self.d.qacc[:] = 0.0
+        Rb = np.zeros(9)
+        mujoco.mju_quat2Mat(Rb, q)
+        # turning about the WORLD vertical, expressed in body axes (MuJoCo's convention)
+        self.d.qvel[3:6] = Rb.reshape(3, 3).T @ np.array([0.0, 0.0, math.radians(spin_dps)])
+        mujoco.mj_kinematics(self.m, self.d)
+        self._held = True
+        self._held_pose = (pitch_deg, roll_deg, yaw_deg)
+        if message:                           # a fresh sensor message from the new pose
+            self._take_sensor_message()
+
+    def hold_turn(self, degrees: float, seconds: float):
+        """While held level, turn the robot by `degrees` (+ = LEFT) at a steady rate over
+        `seconds`, starting now (the sensor messages see it turning)."""
+        if not self._held:
+            self.hold_pose()
+        self._turn = (self.d.time, degrees, seconds, self._held_pose[2])
+
+    def release(self):
+        """Let go: physics runs again."""
+        self._held = False
+        self._turn = None
+
     # ------------------------------------------------------------ internals
-    def _pct_to_joint_speed(self, side: str, pct: int) -> float:
-        """Percent -> simulator joint speed (rad/s). The upright direction is NEGATIVE."""
-        rad_s = U.percent_to_rpm(pct) * 2 * math.pi / 60 * self.motor_scale[side]
-        upright = (pct * C.UPRIGHT_PERCENT_SIGN[side]) > 0
+    def _pct_to_joint_speed(self, leg: str, pct: int) -> float:
+        """Percent -> simulator joint speed (rad/s), with the TRUE hub's rpm table and motor
+        direction. The upright walking direction is a NEGATIVE joint speed."""
+        rpm = float(np.interp(min(abs(pct), 100), self._pct_tbl, self._rpm_tbl))
+        rad_s = rpm * 2 * math.pi / 60 * self.motor_scale[leg]
+        upright = (pct * self.hub["UPRIGHT_PERCENT_SIGN"][leg]) > 0
         return -rad_s if upright else rad_s
 
+    def _rpm_to_pct(self, rpm: float) -> float:
+        """The TRUE hub's percent for a leg speed (for its speed report), linear above 100 %."""
+        if rpm <= self._rpm_tbl[-1]:
+            return float(np.interp(rpm, self._rpm_tbl, self._pct_tbl))
+        return 100.0 * rpm / self._rpm_tbl[-1]
+
     def _physics_step(self):
+        if self._held:                        # body held by hand: time passes, nothing moves
+            self.d.time += self.dt
+            if self._turn is not None:
+                t0, deg, secs, yaw0 = self._turn
+                frac = min(1.0, (self.d.time - t0) / secs)
+                spin = deg / secs if frac < 1.0 else 0.0
+                pitch, roll, _ = self._held_pose
+                t_keep = self.d.time
+                self.hold_pose(pitch, roll, yaw0 + deg * frac, spin_dps=spin, message=False)
+                self.d.time = t_keep
+                self._turn = (t0, deg, secs, yaw0) if frac < 1.0 else None
+            if self.d.time + 1e-9 >= self.next_sensor_t:
+                self._take_sensor_message()
+            return
         # Bluetooth delay: same model as MJLab's actuator delay buffer
         self.history.append(self.wanted.copy())
         self.history = self.history[-(self.delay_range[1] + 1):]
@@ -217,11 +334,19 @@ class FakeRobot(RobotInterface):
             self.lag = int(self.rng.integers(self.delay_range[0], self.delay_range[1] + 1))
         applied = self.history[-1 - min(self.lag, len(self.history) - 1)]
         self.d.ctrl[self.act["right"]], self.d.ctrl[self.act["left"]] = applied
+        if getattr(self, "_stand_pose", None) is not None:       # clamped on a stand
+            self.d.qpos[:7] = self._stand_pose
+            self.d.qvel[:6] = 0.0
         self.d.xfrc_applied[self.body] = 0.0
         if self.d.time < self._tip_until and self.truth()["tilt_deg"] < 100:
             front = self.d.xmat[self.body].reshape(3, 3)[:, 1]     # body +y in the world
             self.d.xfrc_applied[self.body, 3:] = 0.04 * front       # torque (world frame)
         mujoco.mj_step(self.m, self.d)
+        # true heading change since the start, counting whole turns (for the drift test)
+        yaw = self.body_yaw()
+        prev = getattr(self, "_yaw_prev", self.start_yaw)
+        self._turn_rad = getattr(self, "_turn_rad", 0.0) + math.atan2(math.sin(yaw - prev), math.cos(yaw - prev))
+        self._yaw_prev = yaw
         if self.d.time + 1e-9 >= self.next_sensor_t:
             self._take_sensor_message()
 
@@ -235,41 +360,45 @@ class FakeRobot(RobotInterface):
         g_body = Rb.T @ np.array([0.0, 0.0, -1.0])
         if on:
             g_body = g_body + N["tilt"] * rng.standard_normal(3)
-        pitch, roll = U.pitch_roll_from_gravity(U.HUB_FROM_BODY @ g_body)
+        pitch, roll = U.pitch_roll_from_gravity(self.hub_from_body @ g_body)
         # accelerometer: specific force = acceleration - gravity, in g (reads +1 g up at rest)
-        a_world = self.d.qacc[:3] - self.m.opt.gravity
-        accel = U.HUB_FROM_BODY @ (Rb.T @ a_world) / 9.81 * 1000
+        a_world = self.d.qacc[:3] - self.g_world
+        accel = self.hub_from_body @ (Rb.T @ a_world) / 9.81 * 1000
         # gyroscope: MuJoCo keeps the free joint's angular velocity in BODY axes
         w = self.d.qvel[3:6] + (N["gyro_rad_s"] * rng.standard_normal(3) if on else 0.0)
-        gyro = C.GYRO_SIGN * np.degrees(U.HUB_FROM_BODY @ w)
+        gyro = self.hub["GYRO_SIGN"] * np.degrees(self.hub_from_body @ w)
         # yaw since connect, with slow drift and noise
         t = self.d.time - getattr(self, "t_connect", 0.0)
         h = self.body_yaw() - self.yaw_at_connect + self.yaw_drift * t
         if on:
             h += N["heading_rad"] * rng.standard_normal()
         h = math.atan2(math.sin(h), math.cos(h))
-        unit = C.ANGLE_UNIT_DEG
+        unit, hub = self.hub["ANGLE_UNIT_DEG"], self.hub
         motors = {}
         for s in ("right", "left"):
             q = self.d.qpos[self.qadr[s]]
             noisy_q = q + self.leg_calib[s] + (N["leg_angle_rad"] * rng.standard_normal() if on else 0.0)
-            enc = C.ENCODER_SIGN[s] * math.degrees(noisy_q)          # encoder direction
-            enc_counted = C.ENCODER_SIGN[s] * math.degrees(q + self.leg_calib[s])
+            enc = hub["ENCODER_SIGN"][s] * math.degrees(noisy_q)          # encoder direction
+            enc_counted = hub["ENCODER_SIGN"][s] * math.degrees(q + self.leg_calib[s])
             # the hub's own speed report: actual leg speed as a percent (sign: + = upright)
             v = self.d.qvel[self.vadr[s]]
-            pct_now = U.rpm_to_percent(abs(v) * 60 / (2 * math.pi))
-            motors[s] = MotorReading(
-                absolute_deg=int(round(enc + C.LEG_ZERO_DEG[s])) % 360,
+            pct_now = self._rpm_to_pct(abs(v) * 60 / (2 * math.pi))
+            motors[self.lego_of_leg[s]] = MotorReading(          # keyed by LEGO side
+                absolute_deg=int(round(enc + hub["LEG_ZERO_DEG"][s])) % 360,
                 position_deg=int(round(enc_counted)),
                 # one signed byte on the real hub: -127..127
                 speed_pct=int(np.clip(round(pct_now), 0, 127)) * (1 if v < 0 else -1)
-                          * C.UPRIGHT_PERCENT_SIGN[s])
+                          * hub["UPRIGHT_PERCENT_SIGN"][s])
         self.count += 1
+        # same meaning as units.py: PITCH_SIGN / ROLL_SIGN belong to the pitch / roll VALUES;
+        # PITCH_ROLL_SWAPPED then says the hub puts them in each other's fields
+        pitch_field = int(round(hub["PITCH_SIGN"] * math.degrees(pitch) / unit))
+        roll_field = int(round(hub["ROLL_SIGN"] * math.degrees(roll) / unit))
+        if hub.get("PITCH_ROLL_SWAPPED"):
+            pitch_field, roll_field = roll_field, pitch_field
         self.last = Reading(
             t=self.d.time, count=self.count,
             accel_mg=tuple(int(round(v)) for v in accel),
             gyro_dps=tuple(int(round(v)) for v in gyro),
-            yaw=int(round(C.YAW_SIGN * math.degrees(h) / unit)),
-            pitch=int(round(C.PITCH_SIGN * math.degrees(pitch) / unit)),
-            roll=int(round(C.ROLL_SIGN * math.degrees(roll) / unit)),
-            motors=motors)
+            yaw=int(round(hub["YAW_SIGN"] * math.degrees(h) / unit)),
+            pitch=pitch_field, roll=roll_field, motors=motors)

@@ -60,6 +60,9 @@ PITCH_SIGN = +1       # +1: nose (front) UP reads positive  [calibration/imu_axe
 ROLL_SIGN = +1        # +1: RIGHT side DOWN reads positive  [calibration/imu_axes.py]
 YAW_SIGN = +1         # +1: turning LEFT (counter-clockwise seen from above) reads positive
 GYRO_SIGN = +1        # +1: right-hand rule about the hub axes (deg/s)
+# True if the hub reports our "pitch" (front up/down) in its ROLL field and vice versa (its
+# own axis naming depends on how the Double Motor sits in the robot). [calibration/imu_axes.py]
+PITCH_ROLL_SWAPPED = False
 # Where the policy's "tilt" input comes from:
 #   "pitch_roll": the hub's own filtered pitch/roll (default; training's tilt is pure
 #                 gravity, and the raw accelerometer also feels every bump of the gait)

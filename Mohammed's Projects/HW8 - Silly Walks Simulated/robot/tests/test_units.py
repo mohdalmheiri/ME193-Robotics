@@ -43,6 +43,7 @@ sys.path.insert(0, str(ROBOT_DIR))
 import config as C  # noqa: E402
 import units as U  # noqa: E402
 import fake_robot as F  # noqa: E402
+from robot_interface import to_robot_sides  # noqa: E402
 
 REF = np.load(ROBOT_DIR / "tests" / "data" / "training_reference.npz")
 QUANT = math.radians(0.5) + 1e-6          # whole-degree rounding
@@ -70,7 +71,7 @@ def fake_readings_for_reference():
             fake.yaw_at_connect = float(REF["start_yaw"][i])   # heading measured from the start
             fake.t_connect = 0.0
             fake._take_sensor_message()
-            r = fake.last
+            r = to_robot_sides(fake.last)           # what read() returns (robot legs)
             obs[i, k] = U.observation(r, legs.update(r), last)
             last = np.clip(REF["action"][i, k], -1, 1)
     return obs
