@@ -1,6 +1,16 @@
 """
-Main result: BASELINE (both motors at one fixed speed) vs. TRAINED POLICY on the
-same set of randomly lopsided robots.
+Main result: BASELINE (both motors at one fixed speed) vs. a SIMPLE CONTROLLER vs. the
+TRAINED POLICY on the same set of randomly lopsided robots.
+
+The simple controller (step 5, "is the network needed at all?"): a proportional heading
+controller. It reads the SAME noisy, drifting heading input the policy gets
+(sin/cos of the heading change, inputs 7-8) and steers like a tank:
+    h = heading change (rad, + = turned left)
+    right leg command = c - K * h,   left leg command = c + K * h   (clipped to -1..1)
+so a robot that turned left speeds up its left leg and slows its right leg. c is the same
+average command as the baseline. The gain K is TUNED on a different set of robots
+(--tune-seed, default 1: K = 0.25 ... 8, lowest mean heading error + 10 deg per flip) and
+then tested on the evaluation robots, so it gets no unfair look at the test robots.
 
 How it works:
   1. Builds the walk-straight task with --robots robots and every randomization ON
@@ -29,7 +39,9 @@ Robustness check (trained at 0.002 s, tested at 0.001 s):
   ../../.venv-mjlab/bin/python train/evaluate.py --timestep 0.001
 
 Run from the HW8 folder:
-  ../../.venv-mjlab/bin/python train/evaluate.py                     (latest checkpoint)
+  ../../.venv-mjlab/bin/python train/evaluate.py --task v2 --checkpoint \
+      train/logs/rsl_rl/walk_straight_v2/2026-11-13_18-36-30_v2/model_799.pt
+  ../../.venv-mjlab/bin/python train/evaluate.py                     (v1, latest checkpoint)
   ../../.venv-mjlab/bin/python train/evaluate.py --checkpoint train/logs/rsl_rl/walk_straight/<run>/model_300.pt
 """
 
@@ -53,35 +65,43 @@ sys.path.insert(0, str(TRAIN_DIR))
 
 from mjlab.envs import ManagerBasedRlEnv  # noqa: E402
 from mjlab.rl import MjlabOnPolicyRunner, RslRlVecEnvWrapper  # noqa: E402
-import walk_straight_task as T  # noqa: E402
+import walk_straight_task as V1  # noqa: E402
+import walk_straight_v2_task as T2  # noqa: E402
 
-parser = argparse.ArgumentParser(description="Baseline vs trained policy")
+parser = argparse.ArgumentParser(description="Baseline vs simple controller vs trained policy")
+parser.add_argument("--task", choices=["v1", "v2"], default="v1")
 parser.add_argument("--checkpoint", help="model_*.pt (default: newest in train/logs)")
+parser.add_argument("--tune-seed", type=int, default=1, help="robots used to tune the controller gain")
+parser.add_argument("--gains", type=float, nargs="+", default=[0.25, 0.5, 1, 2, 4, 8])
 parser.add_argument("--robots", type=int, default=100)
 parser.add_argument("--seconds", type=float, default=20.0)
-parser.add_argument("--timestep", type=float, default=T.TIMESTEP)
+parser.add_argument("--timestep", type=float, default=V1.TIMESTEP)
 parser.add_argument("--seed", type=int, default=7)
 parser.add_argument("--no-video", action="store_true")
 args = parser.parse_args()
-TAG = f"dt{args.timestep:g}"
-STEPS = round(args.seconds / T.DECISION_DT)
+T = T2 if args.task == "v2" else V1
+EXP = "walk_straight_v2" if args.task == "v2" else "walk_straight"
+TAG = (f"{args.task}_" if args.task != "v1" else "") + f"dt{args.timestep:g}"
+STEPS = round(args.seconds / V1.DECISION_DT)
 
 if args.checkpoint:
     ckpt = Path(args.checkpoint).resolve()
 else:
-    ckpts = sorted((TRAIN_DIR / "logs" / "rsl_rl" / "walk_straight").glob("*/model_*.pt"),
+    ckpts = sorted((TRAIN_DIR / "logs" / "rsl_rl" / EXP).glob("*/model_*.pt"),
                    key=lambda p: (p.parent.name, int(p.stem.split("_")[1])))
     if not ckpts:
-        sys.exit("No checkpoint found in train/logs/rsl_rl/walk_straight/")
+        sys.exit(f"No checkpoint found in train/logs/rsl_rl/{EXP}/")
     ckpt = ckpts[-1]
 print(f"Checkpoint: {ckpt.relative_to(HW8)}\nPhysics step {args.timestep} s, "
       f"{args.robots} robots, {args.seconds:.0f} s each")
 
 
-def make_env():
+def make_env(seed=None):
+    seed = args.seed if seed is None else seed
     cfg = T.make_env_cfg(num_envs=args.robots, timestep=args.timestep, episode_s=1e6)
-    cfg.seed = args.seed
-    torch.manual_seed(args.seed)
+    cfg.events.pop("push", None)    # v2's random pushes are training practice, not part of the test
+    cfg.seed = seed
+    torch.manual_seed(seed)
     return RslRlVecEnvWrapper(ManagerBasedRlEnv(cfg=cfg, device="cpu"))
 
 
@@ -106,9 +126,9 @@ def drive(env, act_fn):
         obs, _, dones, _ = env.step(a)
         # read the state BEFORE an auto-reset could hide it: for flipped robots the
         # env has already reset them, so keep their last recorded values instead
-        fwd, right = T.track_frame(base)
+        fwd, right = V1.track_frame(base)
         rel = robot.data.root_link_pos_w[:, :2] - st["start_xy"]
-        now = {"side": (rel * right).sum(-1) * 1000, "head": T.heading_error(base) * 180 / math.pi,
+        now = {"side": (rel * right).sum(-1) * 1000, "head": V1.heading_error(base) * 180 / math.pi,
                "fwd": (rel * fwd).sum(-1) * 1000}
         just_flipped = alive & dones.bool()
         flipped |= just_flipped
@@ -138,45 +158,91 @@ env.close()
 
 # ------------------------------------------------------------------ 2. baseline
 c = P["mean_cmd"]
-rpm = T.MAX_SPEED_RPM * (c + 1) / 2
-print(f"Policy's average command {c:+.2f} -> baseline runs both legs at {rpm:.0f} rpm")
+if args.task == "v2":
+    speed_txt = f"{100 * (c + 1) / 2:.0f} % of each robot's top speed (80-140 rpm)"
+else:
+    speed_txt = f"{T.MAX_SPEED_RPM * (c + 1) / 2:.0f} rpm"
+print(f"Policy's average command {c:+.2f} -> baseline runs both legs at {speed_txt}")
 env = make_env()
 B = drive(env, lambda obs: torch.full((args.robots, 2), c))
 env.close()
-same = abs(P["fingerprint"] - B["fingerprint"]) < 1e-6
-print(f"Same robots in both runs: {'YES' if same else 'NO (fingerprints differ!)'}")
 
 
-# ------------------------------------------------------------------ 3. table
+# ------------------------------------------------------------------ 3. simple controller
+def p_controller(K):
+    """Proportional heading controller on the policy's own (noisy) heading input."""
+    def act(obs):
+        o = obs["actor"]
+        h = torch.atan2(o[:, 6], o[:, 7])              # heading change, + = turned left
+        return torch.stack([c - K * h, c + K * h], -1).clamp(-1.0, 1.0)
+    return act
+
+
+def score(R):
+    return float(R["res"]["head"].abs().mean()) + 10.0 * int(R["flipped"].sum())
+
+
+tune = []
+for K in args.gains:                                   # tuned on DIFFERENT robots
+    env = make_env(args.tune_seed)
+    R = drive(env, p_controller(K))
+    env.close()
+    tune.append((K, score(R), float(R["res"]["head"].abs().mean()),
+                 float(R["res"]["side"].abs().mean()), int(R["flipped"].sum())))
+    print(f"  tuning K={K:g}: heading {tune[-1][2]:.1f} deg, drift {tune[-1][3]:.0f} mm, "
+          f"flipped {tune[-1][4]}")
+K_BEST = min(tune, key=lambda x: x[1])[0]
+print(f"Chosen gain K = {K_BEST:g} (tuned on seed {args.tune_seed}); testing on seed {args.seed}")
+env = make_env()
+Cn = drive(env, p_controller(K_BEST))
+env.close()
+same = abs(P["fingerprint"] - B["fingerprint"]) < 1e-6 and abs(P["fingerprint"] - Cn["fingerprint"]) < 1e-6
+print(f"Same robots in all three runs: {'YES' if same else 'NO (fingerprints differ!)'}")
+
+
+# ------------------------------------------------------------------ 4. table
 def stats(x):
     x = x.abs().numpy()
     return np.mean(x), np.median(x), np.percentile(x, 95)
 
 
+DRIVERS = (("Baseline (equal speeds)", B), (f"Simple controller (K = {K_BEST:g})", Cn), ("Trained policy", P))
 rows = []
 for label, key, unit in (("Sideways drift", "side", "mm"), ("Heading error", "head", "deg")):
-    b, p = stats(B["res"][key]), stats(P["res"][key])
-    rows.append(f"| {label} ({unit}) | {b[0]:.0f} / {b[1]:.0f} / {b[2]:.0f} | "
-                f"{p[0]:.0f} / {p[1]:.0f} / {p[2]:.0f} |")
-bf, pf = B["res"]["fwd"].numpy(), P["res"]["fwd"].numpy()
-rows.append(f"| Forward distance (mm) | {bf.mean():.0f} / {np.median(bf):.0f} / {np.percentile(bf, 5):.0f} (worst 5 %) | "
-            f"{pf.mean():.0f} / {np.median(pf):.0f} / {np.percentile(pf, 5):.0f} (worst 5 %) |")
-rows.append(f"| Flipped | {int(B['flipped'].sum())} of {args.robots} | {int(P['flipped'].sum())} of {args.robots} |")
+    cells = []
+    for _, R in DRIVERS:
+        x = stats(R["res"][key])
+        cells.append(f"{x[0]:.0f} / {x[1]:.0f} / {x[2]:.0f}")
+    rows.append(f"| {label} ({unit}) | " + " | ".join(cells) + " |")
+cells = []
+for _, R in DRIVERS:
+    f = R["res"]["fwd"].numpy()
+    cells.append(f"{f.mean():.0f} / {np.median(f):.0f} / {np.percentile(f, 5):.0f} (worst 5 %)")
+rows.append("| Forward distance (mm) | " + " | ".join(cells) + " |")
+rows.append("| Flipped | " + " | ".join(f"{int(R['flipped'].sum())} of {args.robots}" for _, R in DRIVERS) + " |")
+tune_rows = [f"| {K:g} | {h:.1f} | {d:.0f} | {fl} |" + (" chosen |" if K == K_BEST else " |")
+             for K, _, h, d, fl in tune]
 table = "\n".join([
-    f"# Evaluation: baseline vs. trained policy ({TAG})", "",
+    f"# Evaluation: baseline vs. simple controller vs. trained policy ({TAG})", "",
     f"- Checkpoint: `{ckpt.relative_to(HW8)}`",
     f"- {args.robots} randomly lopsided robots (seed {args.seed}), {args.seconds:.0f} s each, "
-    f"physics step {args.timestep} s, same robots for both drivers: {'yes' if same else 'NO'}",
-    f"- Baseline: both legs at a constant {rpm:.0f} rpm (the policy's average command)", "",
+    f"physics step {args.timestep} s, same robots for all drivers: {'yes' if same else 'NO'}"
+    + ("; training's random pushes OFF" if args.task == "v2" else ""),
+    f"- Baseline: both legs at a constant {speed_txt} (the policy's average command)",
+    f"- Simple controller: right = c - K h, left = c + K h on the policy's own noisy heading "
+    f"input, same c; K tuned on {args.robots} OTHER robots (seed {args.tune_seed})", "",
     "Values are mean / median / worst 5 % (95th percentile) of the absolute value at the end.", "",
-    "| Measure | Baseline (equal speeds) | Trained policy |", "|---|---|---|", *rows, ""])
+    "| Measure | " + " | ".join(n for n, _ in DRIVERS) + " |", "|---|---|---|---|", *rows, "",
+    f"Gain tuning (seed {args.tune_seed}; score = mean heading error + 10 deg per flip):", "",
+    "| K | Heading error, mean (deg) | Sideways drift, mean (mm) | Flipped | |", "|---|---|---|---|---|",
+    *tune_rows, ""])
 out_md = HW8 / "docs" / f"eval_results_{TAG}.md"
 out_md.write_text(table)
 print("\n" + table)
 
-# ------------------------------------------------------------------ 4. path plot
-fig, axes = plt.subplots(1, 2, figsize=(11, 5.5), sharex=True, sharey=True)
-for ax, (name, R) in zip(axes, (("Baseline: equal speeds", B), ("Trained policy", P))):
+# ------------------------------------------------------------------ 5. path plot
+fig, axes = plt.subplots(1, 3, figsize=(15, 5.5), sharex=True, sharey=True)
+for ax, (name, R) in zip(axes, DRIVERS):
     for i in range(args.robots):
         ax.plot(R["xy"][i, :, 0], R["xy"][i, :, 1], lw=0.7, alpha=0.6,
                 color="tab:red" if R["flipped"][i] else "tab:blue")
@@ -190,7 +256,7 @@ fig.tight_layout()
 fig.savefig(HW8 / "docs" / "media" / f"eval_{TAG}_paths.png", dpi=120)
 
 
-# ------------------------------------------------------------------ 5. videos
+# ------------------------------------------------------------------ 6. videos
 def render(R, i, path):
     """Replay robot i's recorded motion in plain MuJoCo and film it."""
     m = R["model"]
@@ -239,8 +305,8 @@ if not args.no_video:
     err = B["res"]["head"].abs().numpy()
     i = int(np.argmin(np.abs(err - np.median(err))))
     print(f"\nVideo robot #{i}: baseline heading error {B['res']['head'][i]:+.0f} deg, "
-          f"policy {P['res']['head'][i]:+.0f} deg")
-    for name, R in (("baseline", B), ("policy", P)):
+          f"controller {Cn['res']['head'][i]:+.0f} deg, policy {P['res']['head'][i]:+.0f} deg")
+    for name, R in (("baseline", B), ("controller", Cn), ("policy", P)):
         render(R, i, HW8 / "docs" / "media" / f"eval_{TAG}_{name}.mp4")
-    print(f"Saved docs/media/eval_{TAG}_baseline.mp4 and eval_{TAG}_policy.mp4")
+    print(f"Saved docs/media/eval_{TAG}_baseline / _controller / _policy .mp4")
 print(f"Saved docs/eval_results_{TAG}.md and docs/media/eval_{TAG}_paths.png")

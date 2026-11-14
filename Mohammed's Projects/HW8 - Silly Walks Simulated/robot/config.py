@@ -34,12 +34,29 @@ ENCODER_SIGN = {"right": -1, "left": -1}
 # (simulator q = 0).                                     [calibration/leg_zero.py]
 LEG_ZERO_DEG = {"right": 0.0, "left": 0.0}
 # Leg speed (rpm) at each percent command, measured.     [calibration/measure_rpm.py]
-# PLACEHOLDER = a straight line through 120 rpm at 100 %, the policy's assumed top speed.
-# If the measured rpm at 100 % is BELOW the policy's max (120 rpm), the policy can ask for
-# speeds the motor cannot reach: run_policy warns loudly and the policy should be retrained
-# with the real limit.
-RPM_AT_PERCENT = [(0, 0.0), (25, 30.0), (50, 60.0), (75, 90.0), (100, 120.0)]
+# PLACEHOLDER from the motor's published specs (Julian, 2026-11-14; source to be confirmed):
+# no-load speed 322-346 rpm at 4.2 V (full battery) -> a straight line through the middle,
+# 334 rpm at 100 %. Real values will be LOWER under load and with a fuller/emptier battery;
+# Monday's measure_rpm.py replaces this table.
+RPM_AT_PERCENT = [(0, 0.0), (25, 83.5), (50, 167.0), (75, 250.5), (100, 334.0)]
 RPM_MEASURED = False        # set True after measure_rpm.py; run_policy warns while False
+# The policy's top leg speed on THIS robot (rpm). v2 policies output a FRACTION of the top
+# speed: leg speed = POLICY_TOP_RPM * (a + 1) / 2. Training drew each robot's top speed from
+# 80-140 rpm (policy_meta.json "top_speed_rpm_range"), so this must lie inside that range;
+# units.py refuses anything else. The real motor (~330 rpm) is much faster, so a full action
+# becomes only about a third of full power: the legs never go faster than in training.
+# 110 = the middle of the trained range.
+POLICY_TOP_RPM = 110.0
+
+# The motor's published specs (Julian, 2026-11-14; source still to be confirmed), at 4.2 V
+# (full battery). Used ONLY by FakeRobot's "spec motor" robustness tests, never by the
+# real-robot path.  Motor weight 80 g (merlinsbricks.com set database; may include packaging).
+MOTOR_SPEC = {
+    "no_load_rpm": (322.0, 346.0),
+    "rpm_at_50_mNm": (192.0, 220.0),
+    "stall_torque_Nm": (0.148, 0.173),
+    "weight_kg": 0.080,
+}
 # Where the policy's "leg speed" input comes from:
 #   "encoder":   how far the counted encoder position moved over the last 0.05 s (what
 #                certainly happened; but SMOOTHER than training, which used the simulator's

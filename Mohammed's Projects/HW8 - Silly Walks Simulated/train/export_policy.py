@@ -32,7 +32,16 @@ How it works:
        FakeRobot, convert its LEGO-unit readings with robot/units.py, and check they give the
        same 16 numbers; and check the exported policy gives the same outputs.
 
+v2 (walk_straight_v2_task.py, --task v2) differs in what the robot side must know, so the
+meta file then also says: the action means a FRACTION of the motor's top speed
+("action_mode": "top_speed_fraction") and the policy trained on top speeds in
+"top_speed_rpm_range"; the leg-speed input is the encoder average over one decision divided by
+a fixed "leg_speed_norm_rpm"; and the extra randomizations (motor inertia, gearbox friction,
+contact stiffness). The reference recording runs with the training pushes switched off.
+
 Run from the HW8 folder:
+  ../../.venv-mjlab/bin/python train/export_policy.py --task v2 --checkpoint \
+      train/logs/rsl_rl/walk_straight_v2/2026-11-13_18-36-30_v2/model_799.pt
   ../../.venv-mjlab/bin/python train/export_policy.py --checkpoint \
       train/logs/rsl_rl/walk_straight/2026-11-12_22-50-21_first_check/model_299.pt
 """
@@ -54,11 +63,15 @@ sys.path.insert(0, str(TRAIN_DIR))
 
 from mjlab.envs import ManagerBasedRlEnv  # noqa: E402
 from mjlab.rl import MjlabOnPolicyRunner, RslRlVecEnvWrapper  # noqa: E402
-import walk_straight_task as T  # noqa: E402
+import walk_straight_task as T1  # noqa: E402
+import walk_straight_v2_task as T2  # noqa: E402
 
 parser = argparse.ArgumentParser(description="Export the policy for the robot side")
 parser.add_argument("--checkpoint", required=True, help="path to model_<round>.pt")
+parser.add_argument("--task", choices=["v1", "v2"], default="v1")
 args = parser.parse_args()
+V2 = args.task == "v2"
+T = T2 if V2 else T1          # T1 = v1 module; v2 reuses v1's constants where unchanged
 ckpt = Path(args.checkpoint).resolve()
 OUT = HW8 / "robot" / "model"
 TEST_DATA = HW8 / "robot" / "tests" / "data"
@@ -152,8 +165,15 @@ meta = {
     "training_round": int(re.search(r"model_(\d+)", ckpt.name).group(1)),
     "physics_timestep_s": T.TIMESTEP,
     "decision_dt_s": T.DECISION_DT,
+    "task": args.task,
     "max_speed_rpm": T.MAX_SPEED_RPM,
-    "action": "2 numbers (right leg, left leg), clipped to -1..1; leg speed in the upright "
+    "action_mode": "top_speed_fraction" if V2 else "fixed_top_speed",
+    "action": ("2 numbers (right leg, left leg), clipped to -1..1; leg speed in the upright "
+               "direction = (a + 1) / 2 x this motor's TOP speed (-1 = stopped, +1 = top speed). "
+               "Training drew each robot's top speed from top_speed_rpm_range; on a real motor "
+               "the robot side picks one top speed inside that range (config.POLICY_TOP_RPM). "
+               "In the simulator's joint coordinates the upright direction is a NEGATIVE speed.")
+    if V2 else "2 numbers (right leg, left leg), clipped to -1..1; leg speed in the upright "
               "direction = max_speed_rpm * (a + 1) / 2   (-1 = stopped, +1 = full speed). "
               "In the simulator's joint coordinates the upright direction is a NEGATIVE speed.",
     "joints": list(T.JOINTS),
@@ -163,33 +183,48 @@ meta = {
         ["heading", 2, "sin, cos of (heading - start heading), CCW from above positive"],
         ["leg_angle", 4, "sin(q_right), sin(q_left), cos(q_right), cos(q_left); q = joint "
                          "angle, 0 = leg pointing forward (+Y)"],
-        ["leg_speed", 2, "joint speed (right, left) / max speed in rad/s"],
+        ["leg_speed", 2, "(leg angle now - leg angle at the last decision) / decision_dt_s, "
+                         "/ leg_speed_norm_rpm in rad/s (the encoder average)" if V2 else
+                         "joint speed (right, left) / max speed in rad/s"],
         ["last_command", 2, "previous action (right, left), clipped to -1..1"],
     ],
     "body_axes": "x = robot's right, y = robot's front (walking direction), z = up",
-    "flip_angle_deg": math.degrees(T.FLIP_ANGLE),
-    "noise": {"tilt": T.TILT_NOISE, "gyro_rad_s": r(T.GYRO_NOISE),
-              "heading_rad": r(T.HEADING_NOISE), "heading_drift_rad_s": r(T.HEADING_DRIFT),
-              "leg_angle_rad": r(T.LEG_ANGLE_NOISE), "leg_calib_rad": r(T.LEG_CALIB_ERROR),
+    "flip_angle_deg": math.degrees(T1.FLIP_ANGLE),
+    "noise": {"tilt": T1.TILT_NOISE, "gyro_rad_s": r(T1.GYRO_NOISE),
+              "heading_rad": r(T1.HEADING_NOISE), "heading_drift_rad_s": r(T1.HEADING_DRIFT),
+              "leg_angle_rad": r(T1.LEG_ANGLE_NOISE), "leg_calib_rad": r(T1.LEG_CALIB_ERROR),
               "leg_speed_frac": T.LEG_SPEED_NOISE},
-    "randomization": {"motor_speed_scale": T.MOTOR_SPEED_SCALE,
-                      "motor_strength_scale": T.MOTOR_STRENGTH_SCALE,
-                      "friction": T.FRICTION, "mass_scale": T.MASS_SCALE,
-                      "com_shift_x_m": T.COM_SHIFT_X,
-                      "command_delay_physics_steps": T.COMMAND_DELAY_STEPS,
+    "randomization": {"motor_speed_scale": T1.MOTOR_SPEED_SCALE,
+                      "motor_strength_scale": T1.MOTOR_STRENGTH_SCALE,
+                      "friction": T1.FRICTION, "mass_scale": T.MASS_SCALE,
+                      "com_shift_x_m": T1.COM_SHIFT_X,
+                      "command_delay_physics_steps": T1.COMMAND_DELAY_STEPS,
                       "command_delay_hold_prob": 0.95},
-    "reset": {"leg_box_extent_m": [r(v) for v in T.leg_box_extent()],
+    "reset": {"leg_box_extent_m": [r(v) for v in T1.leg_box_extent()],
               "table_height_below_axle_m": T.S.TABLE_HEIGHT_BELOW_AXLE,
               "drop_height_m": T.S.DROP_HEIGHT},
 }
+if V2:
+    meta["top_speed_rpm_range"] = list(T2.TOP_SPEED_RPM)
+    meta["leg_speed_norm_rpm"] = T2.MAX_SPEED_RPM
+    meta["randomization"].update({
+        "armature_kg_m2": list(T2.ARMATURE), "armature_distribution": "log_uniform",
+        "joint_friction_scale": list(T2.JOINT_FRICTION_SCALE),
+        "contact_timeconst_s": list(T2.CONTACT_TIMECONST),
+        "pushes_training_only": {"interval_s": list(T2.PUSH_INTERVAL_S),
+                                 "spin_rad_s": T2.PUSH_SPIN}})
+else:
+    meta["leg_speed_norm_rpm"] = T1.MAX_SPEED_RPM
 (OUT / "policy_meta.json").write_text(json.dumps(meta, indent=2))
 
 # ------------------------------------------------------------------ 5. reference data
 # Same task, but every sensor imperfection switched off, so the recorded inputs are the
 # exact functions of the physical state that the robot-side conversion must reproduce.
 for name in ("HEADING_NOISE", "LEG_ANGLE_NOISE", "LEG_SPEED_NOISE"):
-    setattr(T, name, 0.0)                     # the obs functions read these at call time
+    setattr(T1, name, 0.0)                    # the obs functions read these at call time
+T2.LEG_SPEED_NOISE = 0.0                      # v2's own leg-speed input
 cfg = T.make_env_cfg(num_envs=4)
+cfg.events.pop("push", None)                  # v2: no training pushes in the reference walk
 cfg.observations["actor"].enable_corruption = False   # no tilt/gyro noise
 cfg.seed = 3
 torch.manual_seed(3)
@@ -198,7 +233,7 @@ base = env.unwrapped
 policy = load_runner(env).get_inference_policy(device="cpu")
 # Zero the per-robot sensor errors AFTER the runner is built: building it resets the robots,
 # which draws new errors (found because the first recorded leg angles were 1.7 deg off).
-st = T._state(base)
+st = T._state(base)   # (v2: includes q_prev / top_rpm)
 st["yaw_drift"][:] = 0.0                      # no gyro drift and no encoder calibration
 st["leg_calib"][:] = 0.0                      # error
 origin = base.scene.env_origins.clone()

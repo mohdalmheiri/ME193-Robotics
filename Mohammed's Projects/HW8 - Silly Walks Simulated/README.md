@@ -2,7 +2,7 @@
 
 A LEGO robot with no wheels: one LEGO Education Double Motor with a 1x8 Technic brick "leg" on each motor, so spinning the motors makes it shuffle and flop across the table. The goal is to build a physics model of this robot in MuJoCo, exported straight from its Onshape CAD, check that the model matches the real robot, and later use MJLab to train a policy that makes it walk straight. The interesting part is that this robot's walking comes entirely from contact: the legs reach 48 mm below the axle but the table is only 15 mm below it, so every turn they dig in, lever the body up and throw it forward. The robot only gets anywhere through contact with the table, which makes it a good test of whether the simulator handles contact and friction correctly before any training happens.
 
-*Status: the CAD-to-MuJoCo model is built and checked. The first training run (v1, 300 rounds) cut the median heading error of 100 lopsided robots from 65° to 5° in MJLab, but a check in a slightly different simulator (`robot/check_fake_vs_eval.py`) tipped 6–9 % of robots over, and the simulated motor vibrated ("leg chatter"). A fixed v2 training setup ([train/walk_straight_v2_task.py](train/walk_straight_v2_task.py)) is training. The laptop-side code for the real robot (`robot/`) is built and tested against a simulated "fake robot"; the real robot has not been driven yet. Details in [docs/process_log.md](docs/process_log.md).*
+*Status: the CAD-to-MuJoCo model is built and checked. The v2 policy ([train/walk_straight_v2_task.py](train/walk_straight_v2_task.py), 800 rounds) cuts the mean heading error of 100 lopsided robots from 94° (both motors at one speed) to 7° in MJLab, with no flips, and gives the same result (1 flip in 100) in the robot-side "fake robot" check. It also passes with the real motor's published specs (~334 rpm, 80 g; `docs/spec_motor_check.md`). A simple proportional heading controller goes just as straight (7°, and less sideways drift), but the policy walks 1.9× farther in the same time (`docs/eval_results_v2_dt0.002.md`). The laptop-side code for the real robot (`robot/`) is built and tested; the real robot has not been driven yet (session checklist: [docs/real_robot_checklist.md](docs/real_robot_checklist.md)). Details in [docs/process_log.md](docs/process_log.md).*
 
 ![Six frames of the simulated robot walking toward its leg tips](docs/media/walk_test_frames_-60rpm.png)
 
@@ -84,30 +84,32 @@ HW8 - Silly Walks Simulated/
 | [reward_check.py](train/reward_check.py) | Scores scripted behaviors (walking straight, standing still, off course, lopsided, jerky) to check the reward before training |
 | [walk_straight_v2_task.py](train/walk_straight_v2_task.py) | **v2 training task:** realistic motor inertia (no leg chatter), random motor top speed (80–140 rpm), wider mass range, physics randomization, encoder-average leg-speed input, tilt penalty and random pushes. Each change is explained at the top |
 | [train.py](train/train.py) | Starts a PPO training run (`--task v1/v2`; `--resume <run> --checkpoint <file>` continues a run) |
-| [export_policy.py](train/export_policy.py) | Writes the trained policy, the exact training physics model and the shared numbers into `robot/model/`, and reference data for the robot-side tests; refuses to finish unless the physics model matches MJLab's in 45 fields |
+| [export_policy.py](train/export_policy.py) | (`--task v1/v2`) Writes the trained policy, the exact training physics model and the shared numbers into `robot/model/`, and reference data for the robot-side tests; refuses to finish unless the physics model matches MJLab's in 45 fields |
 | [plot_training.py](train/plot_training.py) | Turns a run's log into reward and drift curves |
-| [evaluate.py](train/evaluate.py) | **Main result:** baseline (equal motor speeds) vs. trained policy on the same 100 lopsided robots: table, path plot, videos |
+| [evaluate.py](train/evaluate.py) | **Main result:** baseline (equal motor speeds) vs. a simple heading controller (gain tuned on other robots) vs. trained policy on the same 100 lopsided robots: table, path plot, videos (`--task v1/v2`) |
 | [speedtest_task.py](train/speedtest_task.py) | Minimal placeholder task used only by the speed test |
 | [speed_test.py](train/speed_test.py) | Measures simulation and training speed on this computer |
 | `logs/` | Training logs and checkpoints (ignored by git) |
 | **robot/** | Runs in the shared `.venv`; no MJLab needed |
-| [config.py](robot/config.py) | **Every real-robot assumption** (motor sides and signs, encoder zero, rpm table, motion-sensor axes and units, leg-speed source, safety limits), each with the calibration that measures it |
+| [config.py](robot/config.py) | **Every real-robot assumption** (motor sides and signs, encoder zero, rpm table, the policy's top speed `POLICY_TOP_RPM`, motion-sensor axes and units, leg-speed source, safety limits), each with the calibration that measures it; plus the motor's published specs (`MOTOR_SPEC`, used only by simulator tests) |
 | [robot_interface.py](robot/robot_interface.py) | The one interface both robots offer: connect, read sensors (in the hub's units), send two speeds, stop |
-| [units.py](robot/units.py) | **The only unit conversion:** hub readings → the policy's 16 inputs, policy output → whole percents |
+| [units.py](robot/units.py) | **The only unit conversion:** hub readings → the policy's 16 inputs, policy output → rpm inside the trained range → whole percents (so the legs never run faster than in training) |
 | [real_robot.py](robot/real_robot.py) | The LEGO Double Motor over Bluetooth (same library calls as MT1) |
-| [fake_robot.py](robot/fake_robot.py) | The training simulator pretending to be the hub: same physics, randomization, delay, noise and units |
+| [fake_robot.py](robot/fake_robot.py) | The training simulator pretending to be the hub: same physics, randomization, delay, noise and units. Options for the real motor's specs (`motor="regulated"` / `"pwm"`) and body mass |
 | [policy.py](robot/policy.py) | The trained network in plain numpy |
 | [run_policy.py](robot/run_policy.py) | **The control loop**, 20 decisions/s, with safety stops (Ctrl-C, lost link, stale sensors, tipping, time limit) and a CSV log per run (`robot/runs/`, not committed) |
 | [check_fake_vs_eval.py](robot/check_fake_vs_eval.py) | 100 fake robots through the real loop, compared with `evaluate.py` |
+| [check_spec_motor.py](robot/check_spec_motor.py) | Robustness test: 100 fake robots with the real motor's published specs and an 80 g body |
 | [compare_drift.py](robot/compare_drift.py) | Real drift-test runs next to the simulated ones: heading curves and a table |
 | `calibration/` | Scripts that make the robot measure itself, each printing the lines to paste into `config.py`: [motor_direction.py](robot/calibration/motor_direction.py), [leg_zero.py](robot/calibration/leg_zero.py), [measure_rpm.py](robot/calibration/measure_rpm.py), [imu_axes.py](robot/calibration/imu_axes.py), [drift_test.py](robot/calibration/drift_test.py) (`--fake` rehearses with the simulator) |
-| [sim_hand_tests.py](robot/sim_hand_tests.py) | Julian's hand tests (weight, axle height, rpm, walking direction, 10 s runs in and out of step) in simulation |
+| [sim_hand_tests.py](robot/sim_hand_tests.py) | Julian's hand tests (weight, axle height, rpm, walking direction, 10 s runs in and out of step) in simulation; `--motor regulated/pwm --percent P` for the spec motor |
 | `tests/` | `test_units.py`, `test_policy.py`, `test_safety.py`, `test_real_robot_dryrun.py`, `test_calibration.py` (PASS/FAIL scripts) and their reference data |
 | `model/` | The exported policy (`policy_weights.npz`, `policy.pt`), the training physics model (`scene.xml`) and `policy_meta.json`. **Generated by export_policy.py** |
 | **docs/** | |
 | [real_robot_checklist.md](docs/real_robot_checklist.md) | **The real-robot session, step by step** |
 | [fake_robot_check.md](docs/fake_robot_check.md) | FakeRobot vs evaluation table |
-| [hand_tests_sim.md](docs/hand_tests_sim.md) | Julian's tests, simulated, with an empty column for his real numbers |
+| [spec_motor_check.md](docs/spec_motor_check.md) | The policy on the real motor's specs (robustness test) |
+| [hand_tests_sim.md](docs/hand_tests_sim.md) | Julian's tests, simulated, with an empty column for his real numbers. `hand_tests_sim_spec_<regulated/pwm>_<35/100>.md`: the same with the spec motor at 35% and 100% |
 | `data/` | Numbers behind the tables and real runs cited in the log |
 | [process_log.md](docs/process_log.md) | What was tried, what failed and what fixed it |
 | `media/` | `rest_pose.png`, plus `walk_test_*.mp4`, `walk_test_frames_*.png` and `walk_trajectory_*.png` for +60 and −60 rpm |
@@ -165,8 +167,8 @@ cd "Mohammed's Projects/HW8 - Silly Walks Simulated"
 ../../.venv-mjlab/bin/python train/reward_check.py        # about 8 minutes
 ../../.venv-mjlab/bin/python train/train.py --envs 256 --iters 300 --name my_run   # about 2.5 h
 ../../.venv-mjlab/bin/python train/plot_training.py
-../../.venv-mjlab/bin/python train/evaluate.py            # newest checkpoint; --timestep 0.001 for the robustness check
-../../.venv-mjlab/bin/python train/export_policy.py --checkpoint <model_N.pt>   # -> robot/model/
+../../.venv-mjlab/bin/python train/evaluate.py --task v2 --checkpoint <model_N.pt>   # --timestep 0.001 for the robustness check
+../../.venv-mjlab/bin/python train/export_policy.py --task v2 --checkpoint <model_N.pt>   # -> robot/model/
 ```
 
 ### Robot side (shared `.venv`)
@@ -176,10 +178,12 @@ cd "Mohammed's Projects/HW8 - Silly Walks Simulated"
 ../../.venv/bin/python robot/tests/test_policy.py          # exported policy matches MJLab
 ../../.venv/bin/python robot/tests/test_safety.py          # every stop works
 ../../.venv/bin/python robot/tests/test_real_robot_dryrun.py
+../../.venv/bin/python robot/tests/test_calibration.py
 ../../.venv/bin/python robot/run_policy.py --fake --realtime   # rehearsal with the simulated robot
 ../../.venv/bin/python robot/run_policy.py --real              # the real Double Motor
 ../../.venv/bin/python robot/check_fake_vs_eval.py
-../../.venv/bin/python robot/sim_hand_tests.py --rpm <measured rpm>
+../../.venv/bin/python robot/check_spec_motor.py           # robustness: the real motor's specs, 80 g
+../../.venv/bin/python robot/sim_hand_tests.py --motor regulated --percent 35 --body-mass-kg 0.080 --tag spec_regulated_35
 ```
 
 ## Tuning and notes

@@ -12,13 +12,19 @@ training.)
                                                    (radians, counter-clockwise positive)
   motor absolutePosition [deg 0..359]        ->    leg angle q: rad, 0 = leg forward,
                                                    sin(qR), sin(qL), cos(qR), cos(qL)
-  motor position [deg, counted] over time    ->    leg speed: rad/s / max speed (120 rpm)
+  motor position [deg, counted] over time    ->    leg speed: rad/s / leg_speed_norm (120 rpm)
   (laptop's own previous command)            ->    last command: -1..1 per leg
 
   policy output a (-1..1 per leg)            ->    percent speed for movement_move_tank
-     rpm = 120 * (a + 1) / 2   (upright direction; -1 = stop, +1 = 120 rpm)
-     percent = from the measured rpm-per-percent table (config.RPM_AT_PERCENT), clipped to
-     100 (and REPORTED when clipped), rounded to a whole percent, given the upright sign.
+     1. rpm FIRST, inside what training used:
+          v2: rpm = config.POLICY_TOP_RPM * (a + 1) / 2, where POLICY_TOP_RPM must lie in the
+              trained top-speed range (80-140 rpm); -1 = stop, +1 = POLICY_TOP_RPM
+          v1: rpm = 120 * (a + 1) / 2 (the one top speed v1 trained with)
+        So the legs can never be asked to go faster than in training, however fast the real
+        motor is. (Not "percent = 100 (a + 1) / 2": on a ~330 rpm motor that would run the
+        legs at up to ~330 rpm, far outside training.)
+     2. percent from the measured rpm-per-percent table (config.RPM_AT_PERCENT), clipped to
+        100 (and REPORTED when clipped), rounded to a whole percent, given the upright sign.
 
 Every robot-specific assumption (axis directions, signs, zero offsets, rpm table) comes
 from config.py.
@@ -34,8 +40,17 @@ import config as C
 
 MODEL_DIR = Path(__file__).resolve().parent / "model"
 META = json.loads((MODEL_DIR / "policy_meta.json").read_text())
-MAX_RPM = META["max_speed_rpm"]                     # policy's full speed (120 rpm)
+V2 = META.get("action_mode") == "top_speed_fraction"
+# Top speeds the policy trained with (v1: a single one)
+TRAINED_TOP_RPM = tuple(META.get("top_speed_rpm_range", (META["max_speed_rpm"],) * 2))
+# MAX_RPM: the leg speed a FULL action (+1) asks for on this robot
+MAX_RPM = float(C.POLICY_TOP_RPM) if V2 else float(META["max_speed_rpm"])
+if not TRAINED_TOP_RPM[0] <= MAX_RPM <= TRAINED_TOP_RPM[1]:
+    raise ValueError(f"config.POLICY_TOP_RPM = {MAX_RPM:g} rpm is outside the top speeds the "
+                     f"policy trained with ({TRAINED_TOP_RPM[0]:g}-{TRAINED_TOP_RPM[1]:g} rpm)")
 MAX_RAD_S = MAX_RPM * 2 * math.pi / 60
+# the leg-speed INPUT's fixed scale (independent of the top speed above)
+LEG_SPEED_NORM_RAD_S = META.get("leg_speed_norm_rpm", META["max_speed_rpm"]) * 2 * math.pi / 60
 SIDES = ("right", "left")                           # policy order: right first, then left
 OBS_SIZE = sum(n for _, n, _ in META["observation_layout"])     # 16
 
@@ -149,7 +164,7 @@ def observation(reading, leg_speed: dict, last_command: np.ndarray) -> np.ndarra
         gyro(reading),                                        # 3
         [math.sin(h), math.cos(h)],                           # 2
         [math.sin(q[0]), math.sin(q[1]), math.cos(q[0]), math.cos(q[1])],   # 4
-        [leg_speed[s] / MAX_RAD_S for s in SIDES],            # 2
+        [leg_speed[s] / LEG_SPEED_NORM_RAD_S for s in SIDES],  # 2
         np.clip(last_command, -1.0, 1.0),                     # 2
     ]).astype(np.float32)
 
@@ -183,11 +198,14 @@ def command(action: np.ndarray):
 
     Returns (percent dict, info dict). info["clipped"] lists the sides whose wanted speed
     was above 100 % (the motor's top speed), with the wanted percent.
+    The action is turned into a leg speed (rpm) FIRST, capped at MAX_RPM, which lies in the
+    trained range; only then into a percent. A faster motor just means a smaller percent.
     """
     a = np.clip(np.asarray(action, dtype=float), -1.0, 1.0)
     pct, info = {}, {"wanted_rpm": {}, "clipped": {}}
     for i, s in enumerate(SIDES):
-        rpm = MAX_RPM * (a[i] + 1.0) / 2.0
+        rpm = MAX_RPM * (a[i] + 1.0) / 2.0           # 0 .. MAX_RPM (inside the trained range)
+        assert 0.0 <= rpm <= TRAINED_TOP_RPM[1] + 1e-9
         p = rpm_to_percent(rpm)
         info["wanted_rpm"][s] = rpm
         if p > 100.0 + 1e-9:
@@ -206,8 +224,11 @@ def action_for_percent(pct: float) -> float:
 def speed_limit_warning():
     """Text warning if the motor can't reach the policy's top speed, else None."""
     if RPM_AT_100 < 0.97 * MAX_RPM:                     # 3 % allowance for measurement rounding
-        return (f"WARNING: the motor reaches only {RPM_AT_100:.0f} rpm at 100 %, but the policy "
-                f"was trained for up to {MAX_RPM:.0f} rpm. Commands above {RPM_AT_100:.0f} rpm "
-                "will be clipped, so the robot cannot do everything the policy learned. "
-                "Retrain with MAX_SPEED_RPM set to the measured limit.")
+        fix = (f"Lower config.POLICY_TOP_RPM to {RPM_AT_100:.0f} or less (the policy trained "
+               f"with {TRAINED_TOP_RPM[0]:.0f}-{TRAINED_TOP_RPM[1]:.0f} rpm)"
+               if V2 and RPM_AT_100 >= TRAINED_TOP_RPM[0] else
+               "Retrain with the measured top speed")
+        return (f"WARNING: the motor reaches only {RPM_AT_100:.0f} rpm at 100 %, but a full "
+                f"action asks for {MAX_RPM:.0f} rpm. Commands above {RPM_AT_100:.0f} rpm "
+                f"will be clipped, so the robot cannot do everything the policy learned. {fix}.")
     return None

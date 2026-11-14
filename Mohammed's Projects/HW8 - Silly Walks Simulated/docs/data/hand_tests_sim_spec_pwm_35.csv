@@ -1,0 +1,43 @@
+test,robot,distance_mm,forward_mm,sideways_mm,turn_deg,max_tilt_deg,flipped
+in step,nominal,472.5,472.5,-0.0,0.0,36.4,False
+in step,lopsided_1,789.0,723.6,314.4,-44.0,34.0,False
+in step,lopsided_2,254.2,-147.4,-207.1,178.0,35.7,False
+in step,lopsided_3,302.5,-159.8,256.9,-192.1,33.7,False
+in step,lopsided_4,377.0,363.3,-100.4,22.4,35.0,False
+in step,lopsided_5,550.2,489.9,250.3,-68.8,34.9,False
+in step,lopsided_6,592.9,567.1,173.1,16.9,33.6,False
+in step,lopsided_7,480.2,470.7,-94.8,18.6,35.3,False
+in step,lopsided_8,223.7,-209.3,78.9,-287.2,34.3,False
+in step,lopsided_9,588.1,389.7,-440.4,115.1,35.0,False
+in step,lopsided_10,563.4,415.7,-380.2,114.7,34.5,False
+in step,lopsided_11,233.5,139.5,187.3,-86.9,34.5,False
+in step,lopsided_12,93.3,93.1,5.0,-394.8,34.0,False
+in step,lopsided_13,463.8,463.8,-3.0,-13.9,34.2,False
+in step,lopsided_14,465.9,465.8,-12.7,13.3,36.1,False
+in step,lopsided_15,651.8,595.0,-266.3,28.2,34.3,False
+in step,lopsided_16,437.3,-156.6,-408.3,194.6,34.3,False
+in step,lopsided_17,293.6,119.8,-268.1,113.4,34.4,False
+in step,lopsided_18,518.9,377.9,-355.6,69.4,33.9,False
+in step,lopsided_19,564.7,460.1,327.3,-77.4,34.3,False
+in step,lopsided_20,897.4,829.2,-343.2,15.6,34.2,False
+out of step,nominal,501.0,497.0,-63.4,4.0,36.8,False
+out of step,lopsided_1,816.4,719.1,386.6,-55.2,33.9,False
+out of step,lopsided_2,380.5,307.5,-224.1,79.6,35.2,False
+out of step,lopsided_3,310.8,-64.7,304.0,-163.2,33.9,False
+out of step,lopsided_4,443.5,334.8,-290.9,52.6,34.7,False
+out of step,lopsided_5,875.5,786.4,-384.9,41.0,29.9,False
+out of step,lopsided_6,586.1,564.4,-158.0,41.2,34.0,False
+out of step,lopsided_7,506.0,487.2,-136.8,18.9,36.1,False
+out of step,lopsided_8,321.4,-65.5,314.7,-231.4,34.1,False
+out of step,lopsided_9,576.0,-7.0,-575.9,176.5,34.6,False
+out of step,lopsided_10,602.5,453.7,-396.4,101.6,34.0,False
+out of step,lopsided_11,357.0,-83.4,347.1,-163.7,34.0,False
+out of step,lopsided_12,31.4,26.9,16.1,-351.7,34.0,False
+out of step,lopsided_13,754.5,747.1,-105.9,1.0,30.3,False
+out of step,lopsided_14,480.3,463.2,-126.7,13.9,36.0,False
+out of step,lopsided_15,892.7,843.8,-291.2,18.6,33.9,False
+out of step,lopsided_16,815.7,447.8,-681.8,147.5,33.9,False
+out of step,lopsided_17,336.6,7.3,-336.5,144.7,34.8,False
+out of step,lopsided_18,871.8,802.5,-340.8,59.8,33.4,False
+out of step,lopsided_19,1109.3,1107.9,-54.8,9.0,28.9,False
+out of step,lopsided_20,843.0,740.5,-402.9,62.8,34.4,False

@@ -71,16 +71,20 @@ def report(res):
           "command, it is only the target.")
     meta = U.META
     if "top_speed_rpm_range" in meta:
+        # v2: the action is turned into an rpm inside the trained range (config.POLICY_TOP_RPM)
+        # BEFORE it becomes a percent, so a FASTER motor is fine (it just uses lower percents).
+        # The motor only has to be able to reach the chosen top speed.
         lo, hi = meta["top_speed_rpm_range"]
-        if not lo <= top <= hi:
-            print(f"\n*** WARNING: {top:.0f} rpm at 100 % is OUTSIDE the {lo:.0f}-{hi:.0f} rpm the "
-                  "policy was trained for. Retrain with the range recentred on this value. ***")
+        if top < lo:
+            print(f"\n*** WARNING: {top:.0f} rpm at 100 % is below the slowest top speed the policy "
+                  f"trained with ({lo:.0f} rpm). Retrain with the range recentred on this value. ***")
+        elif top < 0.97 * C.POLICY_TOP_RPM:
+            print(f"\n*** WARNING: {top:.0f} rpm at 100 % is below config.POLICY_TOP_RPM = "
+                  f"{C.POLICY_TOP_RPM:.0f}: set POLICY_TOP_RPM to {min(top, hi):.0f} or less. ***")
         else:
-            print(f"\nOK: {top:.0f} rpm at 100 % is inside the trained range {lo:.0f}-{hi:.0f} rpm.")
-    elif top < 0.97 * meta["max_speed_rpm"]:          # 3 % allowance for measurement rounding
-        print(f"\n*** WARNING: the motor reaches only {top:.0f} rpm at 100 %, but this policy was "
-              f"trained for up to {meta['max_speed_rpm']:.0f} rpm. Commands above {top:.0f} rpm will "
-              "be clipped. Retrain with MAX_SPEED_RPM set to the measured value. ***")
+            print(f"\nOK: the motor reaches {top:.0f} rpm at 100 %; a full action asks for "
+                  f"POLICY_TOP_RPM = {C.POLICY_TOP_RPM:.0f} rpm (trained range {lo:.0f}-{hi:.0f}), "
+                  f"about {100 * C.POLICY_TOP_RPM / top:.0f} % power.")
     print("\nPaste into robot/config.py:")
     config_line(f"RPM_AT_PERCENT = {table}")
     config_line("RPM_MEASURED = True")

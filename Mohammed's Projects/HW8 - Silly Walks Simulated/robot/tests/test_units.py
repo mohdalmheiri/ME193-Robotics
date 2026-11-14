@@ -25,7 +25,11 @@ How it works:
   are really used consistently, not just all left at their defaults.
 
   Finally it checks the command path: action -> units.command() -> percent -> the leg speed
-  the fake motor runs, against training's  -120 rpm * (a + 1) / 2.
+  the fake motor runs, against training's  -top speed * (a + 1) / 2  (v2: top speed =
+  config.POLICY_TOP_RPM, inside the trained 80-140 rpm), and that the real legs can NEVER be
+  asked to go faster than training's fastest top speed, even on the ~330 rpm spec motor
+  (unit check over all actions, an end-to-end check with a spec-motor FakeRobot on a stand,
+  and units.py refusing a POLICY_TOP_RPM outside the trained range).
 
 Run from the HW8 folder:  ../../.venv/bin/python robot/tests/test_units.py
 """
@@ -94,23 +98,30 @@ def compare(obs, label):
           f"max diff {err[..., 8:12].max():.4f}")
     check(f"{label}: last command matches", err[..., 14:16].max() < 1e-6,
           f"max diff {err[..., 14:16].max():.2e}")
-    if C.LEG_SPEED_SOURCE == "hub_speed":
-        # The hub's speed byte holds -127..127 %, i.e. at most 1.27 x full speed; training's
-        # spikes beyond that cannot be reported by ANY hub, so they are counted separately.
+    e = err[..., 12:14]
+    if U.V2 and C.LEG_SPEED_SOURCE == "encoder":
+        # v2 TRAINED on the encoder average (leg angle change over one decision / 0.05 s), so
+        # this must match up to the encoder's whole degrees: two rounded readings differ from
+        # the true change by up to 1 deg -> 1 deg / 0.05 s / the input's 120 rpm scale.
+        one_deg = math.radians(1.0) / U.META["decision_dt_s"] / U.LEG_SPEED_NORM_RAD_S + 1e-6
+        check(f"{label}: leg speed (encoder average) matches training's v2 input", e.max() <= one_deg,
+              f"max diff {e.max():.4f}; whole-degree encoder steps allow {one_deg:.4f}")
+    elif not U.V2 and C.LEG_SPEED_SOURCE == "hub_speed":
+        # v1 trained on the instantaneous speed. The hub's speed byte holds -127..127 %, i.e.
+        # at most 1.27 x full speed; training's spikes beyond that cannot be reported by ANY
+        # hub, so they are counted separately.
         ok_range = np.abs(ref[..., 12:14]) <= 1.27
-        e = err[..., 12:14][ok_range]
+        e = e[ok_range]
         one_pct = 0.005 + 1e-6                                 # whole-percent rounding (half of 1 %)
         check(f"{label}: leg speed via the hub's speed report matches training", e.max() <= one_pct,
               f"max diff {e.max():.4f} of full speed; rounding allows {one_pct:.4f}; "
               f"{(~ok_range).mean() * 100:.1f} % of training values were beyond what a hub can report")
     else:
-        # KNOWN GAP, measured not judged: the encoder gives the AVERAGE speed over the last
-        # 0.05 s, training gave the instantaneous (spiky) simulator speed.
-        e = err[..., 12:14]
-        print(f"  [INFO] {label}: leg speed via encoder average differs from training's "
-              f"instantaneous speed: median {np.median(e):.3f}, 90th percentile "
-              f"{np.percentile(e, 90):.3f} of full speed (training noise was 5 %). Effect on "
-              "walking: see check_fake_vs_eval.py")
+        # KNOWN GAP, measured not judged: this leg-speed source is not what this policy trained on
+        print(f"  [INFO] {label}: leg speed from '{C.LEG_SPEED_SOURCE}' is not the source this "
+              f"policy trained on; differs by median {np.median(e):.3f}, 90th percentile "
+              f"{np.percentile(e, 90):.3f} of the input scale. Effect on walking: see "
+              "check_fake_vs_eval.py")
     return err
 
 
@@ -127,7 +138,7 @@ C.BODY_FROM_HUB = {"x": "-y", "y": "+x", "z": "+z"}
 C.ANGLE_UNIT_DEG, C.PITCH_SIGN, C.ROLL_SIGN, C.YAW_SIGN, C.GYRO_SIGN = 0.1, -1, -1, -1, -1
 C.ENCODER_SIGN = {"right": +1, "left": -1}
 C.LEG_ZERO_DEG = {"right": 123.0, "left": 300.0}
-C.LEG_SPEED_SOURCE = "hub_speed"
+C.LEG_SPEED_SOURCE = "encoder" if U.V2 else "hub_speed"     # the source this policy trained on
 C.UPRIGHT_PERCENT_SIGN = {"right": -1, "left": +1}
 importlib.reload(U)                       # units.py rebuilds its axis matrix from config
 compare(fake_readings_for_reference(), "different setup")
@@ -146,25 +157,68 @@ for a in np.linspace(-1.2, 1.2, 49):             # includes values outside -1..1
         training_speed = -U.MAX_RAD_S * (ai + 1) / 2              # MJLab action term
         fake_speed = fake._pct_to_joint_speed(s, pct[s])
         worst = max(worst, abs(fake_speed - training_speed))
-one_pct = U.MAX_RAD_S / 100
-check("leg speed from percent matches training's speed for the same action", worst <= one_pct / 2 + 1e-9,
+half_pct = U.RPM_AT_100 / 200 * 2 * math.pi / 60           # half of 1 %, in rad/s
+check("leg speed from percent matches training's speed for the same action", worst <= half_pct + 1e-9,
       f"worst {worst * 60 / (2 * math.pi):.2f} rpm; whole-percent rounding allows "
-      f"{U.MAX_RPM / 200:.2f} rpm")
-_, info = U.command(np.array([1.0, 1.0]))
-check("full action (+1) is exactly 100 %, not clipped, with the placeholder table",
-      U.command(np.array([1.0, 1.0]))[0]["right"] == 100 * C.UPRIGHT_PERCENT_SIGN["right"] and not info["clipped"])
+      f"{U.RPM_AT_100 / 200:.2f} rpm (1 % = {U.RPM_AT_100 / 100:.2f} rpm with this table)")
 
-print("\n4. Speed-limit warning (addition a): a motor slower than 120 rpm must be reported")
+print("\n3b. The real legs never go faster than in training (v2: action = fraction of top speed)")
+print(f"    policy {U.META.get('task', 'v1')}, trained top speeds {U.TRAINED_TOP_RPM[0]:.0f}-"
+      f"{U.TRAINED_TOP_RPM[1]:.0f} rpm, POLICY_TOP_RPM {U.MAX_RPM:.0f}, rpm table top {U.RPM_AT_100:.0f} rpm")
+fastest = 0.0
+for a in np.linspace(-1.5, 1.5, 301):
+    pct, info = U.command(np.array([a, a]))
+    for s_ in ("right", "left"):
+        fastest = max(fastest, U.percent_to_rpm(abs(pct[s_])))
+check("no action asks the motor for more than POLICY_TOP_RPM (+ whole-percent rounding)",
+      fastest <= U.MAX_RPM + U.RPM_AT_100 / 200 + 1e-9, f"fastest {fastest:.1f} rpm")
+check("... and so never more than the trained range's top", fastest <= U.TRAINED_TOP_RPM[1],
+      f"{fastest:.1f} <= {U.TRAINED_TOP_RPM[1]:.0f} rpm")
+pct_full = U.command(np.array([1.0, 1.0]))[0]["right"] * C.UPRIGHT_PERCENT_SIGN["right"]
+expect = round(100 * U.MAX_RPM / U.RPM_AT_100)
+check("full action (+1) gives POLICY_TOP_RPM's percent, not 100 %", pct_full == expect,
+      f"{pct_full} % (= {U.MAX_RPM:.0f} of {U.RPM_AT_100:.0f} rpm); "
+      f"the naive 100 x (a + 1) / 2 would send 100 % = {U.RPM_AT_100:.0f} rpm")
+# end to end: a spec-motor FakeRobot on a stand (legs free = the fastest they can go), full action
+for mode in ("regulated", "pwm"):
+    fake = F.FakeRobot(seed=0, randomize=False, noise=False, start_q=[0.0, 0.0], motor=mode)
+    fake.connect()
+    fake.on_stand()
+    pct, _ = U.command(np.array([1.0, 1.0]))
+    fake.send(pct["right"], pct["left"])
+    fake.wait_until(1.0)                                    # spin up
+    q0 = {s_: fake.d.qpos[fake.qadr[s_]] for s_ in ("right", "left")}
+    fake.wait_until(3.0)
+    rpm = max(abs(fake.d.qpos[fake.qadr[s_]] - q0[s_]) / 2.0 * 60 / (2 * math.pi) for s_ in ("right", "left"))
+    fake.close()
+    check(f"spec motor ({mode}), legs free, full action: legs run at about POLICY_TOP_RPM, not ~330 rpm",
+          abs(rpm - U.MAX_RPM) <= 0.05 * U.MAX_RPM and rpm <= U.TRAINED_TOP_RPM[1], f"{rpm:.1f} rpm")
+# a POLICY_TOP_RPM outside the trained range is refused
+saved_top = C.POLICY_TOP_RPM
+for bad in (U.TRAINED_TOP_RPM[1] + 60, U.TRAINED_TOP_RPM[0] - 30):
+    if U.V2:
+        C.POLICY_TOP_RPM = bad
+        try:
+            importlib.reload(U)
+            refused = False
+        except ValueError:
+            refused = True
+        C.POLICY_TOP_RPM = saved_top
+        importlib.reload(U)
+        check(f"units.py refuses POLICY_TOP_RPM = {bad:.0f} (outside the trained range)", refused)
+
+print("\n4. Speed-limit warning (addition a): a motor slower than a full action asks for must be reported")
 saved_table = C.RPM_AT_PERCENT
 C.RPM_AT_PERCENT = [(0, 0.0), (50, 50.0), (100, 100.0)]       # pretend: only 100 rpm at 100 %
 importlib.reload(U)
 pct, info = U.command(np.array([1.0, 0.0]))
-check("warning text appears when 100 % gives less than 120 rpm", U.speed_limit_warning() is not None)
+check(f"warning text appears when 100 % gives less than {U.MAX_RPM:.0f} rpm", U.speed_limit_warning() is not None,
+      U.speed_limit_warning())
 check("a full-speed action is clipped to 100 % and reported", pct["right"] == 100 * C.UPRIGHT_PERCENT_SIGN["right"]
       and "right" in info["clipped"], f"wanted {info['clipped'].get('right', 0):.0f} %")
 C.RPM_AT_PERCENT = saved_table
 importlib.reload(U)
-check("no warning with the 120 rpm placeholder table", U.speed_limit_warning() is None)
+check(f"no warning with the placeholder table ({U.RPM_AT_100:.0f} rpm at 100 %)", U.speed_limit_warning() is None)
 
 print("\n5. Physical sanity: a level robot at rest")
 fake = F.FakeRobot(seed=0, randomize=False, noise=False, start_q=[0.0, 0.0], start_yaw=0.3)

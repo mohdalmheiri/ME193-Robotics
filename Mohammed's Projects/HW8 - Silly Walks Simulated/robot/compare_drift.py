@@ -36,7 +36,9 @@ TEST = {"in": "in step", "out": "out of step"}
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--real", nargs="+", required=True, help="drift_test CSV file(s)")
+ap.add_argument("--sim", default=str(SIM), help="sim heading CSV (e.g. docs/data/hand_tests_sim_heading_spec_100.csv)")
 a = ap.parse_args()
+SIM = Path(a.sim)
 
 sim = defaultdict(lambda: defaultdict(list))          # test -> robot -> rows
 for row in csv.DictReader(open(SIM)):

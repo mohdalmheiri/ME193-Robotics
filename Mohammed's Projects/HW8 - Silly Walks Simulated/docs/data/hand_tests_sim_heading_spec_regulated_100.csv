@@ -1,0 +1,1052 @@
+test,robot,t,heading_deg,sideways_mm,forward_mm
+in step,nominal,0.0,0.0,0.0,0.0
+in step,nominal,0.05,0.0,-0.0,-0.1
+in step,nominal,0.1,0.0,-0.0,-4.6
+in step,nominal,0.15,0.0,-0.0,-8.8
+in step,nominal,0.2,0.0,-0.0,-6.5
+in step,nominal,0.25,0.0,-0.0,2.5
+in step,nominal,0.3,0.0,-0.0,17.2
+in step,nominal,0.35,-0.0,-0.0,26.1
+in step,lopsided_1,0.0,0.0,0.0,0.0
+in step,lopsided_1,0.05,-2.99,0.5,1.9
+in step,lopsided_1,0.1,-14.64,3.1,2.2
+in step,lopsided_1,0.15,-25.12,7.0,4.0
+in step,lopsided_1,0.2,-31.79,15.6,9.2
+in step,lopsided_1,0.25,-36.67,27.2,18.3
+in step,lopsided_1,0.3,-29.76,33.5,27.5
+in step,lopsided_1,0.35,-26.89,41.1,39.5
+in step,lopsided_1,0.4,-26.81,48.6,54.2
+in step,lopsided_1,0.45,-25.67,52.9,64.0
+in step,lopsided_1,0.5,-21.41,52.8,68.6
+in step,lopsided_1,0.55,-17.88,53.7,77.2
+in step,lopsided_1,0.6,-16.97,57.0,90.3
+in step,lopsided_1,0.65,-14.92,61.4,101.9
+in step,lopsided_1,0.7,-7.28,63.5,109.3
+in step,lopsided_1,0.75,-4.54,65.1,120.2
+in step,lopsided_1,0.8,-4.6,66.4,135.1
+in step,lopsided_1,0.85,-3.44,69.1,149.8
+in step,lopsided_1,0.9,3.57,71.0,159.9
+in step,lopsided_1,0.95,6.26,70.8,173.7
+in step,lopsided_1,1.0,6.21,69.0,190.3
+in step,lopsided_1,1.05,8.0,68.0,202.9
+in step,lopsided_1,1.1,16.43,66.2,210.3
+in step,lopsided_1,1.15,21.86,62.6,220.4
+in step,lopsided_1,1.2,28.01,52.8,230.8
+in step,lopsided_1,1.25,30.2,44.6,242.9
+in step,lopsided_1,1.3,35.86,36.9,252.8
+in step,lopsided_1,1.35,36.63,27.4,265.6
+in step,lopsided_1,1.4,36.58,18.2,278.4
+in step,lopsided_1,1.45,38.89,17.1,280.4
+in step,lopsided_1,1.5,39.87,16.4,282.1
+in step,lopsided_1,1.55,39.8,11.4,288.2
+in step,lopsided_1,1.6,39.79,2.5,298.9
+in step,lopsided_1,1.65,42.02,-5.0,307.5
+in step,lopsided_1,1.7,47.54,-12.1,314.8
+in step,lopsided_1,1.75,51.78,-23.8,322.2
+in step,lopsided_1,1.8,52.75,-38.0,331.9
+in step,lopsided_1,1.85,54.53,-42.1,335.7
+in step,lopsided_1,1.9,57.28,-46.2,338.3
+in step,lopsided_1,1.95,57.28,-53.7,343.2
+in step,lopsided_1,2.0,57.27,-66.1,351.2
+in step,lopsided_1,2.05,55.59,-80.2,360.7
+in step,lopsided_1,2.1,56.55,-95.0,369.8
+in step,lopsided_1,2.15,57.29,-111.4,380.2
+in step,lopsided_1,2.2,56.78,-125.9,391.7
+in step,lopsided_1,2.25,67.49,-134.6,398.8
+in step,lopsided_1,2.3,74.44,-144.7,406.2
+in step,lopsided_1,2.35,74.63,-158.8,411.3
+in step,lopsided_1,2.4,74.44,-171.6,415.4
+in step,lopsided_1,2.45,78.71,-175.4,414.7
+in step,lopsided_1,2.5,81.46,-180.5,415.2
+in step,lopsided_1,2.55,81.32,-189.2,416.6
+in step,lopsided_1,2.6,81.22,-204.9,419.0
+in step,lopsided_1,2.65,82.78,-224.1,424.7
+in step,lopsided_1,2.7,85.98,-244.8,430.0
+in step,lopsided_1,2.75,86.87,-266.6,432.3
+in step,lopsided_1,2.8,87.42,-281.1,433.0
+in step,lopsided_1,2.85,92.73,-288.0,431.1
+in step,lopsided_1,2.9,95.89,-299.0,428.7
+in step,lopsided_1,2.95,96.55,-313.7,426.5
+in step,lopsided_1,3.0,98.62,-323.5,425.8
+in step,lopsided_1,3.05,105.78,-328.2,424.4
+in step,lopsided_1,3.1,111.67,-335.7,419.6
+in step,lopsided_1,3.15,115.73,-345.8,411.3
+in step,lopsided_1,3.2,117.91,-352.8,405.8
+in step,lopsided_1,3.25,123.72,-353.7,402.4
+in step,lopsided_1,3.3,125.31,-358.3,398.6
+in step,lopsided_1,3.35,125.32,-366.1,393.1
+in step,lopsided_1,3.4,123.08,-381.0,383.4
+in step,lopsided_1,3.45,124.97,-395.7,370.8
+in step,lopsided_1,3.5,126.49,-412.5,357.4
+in step,lopsided_1,3.55,127.97,-427.5,344.0
+in step,lopsided_1,3.6,132.61,-429.7,339.9
+in step,lopsided_1,3.65,141.0,-429.4,337.4
+in step,lopsided_1,3.7,146.97,-431.4,332.8
+in step,lopsided_1,3.75,153.31,-431.7,322.7
+in step,lopsided_1,3.8,153.04,-438.0,306.4
+in step,lopsided_1,3.85,152.34,-443.2,289.6
+in step,lopsided_1,3.9,153.46,-450.9,271.5
+in step,lopsided_1,3.95,155.58,-457.4,252.9
+in step,lopsided_1,4.0,159.94,-460.2,245.9
+in step,lopsided_1,4.05,165.49,-462.6,238.4
+in step,lopsided_1,4.1,165.32,-466.0,226.2
+in step,lopsided_1,4.15,164.41,-470.9,211.2
+in step,lopsided_1,4.2,170.79,-473.1,199.8
+in step,lopsided_1,4.25,176.26,-475.2,187.8
+in step,lopsided_1,4.3,176.49,-476.2,172.3
+in step,lopsided_1,4.35,177.11,-476.8,160.2
+in step,lopsided_1,4.4,181.64,-474.3,156.6
+in step,lopsided_1,4.45,184.02,-472.9,150.8
+in step,lopsided_1,4.5,184.0,-472.1,139.0
+in step,lopsided_1,4.55,183.99,-471.2,125.7
+in step,lopsided_1,4.6,188.12,-468.2,120.4
+in step,lopsided_1,4.65,190.8,-465.5,112.6
+in step,lopsided_1,4.7,191.25,-462.7,99.9
+in step,lopsided_1,4.75,191.56,-459.9,86.8
+in step,lopsided_1,4.8,197.51,-455.1,81.5
+in step,lopsided_1,4.85,203.67,-449.9,74.0
+in step,lopsided_1,4.9,209.67,-440.5,64.9
+in step,lopsided_1,4.95,211.17,-432.3,55.2
+in step,lopsided_1,5.0,212.52,-427.7,52.3
+in step,lopsided_1,5.05,214.17,-422.4,46.6
+in step,lopsided_1,5.1,214.27,-416.0,37.3
+in step,lopsided_1,5.15,212.75,-407.1,22.7
+in step,lopsided_1,5.2,214.97,-399.3,14.0
+in step,lopsided_1,5.25,215.08,-393.7,4.4
+in step,lopsided_1,5.3,219.49,-385.2,-3.9
+in step,lopsided_1,5.35,221.19,-372.6,-16.9
+in step,lopsided_1,5.4,208.2,-360.4,-38.3
+in step,lopsided_1,5.45,201.64,-347.8,-60.6
+in step,lopsided_1,5.5,201.04,-339.5,-76.5
+in step,lopsided_1,5.55,197.34,-338.5,-82.4
+in step,lopsided_1,5.6,196.1,-337.0,-86.6
+in step,lopsided_1,5.65,195.01,-335.3,-96.0
+in step,lopsided_1,5.7,194.48,-331.8,-109.9
+in step,lopsided_1,5.75,195.18,-331.3,-121.1
+in step,lopsided_1,5.8,202.31,-330.7,-128.8
+in step,lopsided_1,5.85,204.03,-326.6,-139.3
+in step,lopsided_1,5.9,204.02,-320.3,-153.4
+in step,lopsided_1,5.95,203.84,-314.8,-168.5
+in step,lopsided_1,6.0,209.63,-309.2,-180.7
+in step,lopsided_1,6.05,213.38,-300.5,-194.6
+in step,lopsided_1,6.1,215.78,-288.5,-208.5
+in step,lopsided_1,6.15,219.95,-283.2,-216.0
+in step,lopsided_1,6.2,227.14,-278.7,-222.1
+in step,lopsided_1,6.25,233.24,-269.5,-228.0
+in step,lopsided_1,6.3,237.78,-254.9,-233.3
+in step,lopsided_1,6.35,239.92,-243.4,-241.9
+in step,lopsided_1,6.4,244.81,-234.4,-249.2
+in step,lopsided_1,6.45,246.27,-222.1,-255.3
+in step,lopsided_1,6.5,246.31,-206.2,-262.4
+in step,lopsided_1,6.55,243.94,-187.7,-271.5
+in step,lopsided_1,6.6,245.0,-168.2,-280.1
+in step,lopsided_1,6.65,246.4,-148.2,-288.1
+in step,lopsided_1,6.7,247.67,-136.1,-294.8
+in step,lopsided_1,6.75,251.79,-133.7,-298.2
+in step,lopsided_1,6.8,253.09,-128.2,-301.4
+in step,lopsided_1,6.85,252.95,-117.5,-304.6
+in step,lopsided_1,6.9,251.61,-103.2,-310.3
+in step,lopsided_1,6.95,255.65,-95.8,-313.9
+in step,lopsided_1,7.0,258.68,-85.8,-317.4
+in step,lopsided_1,7.05,260.68,-72.2,-318.4
+in step,lopsided_1,7.1,258.99,-55.1,-322.4
+in step,lopsided_1,7.15,266.01,-40.7,-323.5
+in step,lopsided_1,7.2,270.09,-23.9,-325.4
+in step,lopsided_1,7.25,272.32,-7.3,-324.5
+in step,lopsided_1,7.3,273.69,-3.0,-323.2
+in step,lopsided_1,7.35,277.07,-5.6,-322.1
+in step,lopsided_1,7.4,279.27,-3.6,-321.0
+in step,lopsided_1,7.45,279.29,3.2,-319.9
+in step,lopsided_1,7.5,277.38,19.1,-318.3
+in step,lopsided_1,7.55,278.04,37.4,-313.7
+in step,lopsided_1,7.6,279.79,58.1,-310.0
+in step,lopsided_1,7.65,281.41,77.2,-305.4
+in step,lopsided_1,7.7,284.16,84.7,-303.6
+in step,lopsided_1,7.75,285.01,89.3,-302.6
+in step,lopsided_1,7.8,285.14,98.7,-300.0
+in step,lopsided_1,7.85,285.14,112.7,-296.2
+in step,lopsided_1,7.9,284.34,123.9,-293.2
+in step,lopsided_1,7.95,283.07,129.8,-291.1
+in step,lopsided_1,8.0,283.56,139.0,-288.5
+in step,lopsided_1,8.05,283.56,150.7,-285.6
+in step,lopsided_1,8.1,280.27,170.1,-282.1
+in step,lopsided_1,8.15,275.45,189.5,-277.6
+in step,lopsided_1,8.2,275.04,211.0,-273.7
+in step,lopsided_1,8.25,274.57,228.6,-273.2
+in step,lopsided_1,8.3,279.32,232.3,-274.3
+in step,lopsided_1,8.35,283.37,235.3,-275.5
+in step,lopsided_1,8.4,283.68,242.6,-273.9
+in step,lopsided_1,8.45,283.68,255.7,-270.7
+in step,lopsided_1,8.5,284.97,273.5,-268.4
+in step,lopsided_1,8.55,290.89,291.6,-265.2
+in step,lopsided_1,8.6,292.5,310.0,-259.4
+in step,lopsided_1,8.65,291.48,325.5,-255.1
+in step,lopsided_1,8.7,298.51,330.3,-252.7
+in step,lopsided_1,8.75,303.75,336.0,-249.7
+in step,lopsided_1,8.8,307.97,343.1,-241.5
+in step,lopsided_1,8.85,308.51,353.4,-232.7
+in step,lopsided_1,8.9,315.15,357.4,-226.6
+in step,lopsided_1,8.95,321.61,362.1,-219.3
+in step,lopsided_1,9.0,324.42,368.0,-208.1
+in step,lopsided_1,9.05,326.6,373.9,-198.9
+in step,lopsided_1,9.1,331.38,374.3,-199.3
+in step,lopsided_1,9.15,336.47,374.2,-199.6
+in step,lopsided_1,9.2,336.68,374.1,-199.6
+in step,lopsided_1,9.25,336.68,374.9,-197.8
+in step,lopsided_1,9.3,336.68,379.0,-188.2
+in step,lopsided_1,9.35,336.94,385.5,-172.6
+in step,lopsided_1,9.4,337.07,392.5,-156.0
+in step,lopsided_1,9.45,336.23,400.8,-149.8
+in step,lopsided_1,9.5,340.32,406.2,-147.2
+in step,lopsided_1,9.55,341.68,410.4,-139.5
+in step,lopsided_1,9.6,342.92,413.2,-126.7
+in step,lopsided_1,9.65,341.75,419.3,-115.8
+in step,lopsided_1,9.7,348.57,422.7,-109.1
+in step,lopsided_1,9.75,350.01,425.5,-98.5
+in step,lopsided_1,9.8,349.14,428.9,-84.4
+in step,lopsided_1,9.85,348.04,433.6,-69.9
+in step,lopsided_1,9.9,356.91,435.5,-61.4
+in step,lopsided_1,9.95,360.02,439.9,-51.6
+in step,lopsided_1,10.0,365.16,437.9,-41.1
+in step,lopsided_2,0.0,0.0,0.0,0.0
+in step,lopsided_2,0.05,3.44,-4.1,-3.5
+in step,lopsided_2,0.1,16.4,-13.3,-12.4
+in step,lopsided_2,0.15,25.72,-18.3,-13.2
+in step,lopsided_2,0.2,30.49,-26.1,-7.2
+in step,lopsided_2,0.25,37.68,-40.5,-3.0
+in step,lopsided_2,0.3,40.4,-49.8,-4.7
+in step,lopsided_2,0.35,24.87,-53.5,-7.9
+in step,lopsided_3,0.0,0.0,0.0,0.0
+in step,lopsided_3,0.05,-1.49,0.9,-3.4
+in step,lopsided_3,0.1,-2.85,2.0,-13.8
+in step,lopsided_3,0.15,-1.74,1.2,-19.3
+in step,lopsided_3,0.2,-1.75,1.2,-20.1
+in step,lopsided_3,0.25,-1.74,1.4,-11.9
+in step,lopsided_3,0.3,2.19,-0.8,7.5
+in step,lopsided_3,0.35,5.93,-4.6,24.4
+in step,lopsided_3,0.4,3.66,-2.9,35.3
+in step,lopsided_3,0.45,-4.02,5.9,35.6
+in step,lopsided_3,0.5,-12.57,9.8,32.6
+in step,lopsided_3,0.55,-20.8,14.3,33.2
+in step,lopsided_3,0.6,-23.0,18.2,40.3
+in step,lopsided_3,0.65,-17.74,21.0,58.8
+in step,lopsided_3,0.7,2.84,11.9,79.3
+in step,lopsided_3,0.75,10.59,8.1,93.8
+in step,lopsided_3,0.8,-0.17,27.8,99.0
+in step,lopsided_3,0.85,-15.63,43.5,94.8
+in step,lopsided_3,0.9,-48.2,55.1,85.8
+in step,lopsided_4,0.0,0.0,0.0,0.0
+in step,lopsided_4,0.05,2.96,-2.0,-0.4
+in step,lopsided_4,0.1,11.35,-6.3,-5.3
+in step,lopsided_4,0.15,18.29,-11.3,-6.4
+in step,lopsided_4,0.2,18.88,-14.1,1.2
+in step,lopsided_4,0.25,21.67,-20.6,12.5
+in step,lopsided_4,0.3,20.08,-25.5,15.1
+in step,lopsided_4,0.35,7.58,-29.4,14.1
+in step,lopsided_5,0.0,0.0,0.0,0.0
+in step,lopsided_5,0.05,4.74,-4.6,0.6
+in step,lopsided_5,0.1,17.9,-14.5,0.3
+in step,lopsided_5,0.15,8.12,-10.2,0.9
+in step,lopsided_5,0.2,1.4,-7.1,6.7
+in step,lopsided_5,0.25,2.83,-6.4,20.6
+in step,lopsided_5,0.3,26.02,-21.8,37.3
+in step,lopsided_5,0.35,25.68,-20.3,52.1
+in step,lopsided_5,0.4,-21.39,-9.5,64.0
+in step,lopsided_6,0.0,0.0,0.0,0.0
+in step,lopsided_6,0.05,-2.05,1.7,-0.1
+in step,lopsided_6,0.1,-10.08,5.7,-3.1
+in step,lopsided_6,0.15,-13.19,8.5,-0.5
+in step,lopsided_6,0.2,-13.26,10.9,9.7
+in step,lopsided_6,0.25,-15.15,16.6,21.4
+in step,lopsided_6,0.3,-12.46,21.2,26.3
+in step,lopsided_6,0.35,-11.39,24.8,32.6
+in step,lopsided_6,0.4,-10.62,25.1,41.5
+in step,lopsided_6,0.45,-10.56,27.8,56.6
+in step,lopsided_6,0.5,-20.1,37.8,75.2
+in step,lopsided_6,0.55,-26.82,47.9,94.3
+in step,lopsided_6,0.6,-29.33,58.8,113.2
+in step,lopsided_6,0.65,-31.64,71.7,123.6
+in step,lopsided_6,0.7,-28.01,81.6,126.2
+in step,lopsided_6,0.75,-23.17,87.9,129.3
+in step,lopsided_6,0.8,-21.85,89.7,134.3
+in step,lopsided_6,0.85,-21.96,93.0,142.3
+in step,lopsided_6,0.9,-21.9,100.0,159.7
+in step,lopsided_6,0.95,-21.08,106.7,179.5
+in step,lopsided_6,1.0,-17.89,112.7,198.7
+in step,lopsided_6,1.05,-25.26,123.7,208.1
+in step,lopsided_6,1.1,-27.43,129.9,215.5
+in step,lopsided_6,1.15,-30.04,138.4,226.1
+in step,lopsided_6,1.2,-30.97,147.3,240.2
+in step,lopsided_6,1.25,-43.38,166.6,245.5
+in step,lopsided_6,1.3,-58.66,180.4,245.6
+in step,lopsided_6,1.35,-118.54,189.0,243.5
+in step,lopsided_7,0.0,0.0,0.0,0.0
+in step,lopsided_7,0.05,-2.25,1.7,1.6
+in step,lopsided_7,0.1,-15.66,9.7,1.5
+in step,lopsided_7,0.15,-27.83,13.9,-0.4
+in step,lopsided_7,0.2,-34.02,19.5,3.2
+in step,lopsided_7,0.25,-40.5,31.8,9.6
+in step,lopsided_7,0.3,-57.53,48.3,10.9
+in step,lopsided_7,0.35,-81.73,64.4,9.1
+in step,lopsided_7,0.4,-89.72,81.8,10.5
+in step,lopsided_7,0.45,-98.13,93.7,5.2
+in step,lopsided_7,0.5,-112.25,92.0,-15.6
+in step,lopsided_7,0.55,-161.62,83.0,-33.1
+in step,lopsided_8,0.0,0.0,0.0,0.0
+in step,lopsided_8,0.05,0.27,-0.1,2.0
+in step,lopsided_8,0.1,1.48,-0.3,1.8
+in step,lopsided_8,0.15,2.57,-0.7,4.5
+in step,lopsided_8,0.2,2.56,-1.1,13.4
+in step,lopsided_8,0.25,1.17,-1.0,27.9
+in step,lopsided_8,0.3,-4.61,-1.0,35.2
+in step,lopsided_8,0.35,-11.04,-2.3,38.7
+in step,lopsided_9,0.0,0.0,0.0,0.0
+in step,lopsided_9,0.05,-2.64,3.0,0.7
+in step,lopsided_9,0.1,-10.61,10.3,-0.4
+in step,lopsided_9,0.15,-8.98,12.9,-0.6
+in step,lopsided_9,0.2,-16.34,20.2,4.6
+in step,lopsided_9,0.25,-20.06,24.1,16.5
+in step,lopsided_9,0.3,-38.76,41.9,26.5
+in step,lopsided_9,0.35,-33.21,48.0,39.8
+in step,lopsided_9,0.4,19.85,45.0,51.7
+in step,lopsided_10,0.0,0.0,0.0,0.0
+in step,lopsided_10,0.05,0.69,-0.7,0.2
+in step,lopsided_10,0.1,6.49,-4.1,-2.2
+in step,lopsided_10,0.15,14.89,-9.1,-5.7
+in step,lopsided_10,0.2,18.99,-15.3,1.1
+in step,lopsided_10,0.25,19.41,-19.2,10.1
+in step,lopsided_10,0.3,22.76,-22.4,8.9
+in step,lopsided_10,0.35,34.44,-25.0,0.6
+in step,lopsided_10,0.4,73.02,-23.0,-8.2
+in step,lopsided_11,0.0,0.0,0.0,0.0
+in step,lopsided_11,0.05,3.02,-3.9,-1.5
+in step,lopsided_11,0.1,9.88,-11.5,-7.9
+in step,lopsided_11,0.15,18.33,-14.6,-11.0
+in step,lopsided_11,0.2,23.92,-19.3,-8.9
+in step,lopsided_11,0.25,25.17,-24.9,1.3
+in step,lopsided_11,0.3,34.47,-37.4,10.1
+in step,lopsided_11,0.35,39.01,-47.2,18.5
+in step,lopsided_11,0.4,37.65,-55.1,30.4
+in step,lopsided_11,0.45,37.14,-66.9,45.8
+in step,lopsided_11,0.5,31.7,-74.7,55.7
+in step,lopsided_11,0.55,27.79,-84.0,65.4
+in step,lopsided_11,0.6,24.29,-90.4,79.3
+in step,lopsided_11,0.65,14.5,-89.8,98.0
+in step,lopsided_11,0.7,2.83,-84.7,110.8
+in step,lopsided_11,0.75,-3.31,-80.9,126.7
+in step,lopsided_11,0.8,-3.57,-79.7,144.9
+in step,lopsided_11,0.85,-7.83,-74.3,154.3
+in step,lopsided_11,0.9,-9.5,-70.3,157.5
+in step,lopsided_11,0.95,-17.01,-63.0,159.3
+in step,lopsided_11,1.0,-14.46,-62.5,160.8
+in step,lopsided_11,1.05,-8.17,-63.8,167.7
+in step,lopsided_11,1.1,-7.78,-61.8,180.9
+in step,lopsided_11,1.15,-7.81,-59.7,196.4
+in step,lopsided_11,1.2,-10.55,-55.1,212.8
+in step,lopsided_11,1.25,-24.13,-44.8,216.6
+in step,lopsided_11,1.3,-60.06,-36.9,216.6
+in step,lopsided_12,0.0,0.0,0.0,0.0
+in step,lopsided_12,0.05,3.19,-2.5,0.5
+in step,lopsided_12,0.1,15.37,-10.1,-0.9
+in step,lopsided_12,0.15,9.92,-8.4,0.1
+in step,lopsided_12,0.2,5.6,-6.6,7.4
+in step,lopsided_12,0.25,6.07,-6.4,19.9
+in step,lopsided_12,0.3,20.75,-15.8,30.8
+in step,lopsided_12,0.35,-8.81,-7.3,43.5
+in step,lopsided_12,0.4,-35.25,-1.7,55.3
+in step,lopsided_12,0.45,-40.08,-1.4,69.2
+in step,lopsided_12,0.5,-37.15,5.0,90.6
+in step,lopsided_12,0.55,-72.77,28.2,97.7
+in step,lopsided_12,0.6,-92.92,48.1,104.3
+in step,lopsided_12,0.65,-90.43,63.9,119.2
+in step,lopsided_12,0.7,-76.6,65.9,135.7
+in step,lopsided_12,0.75,-55.03,63.9,147.5
+in step,lopsided_12,0.8,-22.73,61.7,152.3
+in step,lopsided_13,0.0,0.0,0.0,0.0
+in step,lopsided_13,0.05,3.65,-4.4,-0.6
+in step,lopsided_13,0.1,16.1,-15.0,-3.1
+in step,lopsided_13,0.15,14.03,-14.0,-4.9
+in step,lopsided_13,0.2,14.44,-15.8,0.3
+in step,lopsided_13,0.25,15.61,-20.5,12.8
+in step,lopsided_13,0.3,37.52,-41.5,22.3
+in step,lopsided_13,0.35,37.9,-47.8,34.0
+in step,lopsided_13,0.4,5.97,-47.0,42.7
+in step,lopsided_14,0.0,0.0,0.0,0.0
+in step,lopsided_14,0.05,-1.03,1.2,-0.4
+in step,lopsided_14,0.1,-6.64,4.3,-6.6
+in step,lopsided_14,0.15,-16.42,7.1,-15.0
+in step,lopsided_14,0.2,-18.27,3.2,-19.1
+in step,lopsided_14,0.25,-23.81,3.9,-23.7
+in step,lopsided_14,0.3,-26.3,5.2,-22.1
+in step,lopsided_14,0.35,-26.83,9.4,-14.2
+in step,lopsided_14,0.4,-26.83,14.6,-3.9
+in step,lopsided_14,0.45,-26.86,22.1,10.9
+in step,lopsided_14,0.5,-42.6,38.1,14.6
+in step,lopsided_14,0.55,-110.24,49.2,12.6
+in step,lopsided_15,0.0,0.0,0.0,0.0
+in step,lopsided_15,0.05,2.56,-1.3,1.2
+in step,lopsided_15,0.1,15.16,-7.0,0.8
+in step,lopsided_15,0.15,27.65,-13.4,2.7
+in step,lopsided_15,0.2,32.38,-22.5,10.3
+in step,lopsided_15,0.25,36.72,-33.2,17.0
+in step,lopsided_15,0.3,49.53,-45.7,18.7
+in step,lopsided_15,0.35,51.39,-52.7,24.5
+in step,lopsided_15,0.4,24.94,-51.5,31.6
+in step,lopsided_16,0.0,0.0,0.0,0.0
+in step,lopsided_16,0.05,-0.96,0.8,0.6
+in step,lopsided_16,0.1,-6.13,2.8,0.2
+in step,lopsided_16,0.15,-17.56,7.0,-1.0
+in step,lopsided_16,0.2,-21.86,12.5,4.5
+in step,lopsided_16,0.25,-24.99,19.5,13.8
+in step,lopsided_16,0.3,-25.73,28.3,22.7
+in step,lopsided_16,0.35,-18.99,33.4,26.6
+in step,lopsided_16,0.4,133.59,39.8,24.8
+in step,lopsided_17,0.0,0.0,0.0,0.0
+in step,lopsided_17,0.05,-3.27,3.2,-3.3
+in step,lopsided_17,0.1,-13.45,9.3,-11.8
+in step,lopsided_17,0.15,-21.38,15.3,-13.1
+in step,lopsided_17,0.2,-23.66,20.8,-5.6
+in step,lopsided_17,0.25,-27.88,28.8,2.2
+in step,lopsided_17,0.3,-20.72,30.0,4.3
+in step,lopsided_17,0.35,-17.29,33.7,5.1
+in step,lopsided_17,0.4,-19.19,34.5,5.9
+in step,lopsided_17,0.45,-14.48,32.5,9.1
+in step,lopsided_17,0.5,-15.49,36.1,18.2
+in step,lopsided_17,0.55,-15.56,39.8,31.4
+in step,lopsided_17,0.6,-15.54,44.2,47.4
+in step,lopsided_17,0.65,-3.04,42.1,67.8
+in step,lopsided_17,0.7,31.43,37.2,83.1
+in step,lopsided_17,0.75,44.96,36.4,99.8
+in step,lopsided_17,0.8,44.26,34.4,115.5
+in step,lopsided_17,0.85,54.83,19.9,127.0
+in step,lopsided_17,0.9,93.79,-0.0,127.1
+in step,lopsided_17,0.95,100.95,-22.6,129.2
+in step,lopsided_17,1.0,107.55,-40.3,123.6
+in step,lopsided_17,1.05,121.81,-46.0,112.3
+in step,lopsided_17,1.1,141.47,-48.8,105.7
+in step,lopsided_17,1.15,-17.46,-56.6,112.2
+in step,lopsided_18,0.0,0.0,0.0,0.0
+in step,lopsided_18,0.05,-3.88,2.8,2.1
+in step,lopsided_18,0.1,-7.92,5.8,3.1
+in step,lopsided_18,0.15,-8.61,7.3,8.9
+in step,lopsided_18,0.2,-8.4,8.9,20.8
+in step,lopsided_18,0.25,-8.61,10.5,29.7
+in step,lopsided_18,0.3,-5.36,9.1,30.6
+in step,lopsided_18,0.35,-2.83,8.7,32.0
+in step,lopsided_18,0.4,-2.71,8.7,35.1
+in step,lopsided_18,0.45,-2.72,9.1,44.5
+in step,lopsided_18,0.5,-2.93,10.2,64.9
+in step,lopsided_18,0.55,-2.84,11.6,84.1
+in step,lopsided_18,0.6,0.18,10.3,103.5
+in step,lopsided_18,0.65,14.31,0.3,116.2
+in step,lopsided_18,0.7,33.02,-7.6,125.3
+in step,lopsided_18,0.75,42.14,-10.9,136.7
+in step,lopsided_18,0.8,50.23,-19.5,151.7
+in step,lopsided_18,0.85,75.6,-36.3,157.6
+in step,lopsided_18,0.9,92.53,-55.6,160.1
+in step,lopsided_18,0.95,100.02,-72.2,159.3
+in step,lopsided_18,1.0,109.97,-73.0,145.9
+in step,lopsided_18,1.05,128.3,-69.1,129.9
+in step,lopsided_18,1.1,148.05,-65.7,116.8
+in step,lopsided_18,1.15,165.2,-63.5,104.3
+in step,lopsided_18,1.2,176.64,-66.6,88.7
+in step,lopsided_18,1.25,155.22,-91.5,71.8
+in step,lopsided_18,1.3,128.59,-119.7,60.0
+in step,lopsided_18,1.35,122.14,-131.7,50.8
+in step,lopsided_18,1.4,136.79,-131.6,37.5
+in step,lopsided_18,1.45,146.79,-133.8,28.1
+in step,lopsided_18,1.5,148.01,-139.4,22.2
+in step,lopsided_18,1.55,150.47,-149.1,15.0
+in step,lopsided_18,1.6,148.78,-167.3,2.8
+in step,lopsided_18,1.65,120.55,-198.9,-7.3
+in step,lopsided_18,1.7,106.81,-220.7,-21.9
+in step,lopsided_18,1.75,118.95,-224.4,-47.3
+in step,lopsided_18,1.8,140.41,-222.8,-72.6
+in step,lopsided_18,1.85,169.94,-214.9,-92.4
+in step,lopsided_19,0.0,0.0,0.0,0.0
+in step,lopsided_19,0.05,1.92,-1.8,0.9
+in step,lopsided_19,0.1,9.97,-7.7,0.8
+in step,lopsided_19,0.15,14.91,-11.3,1.8
+in step,lopsided_19,0.2,18.77,-17.3,8.5
+in step,lopsided_19,0.25,21.7,-25.1,17.2
+in step,lopsided_19,0.3,32.93,-39.1,23.2
+in step,lopsided_19,0.35,46.7,-48.4,25.8
+in step,lopsided_19,0.4,128.74,-53.5,24.9
+in step,lopsided_20,0.0,0.0,0.0,0.0
+in step,lopsided_20,0.05,-2.32,1.4,2.1
+in step,lopsided_20,0.1,-14.64,8.2,4.4
+in step,lopsided_20,0.15,-17.51,9.8,7.6
+in step,lopsided_20,0.2,-16.97,11.6,15.0
+in step,lopsided_20,0.25,-14.34,13.3,24.2
+in step,lopsided_20,0.3,-25.26,23.8,27.6
+in step,lopsided_20,0.35,-30.35,29.9,31.3
+in step,lopsided_20,0.4,-4.0,26.2,31.5
+out of step,nominal,0.0,0.0,0.0,0.0
+out of step,nominal,0.05,1.41,-1.7,2.4
+out of step,nominal,0.1,12.61,-10.9,5.1
+out of step,nominal,0.15,7.66,-9.2,7.4
+out of step,nominal,0.2,-11.49,-0.8,9.6
+out of step,nominal,0.25,-20.32,1.4,14.9
+out of step,nominal,0.3,-18.26,-1.3,28.5
+out of step,nominal,0.35,-31.71,12.3,45.0
+out of step,nominal,0.4,-48.12,29.9,55.3
+out of step,nominal,0.45,-46.66,29.9,70.0
+out of step,nominal,0.5,-24.01,16.8,91.6
+out of step,nominal,0.55,11.74,-2.8,110.0
+out of step,lopsided_1,0.0,0.0,0.0,0.0
+out of step,lopsided_1,0.05,2.48,-1.4,1.9
+out of step,lopsided_1,0.1,13.59,-7.5,5.0
+out of step,lopsided_1,0.15,0.46,-2.1,9.0
+out of step,lopsided_1,0.2,-8.85,4.4,16.8
+out of step,lopsided_1,0.25,-13.33,11.3,29.1
+out of step,lopsided_1,0.3,3.6,0.6,48.5
+out of step,lopsided_1,0.35,22.53,-7.9,65.7
+out of step,lopsided_1,0.4,32.09,-14.1,85.0
+out of step,lopsided_1,0.45,34.69,-23.4,104.9
+out of step,lopsided_1,0.5,44.17,-35.8,107.3
+out of step,lopsided_1,0.55,42.37,-43.2,111.5
+out of step,lopsided_1,0.6,42.03,-52.1,118.9
+out of step,lopsided_1,0.65,38.73,-59.5,133.1
+out of step,lopsided_1,0.7,41.3,-72.3,142.9
+out of step,lopsided_1,0.75,48.22,-85.5,150.3
+out of step,lopsided_1,0.8,53.94,-99.1,160.9
+out of step,lopsided_1,0.85,57.54,-115.7,169.8
+out of step,lopsided_1,0.9,60.33,-126.2,166.4
+out of step,lopsided_1,0.95,66.03,-134.9,163.8
+out of step,lopsided_1,1.0,71.6,-142.2,166.3
+out of step,lopsided_1,1.05,77.29,-154.3,165.9
+out of step,lopsided_1,1.1,77.77,-175.6,169.5
+out of step,lopsided_1,1.15,78.4,-199.5,173.4
+out of step,lopsided_1,1.2,78.62,-216.9,176.4
+out of step,lopsided_1,1.25,75.67,-219.4,177.8
+out of step,lopsided_1,1.3,73.47,-220.3,178.0
+out of step,lopsided_1,1.35,71.5,-224.4,180.3
+out of step,lopsided_1,1.4,71.17,-233.9,183.7
+out of step,lopsided_1,1.45,67.91,-248.2,190.8
+out of step,lopsided_1,1.5,72.45,-258.5,194.8
+out of step,lopsided_1,1.55,73.39,-269.3,201.1
+out of step,lopsided_1,1.6,78.14,-282.0,201.5
+out of step,lopsided_1,1.65,79.67,-301.8,204.2
+out of step,lopsided_1,1.7,75.13,-324.5,209.9
+out of step,lopsided_1,1.75,74.22,-348.4,215.7
+out of step,lopsided_1,1.8,74.09,-362.8,219.5
+out of step,lopsided_1,1.85,70.77,-367.8,220.6
+out of step,lopsided_1,1.9,70.78,-372.3,220.6
+out of step,lopsided_1,1.95,73.66,-381.2,222.2
+out of step,lopsided_1,2.0,75.31,-395.1,224.3
+out of step,lopsided_1,2.05,77.6,-403.2,228.4
+out of step,lopsided_1,2.1,82.97,-410.8,231.1
+out of step,lopsided_1,2.15,83.58,-423.0,232.8
+out of step,lopsided_1,2.2,83.61,-438.8,234.6
+out of step,lopsided_1,2.25,87.74,-445.7,235.6
+out of step,lopsided_1,2.3,94.27,-451.7,236.0
+out of step,lopsided_1,2.35,100.08,-461.4,231.5
+out of step,lopsided_1,2.4,102.27,-476.0,226.2
+out of step,lopsided_1,2.45,105.22,-487.2,223.2
+out of step,lopsided_1,2.5,109.38,-498.9,218.9
+out of step,lopsided_1,2.55,110.52,-513.0,212.9
+out of step,lopsided_1,2.6,111.09,-524.2,208.8
+out of step,lopsided_1,2.65,115.88,-525.5,206.9
+out of step,lopsided_1,2.7,119.97,-527.6,205.1
+out of step,lopsided_1,2.75,119.79,-533.9,201.4
+out of step,lopsided_1,2.8,119.87,-546.0,194.4
+out of step,lopsided_1,2.85,120.97,-561.8,188.0
+out of step,lopsided_1,2.9,124.97,-576.9,181.2
+out of step,lopsided_1,2.95,124.59,-592.3,171.0
+out of step,lopsided_1,3.0,122.41,-610.3,161.2
+out of step,lopsided_1,3.05,130.16,-624.4,154.8
+out of step,lopsided_1,3.1,135.39,-639.5,146.5
+out of step,lopsided_1,3.15,133.33,-654.2,135.8
+out of step,lopsided_1,3.2,133.41,-664.9,128.6
+out of step,lopsided_1,3.25,139.56,-668.6,125.8
+out of step,lopsided_1,3.3,142.64,-673.9,120.0
+out of step,lopsided_1,3.35,142.59,-681.5,110.1
+out of step,lopsided_1,3.4,142.25,-692.1,98.9
+out of step,lopsided_1,3.45,148.31,-699.0,92.5
+out of step,lopsided_1,3.5,151.01,-706.0,83.7
+out of step,lopsided_1,3.55,151.01,-712.6,71.7
+out of step,lopsided_1,3.6,148.51,-723.9,55.9
+out of step,lopsided_1,3.65,156.16,-733.6,42.5
+out of step,lopsided_1,3.7,159.72,-744.0,27.2
+out of step,lopsided_1,3.75,159.01,-751.5,9.2
+out of step,lopsided_1,3.8,159.04,-761.3,-6.9
+out of step,lopsided_1,3.85,167.46,-769.4,-18.1
+out of step,lopsided_1,3.9,171.45,-775.7,-32.8
+out of step,lopsided_1,3.95,170.76,-779.2,-50.5
+out of step,lopsided_1,4.0,171.74,-782.8,-61.5
+out of step,lopsided_1,4.05,175.29,-785.2,-68.1
+out of step,lopsided_1,4.1,175.63,-786.6,-78.7
+out of step,lopsided_1,4.15,175.63,-787.8,-93.9
+out of step,lopsided_1,4.2,176.4,-790.4,-106.5
+out of step,lopsided_1,4.25,180.44,-792.2,-115.3
+out of step,lopsided_1,4.3,181.2,-792.3,-128.1
+out of step,lopsided_1,4.35,181.19,-791.9,-144.6
+out of step,lopsided_1,4.4,184.19,-794.3,-160.4
+out of step,lopsided_1,4.45,190.85,-795.7,-176.0
+out of step,lopsided_1,4.5,190.61,-795.0,-193.6
+out of step,lopsided_1,4.55,189.15,-794.6,-209.4
+out of step,lopsided_1,4.6,193.6,-794.7,-216.2
+out of step,lopsided_1,4.65,196.21,-794.4,-223.7
+out of step,lopsided_1,4.7,196.08,-791.1,-235.7
+out of step,lopsided_1,4.75,195.3,-787.9,-249.3
+out of step,lopsided_1,4.8,198.97,-785.0,-255.9
+out of step,lopsided_1,4.85,200.01,-782.5,-263.3
+out of step,lopsided_1,4.9,199.92,-778.3,-275.1
+out of step,lopsided_1,4.95,199.12,-773.7,-290.0
+out of step,lopsided_1,5.0,201.43,-769.7,-296.5
+out of step,lopsided_1,5.05,203.59,-765.3,-304.1
+out of step,lopsided_1,5.1,203.68,-759.9,-316.2
+out of step,lopsided_1,5.15,203.33,-754.1,-330.4
+out of step,lopsided_1,5.2,206.33,-750.1,-335.4
+out of step,lopsided_1,5.25,208.6,-745.7,-342.4
+out of step,lopsided_1,5.3,208.55,-739.8,-353.4
+out of step,lopsided_1,5.35,207.75,-732.4,-368.1
+out of step,lopsided_1,5.4,209.93,-726.2,-375.8
+out of step,lopsided_1,5.45,211.25,-720.2,-384.2
+out of step,lopsided_1,5.5,212.12,-713.2,-394.4
+out of step,lopsided_1,5.55,212.0,-703.5,-409.9
+out of step,lopsided_1,5.6,212.22,-694.2,-425.3
+out of step,lopsided_1,5.65,213.76,-684.3,-442.1
+out of step,lopsided_1,5.7,216.11,-671.9,-458.1
+out of step,lopsided_1,5.75,216.55,-663.9,-471.3
+out of step,lopsided_1,5.8,223.44,-662.2,-476.1
+out of step,lopsided_1,5.85,228.29,-658.5,-481.7
+out of step,lopsided_1,5.9,228.5,-651.9,-487.5
+out of step,lopsided_1,5.95,228.47,-639.3,-498.7
+out of step,lopsided_1,6.0,223.03,-623.7,-512.7
+out of step,lopsided_1,6.05,221.92,-606.7,-527.7
+out of step,lopsided_1,6.1,222.44,-592.0,-543.2
+out of step,lopsided_1,6.15,225.78,-585.7,-552.3
+out of step,lopsided_1,6.2,232.18,-580.7,-558.4
+out of step,lopsided_1,6.25,233.77,-571.1,-565.5
+out of step,lopsided_1,6.3,233.83,-558.4,-574.7
+out of step,lopsided_1,6.35,235.9,-550.7,-578.9
+out of step,lopsided_1,6.4,241.09,-545.4,-580.2
+out of step,lopsided_1,6.45,246.7,-535.4,-581.5
+out of step,lopsided_1,6.5,249.11,-521.2,-584.8
+out of step,lopsided_1,6.55,251.87,-509.4,-588.8
+out of step,lopsided_1,6.6,258.21,-498.8,-591.1
+out of step,lopsided_1,6.65,260.83,-484.7,-592.2
+out of step,lopsided_1,6.7,261.68,-471.1,-593.9
+out of step,lopsided_1,6.75,268.14,-467.8,-594.6
+out of step,lopsided_1,6.8,276.1,-467.0,-595.3
+out of step,lopsided_1,6.85,277.96,-462.7,-594.6
+out of step,lopsided_1,6.9,277.95,-453.9,-593.4
+out of step,lopsided_1,6.95,273.64,-435.2,-592.3
+out of step,lopsided_1,7.0,264.65,-413.6,-592.0
+out of step,lopsided_1,7.05,262.96,-392.1,-592.8
+out of step,lopsided_1,7.1,263.75,-378.8,-593.5
+out of step,lopsided_1,7.15,270.37,-375.3,-590.8
+out of step,lopsided_1,7.2,275.82,-370.4,-588.6
+out of step,lopsided_1,7.25,276.37,-359.7,-587.0
+out of step,lopsided_1,7.3,275.65,-345.6,-586.1
+out of step,lopsided_1,7.35,283.23,-337.4,-582.3
+out of step,lopsided_1,7.4,289.66,-328.1,-577.9
+out of step,lopsided_1,7.45,291.96,-316.2,-571.3
+out of step,lopsided_1,7.5,293.73,-306.9,-566.1
+out of step,lopsided_1,7.55,295.97,-305.3,-563.8
+out of step,lopsided_1,7.6,296.56,-301.8,-561.7
+out of step,lopsided_1,7.65,297.05,-294.4,-557.6
+out of step,lopsided_1,7.7,297.08,-280.5,-550.6
+out of step,lopsided_1,7.75,297.48,-267.8,-543.1
+out of step,lopsided_1,7.8,299.98,-253.6,-534.0
+out of step,lopsided_1,7.85,301.66,-238.5,-523.7
+out of step,lopsided_1,7.9,303.26,-228.8,-516.8
+out of step,lopsided_1,7.95,308.53,-226.8,-512.9
+out of step,lopsided_1,8.0,311.32,-221.6,-507.2
+out of step,lopsided_1,8.05,311.3,-212.1,-498.9
+out of step,lopsided_1,8.1,310.37,-201.4,-489.9
+out of step,lopsided_1,8.15,309.25,-197.6,-485.6
+out of step,lopsided_1,8.2,306.83,-194.3,-482.6
+out of step,lopsided_2,0.0,0.0,0.0,0.0
+out of step,lopsided_2,0.05,3.24,-2.7,-3.6
+out of step,lopsided_2,0.1,15.41,-9.3,-15.1
+out of step,lopsided_2,0.15,21.47,-10.8,-20.4
+out of step,lopsided_2,0.2,21.26,-11.9,-17.1
+out of step,lopsided_2,0.25,21.64,-16.3,-6.8
+out of step,lopsided_2,0.3,31.52,-31.7,3.3
+out of step,lopsided_2,0.35,16.64,-26.7,18.6
+out of step,lopsided_2,0.4,4.43,-20.4,34.2
+out of step,lopsided_2,0.45,14.88,-32.9,45.2
+out of step,lopsided_2,0.5,35.97,-54.3,52.3
+out of step,lopsided_2,0.55,21.84,-51.8,62.5
+out of step,lopsided_2,0.6,9.02,-51.9,73.3
+out of step,lopsided_2,0.65,11.4,-60.7,87.5
+out of step,lopsided_2,0.7,5.95,-60.4,107.2
+out of step,lopsided_2,0.75,-21.41,-37.8,123.0
+out of step,lopsided_2,0.8,-44.99,-16.4,132.3
+out of step,lopsided_2,0.85,-72.85,4.3,131.3
+out of step,lopsided_3,0.0,0.0,0.0,0.0
+out of step,lopsided_3,0.05,2.61,-3.1,-4.0
+out of step,lopsided_3,0.1,13.1,-11.2,-13.8
+out of step,lopsided_3,0.15,21.85,-15.2,-15.2
+out of step,lopsided_3,0.2,25.48,-20.9,-9.3
+out of step,lopsided_3,0.25,28.86,-29.5,0.7
+out of step,lopsided_3,0.3,40.96,-42.5,0.9
+out of step,lopsided_3,0.35,52.63,-52.2,2.3
+out of step,lopsided_3,0.4,58.43,-62.3,8.3
+out of step,lopsided_3,0.45,64.78,-78.8,10.7
+out of step,lopsided_3,0.5,71.25,-86.8,8.4
+out of step,lopsided_3,0.55,77.73,-95.8,4.4
+out of step,lopsided_3,0.6,83.94,-110.0,-1.2
+out of step,lopsided_3,0.65,81.51,-122.2,4.3
+out of step,lopsided_3,0.7,82.52,-122.5,12.7
+out of step,lopsided_3,0.75,76.82,-120.2,22.7
+out of step,lopsided_4,0.0,0.0,0.0,0.0
+out of step,lopsided_4,0.05,2.55,-1.4,-1.9
+out of step,lopsided_4,0.1,10.27,-5.0,-9.2
+out of step,lopsided_4,0.15,11.57,-5.8,-8.8
+out of step,lopsided_4,0.2,11.6,-7.9,1.4
+out of step,lopsided_4,0.25,16.59,-16.9,13.1
+out of step,lopsided_4,0.3,30.96,-34.1,20.1
+out of step,lopsided_4,0.35,39.98,-41.5,22.3
+out of step,lopsided_4,0.4,49.55,-46.0,28.7
+out of step,lopsided_4,0.45,55.28,-57.7,37.5
+out of step,lopsided_4,0.5,82.56,-75.9,31.9
+out of step,lopsided_4,0.55,87.64,-96.1,34.6
+out of step,lopsided_4,0.6,85.82,-111.4,40.2
+out of step,lopsided_4,0.65,93.68,-114.8,24.9
+out of step,lopsided_4,0.7,107.94,-115.3,8.6
+out of step,lopsided_4,0.75,125.29,-110.7,-2.9
+out of step,lopsided_4,0.8,142.69,-107.5,-15.0
+out of step,lopsided_4,0.85,159.93,-107.1,-30.2
+out of step,lopsided_4,0.9,168.83,-113.3,-43.3
+out of step,lopsided_4,0.95,170.34,-123.1,-48.8
+out of step,lopsided_4,1.0,166.92,-135.3,-58.0
+out of step,lopsided_4,1.05,181.61,-135.7,-75.3
+out of step,lopsided_4,1.1,201.27,-129.8,-93.4
+out of step,lopsided_4,1.15,191.31,-130.0,-117.1
+out of step,lopsided_4,1.2,196.48,-118.2,-126.1
+out of step,lopsided_4,1.25,211.87,-96.2,-124.7
+out of step,lopsided_4,1.3,232.92,-80.5,-116.2
+out of step,lopsided_4,1.35,253.62,-67.3,-105.9
+out of step,lopsided_5,0.0,0.0,0.0,0.0
+out of step,lopsided_5,0.05,3.83,-3.2,-1.3
+out of step,lopsided_5,0.1,18.66,-12.3,-5.9
+out of step,lopsided_5,0.15,28.68,-18.4,-4.6
+out of step,lopsided_5,0.2,16.71,-17.1,7.3
+out of step,lopsided_5,0.25,-9.64,-9.1,22.9
+out of step,lopsided_5,0.3,4.92,-18.0,39.6
+out of step,lopsided_5,0.35,-8.91,-14.9,64.1
+out of step,lopsided_5,0.4,-45.29,-12.8,87.0
+out of step,lopsided_6,0.0,0.0,0.0,0.0
+out of step,lopsided_6,0.05,2.35,-1.0,0.3
+out of step,lopsided_6,0.1,11.8,-4.5,-1.8
+out of step,lopsided_6,0.15,18.15,-9.1,-0.4
+out of step,lopsided_6,0.2,20.66,-15.4,8.9
+out of step,lopsided_6,0.25,23.69,-22.5,17.3
+out of step,lopsided_6,0.3,28.12,-28.8,19.6
+out of step,lopsided_6,0.35,25.95,-30.9,21.2
+out of step,lopsided_6,0.4,25.21,-34.2,28.4
+out of step,lopsided_6,0.45,25.22,-39.8,40.3
+out of step,lopsided_6,0.5,28.02,-46.3,54.9
+out of step,lopsided_6,0.55,31.14,-50.5,67.1
+out of step,lopsided_6,0.6,32.2,-58.6,80.9
+out of step,lopsided_6,0.65,32.14,-68.7,96.9
+out of step,lopsided_6,0.7,29.31,-74.1,108.1
+out of step,lopsided_6,0.75,27.72,-78.3,115.6
+out of step,lopsided_6,0.8,28.42,-84.4,126.1
+out of step,lopsided_6,0.85,28.37,-92.0,140.2
+out of step,lopsided_6,0.9,24.34,-96.6,157.7
+out of step,lopsided_6,0.95,23.75,-99.5,171.4
+out of step,lopsided_6,1.0,22.35,-105.3,187.1
+out of step,lopsided_6,1.05,22.27,-112.6,205.0
+out of step,lopsided_6,1.1,18.96,-112.7,224.1
+out of step,lopsided_6,1.15,18.72,-113.1,240.5
+out of step,lopsided_6,1.2,13.99,-116.4,259.4
+out of step,lopsided_6,1.25,13.13,-120.6,279.8
+out of step,lopsided_6,1.3,3.68,-113.9,296.3
+out of step,lopsided_6,1.35,-12.4,-109.1,306.6
+out of step,lopsided_7,0.0,0.0,0.0,0.0
+out of step,lopsided_7,0.05,-0.66,0.1,2.0
+out of step,lopsided_7,0.1,6.88,-8.4,2.1
+out of step,lopsided_7,0.15,-0.64,-7.2,-0.6
+out of step,lopsided_7,0.2,-4.26,-8.6,-1.2
+out of step,lopsided_7,0.25,-4.83,-8.8,2.8
+out of step,lopsided_7,0.3,-8.11,-4.7,13.7
+out of step,lopsided_7,0.35,-16.58,6.6,29.2
+out of step,lopsided_7,0.4,-42.73,18.1,41.4
+out of step,lopsided_8,0.0,0.0,0.0,0.0
+out of step,lopsided_8,0.05,1.71,-0.8,1.0
+out of step,lopsided_8,0.1,12.75,-5.1,-1.1
+out of step,lopsided_8,0.15,20.53,-10.2,-0.2
+out of step,lopsided_8,0.2,21.01,-14.9,10.0
+out of step,lopsided_8,0.25,24.28,-24.0,18.4
+out of step,lopsided_8,0.3,40.65,-44.7,16.3
+out of step,lopsided_8,0.35,64.24,-60.9,11.1
+out of step,lopsided_8,0.4,85.59,-74.7,6.7
+out of step,lopsided_8,0.45,102.06,-88.8,2.8
+out of step,lopsided_8,0.5,99.63,-110.4,10.2
+out of step,lopsided_8,0.55,72.24,-136.4,34.3
+out of step,lopsided_8,0.6,63.6,-158.5,46.8
+out of step,lopsided_8,0.65,62.54,-174.5,51.5
+out of step,lopsided_8,0.7,66.66,-183.8,51.1
+out of step,lopsided_8,0.75,66.02,-192.7,53.6
+out of step,lopsided_8,0.8,66.13,-205.7,59.3
+out of step,lopsided_8,0.85,68.93,-222.5,61.1
+out of step,lopsided_8,0.9,69.32,-238.0,56.2
+out of step,lopsided_8,0.95,87.53,-249.8,49.1
+out of step,lopsided_9,0.0,0.0,0.0,0.0
+out of step,lopsided_9,0.05,-0.49,-0.1,1.5
+out of step,lopsided_9,0.1,3.94,-5.2,1.9
+out of step,lopsided_9,0.15,-1.78,-2.4,-1.0
+out of step,lopsided_9,0.2,-0.51,-2.1,2.8
+out of step,lopsided_9,0.25,-0.06,-2.6,13.1
+out of step,lopsided_9,0.3,-5.45,1.8,27.1
+out of step,lopsided_9,0.35,-8.27,4.0,37.7
+out of step,lopsided_9,0.4,39.32,-2.0,44.1
+out of step,lopsided_10,0.0,0.0,0.0,0.0
+out of step,lopsided_10,0.05,0.91,0.0,1.2
+out of step,lopsided_10,0.1,9.69,-6.7,2.0
+out of step,lopsided_10,0.15,24.24,-16.3,1.4
+out of step,lopsided_10,0.2,26.14,-17.0,9.8
+out of step,lopsided_10,0.25,23.84,-18.7,21.4
+out of step,lopsided_10,0.3,30.05,-32.7,26.9
+out of step,lopsided_10,0.35,50.84,-58.7,23.1
+out of step,lopsided_10,0.4,96.03,-83.3,9.6
+out of step,lopsided_11,0.0,0.0,0.0,0.0
+out of step,lopsided_11,0.05,3.21,-3.8,-3.1
+out of step,lopsided_11,0.1,14.78,-13.0,-10.9
+out of step,lopsided_11,0.15,23.18,-17.8,-9.8
+out of step,lopsided_11,0.2,17.55,-17.8,-1.0
+out of step,lopsided_11,0.25,19.35,-22.8,9.5
+out of step,lopsided_11,0.3,34.73,-41.1,13.6
+out of step,lopsided_11,0.35,42.79,-47.9,14.4
+out of step,lopsided_11,0.4,53.23,-51.5,16.3
+out of step,lopsided_11,0.45,57.94,-52.4,23.5
+out of step,lopsided_11,0.5,63.59,-61.6,29.4
+out of step,lopsided_11,0.55,70.48,-79.7,30.4
+out of step,lopsided_11,0.6,74.0,-99.2,30.7
+out of step,lopsided_11,0.65,77.72,-108.5,29.4
+out of step,lopsided_11,0.7,81.0,-114.0,28.8
+out of step,lopsided_11,0.75,56.91,-112.9,36.9
+out of step,lopsided_11,0.8,48.3,-116.6,38.0
+out of step,lopsided_11,0.85,45.23,-121.6,45.1
+out of step,lopsided_11,0.9,39.9,-131.5,62.3
+out of step,lopsided_11,0.95,24.79,-138.2,83.3
+out of step,lopsided_11,1.0,18.32,-141.8,97.2
+out of step,lopsided_11,1.05,26.27,-150.3,99.2
+out of step,lopsided_11,1.1,18.13,-149.3,96.8
+out of step,lopsided_11,1.15,14.79,-152.5,89.8
+out of step,lopsided_12,0.0,0.0,0.0,0.0
+out of step,lopsided_12,0.05,3.05,-2.4,-1.5
+out of step,lopsided_12,0.1,14.86,-8.9,-7.1
+out of step,lopsided_12,0.15,24.92,-14.9,-9.2
+out of step,lopsided_12,0.2,10.56,-15.1,-1.7
+out of step,lopsided_12,0.25,-2.03,-13.6,9.0
+out of step,lopsided_12,0.3,15.17,-25.5,22.5
+out of step,lopsided_12,0.35,25.4,-35.5,37.6
+out of step,lopsided_12,0.4,2.03,-30.0,58.0
+out of step,lopsided_12,0.45,-2.76,-29.6,77.7
+out of step,lopsided_12,0.5,15.6,-42.8,94.9
+out of step,lopsided_12,0.55,17.53,-44.6,108.9
+out of step,lopsided_12,0.6,2.19,-39.0,120.6
+out of step,lopsided_12,0.65,-2.88,-38.7,136.9
+out of step,lopsided_12,0.7,13.61,-46.2,154.3
+out of step,lopsided_12,0.75,14.52,-47.0,174.8
+out of step,lopsided_12,0.8,-6.76,-36.2,198.1
+out of step,lopsided_12,0.85,-7.78,-35.4,217.2
+out of step,lopsided_12,0.9,6.33,-45.7,233.9
+out of step,lopsided_12,0.95,2.19,-45.0,245.9
+out of step,lopsided_12,1.0,-11.93,-44.2,255.9
+out of step,lopsided_12,1.05,-14.89,-40.9,269.2
+out of step,lopsided_12,1.1,-11.22,-36.8,289.2
+out of step,lopsided_12,1.15,-34.08,-17.2,307.5
+out of step,lopsided_12,1.2,-55.68,1.9,322.4
+out of step,lopsided_12,1.25,-51.03,6.9,345.3
+out of step,lopsided_12,1.3,-31.79,-0.4,367.7
+out of step,lopsided_12,1.35,-8.62,-10.3,380.1
+out of step,lopsided_12,1.4,14.27,-18.6,392.3
+out of step,lopsided_12,1.45,30.68,-26.4,407.3
+out of step,lopsided_12,1.5,27.01,-25.2,433.4
+out of step,lopsided_12,1.55,-4.91,-7.3,467.4
+out of step,lopsided_12,1.6,-27.87,2.8,495.7
+out of step,lopsided_12,1.65,-36.1,-2.4,510.4
+out of step,lopsided_12,1.7,-33.56,-4.6,527.1
+out of step,lopsided_12,1.75,-70.8,2.0,533.0
+out of step,lopsided_12,1.8,-77.56,10.0,539.1
+out of step,lopsided_12,1.85,-82.01,24.5,541.0
+out of step,lopsided_12,1.9,-109.71,40.1,524.8
+out of step,lopsided_12,1.95,-138.32,52.4,504.5
+out of step,lopsided_12,2.0,-147.52,65.5,490.2
+out of step,lopsided_12,2.05,-133.92,88.9,494.6
+out of step,lopsided_12,2.1,-128.03,95.4,502.2
+out of step,lopsided_12,2.15,41.47,97.0,512.8
+out of step,lopsided_13,0.0,0.0,0.0,0.0
+out of step,lopsided_13,0.05,3.2,-3.4,-1.7
+out of step,lopsided_13,0.1,17.32,-13.6,-7.1
+out of step,lopsided_13,0.15,29.78,-20.8,-6.7
+out of step,lopsided_13,0.2,24.54,-24.4,3.9
+out of step,lopsided_13,0.25,12.77,-26.2,17.9
+out of step,lopsided_13,0.3,31.12,-39.2,33.1
+out of step,lopsided_13,0.35,45.24,-52.3,47.1
+out of step,lopsided_13,0.4,29.33,-53.6,64.7
+out of step,lopsided_13,0.45,5.56,-52.3,81.0
+out of step,lopsided_13,0.5,7.76,-61.5,94.1
+out of step,lopsided_13,0.55,11.7,-73.7,107.4
+out of step,lopsided_13,0.6,-1.85,-74.5,128.2
+out of step,lopsided_13,0.65,-19.37,-68.1,150.1
+out of step,lopsided_13,0.7,3.33,-75.7,178.3
+out of step,lopsided_13,0.75,17.56,-80.1,201.4
+out of step,lopsided_13,0.8,0.43,-64.3,209.9
+out of step,lopsided_13,0.85,-26.51,-47.4,216.2
+out of step,lopsided_13,0.9,-40.03,-33.1,223.7
+out of step,lopsided_14,0.0,0.0,0.0,0.0
+out of step,lopsided_14,0.05,1.04,-1.0,2.3
+out of step,lopsided_14,0.1,12.41,-9.6,4.6
+out of step,lopsided_14,0.15,14.75,-10.6,5.7
+out of step,lopsided_14,0.2,-0.53,-2.6,7.3
+out of step,lopsided_14,0.25,-7.14,-0.8,10.9
+out of step,lopsided_14,0.3,-5.64,-5.1,20.4
+out of step,lopsided_14,0.35,-10.48,-4.2,39.5
+out of step,lopsided_14,0.4,-27.87,8.2,56.9
+out of step,lopsided_14,0.45,-31.97,11.3,69.2
+out of step,lopsided_14,0.5,-18.7,-3.7,78.6
+out of step,lopsided_14,0.55,2.58,-19.9,79.3
+out of step,lopsided_14,0.6,71.44,-35.0,74.6
+out of step,lopsided_15,0.0,0.0,0.0,0.0
+out of step,lopsided_15,0.05,1.93,-0.6,-0.1
+out of step,lopsided_15,0.1,12.04,-4.3,-3.4
+out of step,lopsided_15,0.15,17.59,-8.3,-3.7
+out of step,lopsided_15,0.2,7.66,-5.1,7.7
+out of step,lopsided_15,0.25,-14.84,5.0,22.7
+out of step,lopsided_15,0.3,-0.24,-2.5,41.4
+out of step,lopsided_15,0.35,14.19,-12.4,60.2
+out of step,lopsided_15,0.4,2.73,-12.4,83.1
+out of step,lopsided_15,0.45,-19.3,-9.0,106.8
+out of step,lopsided_15,0.5,-16.89,-16.8,126.9
+out of step,lopsided_15,0.55,-5.4,-25.4,144.9
+out of step,lopsided_15,0.6,-15.1,-27.2,162.9
+out of step,lopsided_15,0.65,-24.81,-20.4,183.0
+out of step,lopsided_15,0.7,-28.37,-7.8,202.1
+out of step,lopsided_15,0.75,-31.1,5.8,210.5
+out of step,lopsided_15,0.8,-51.27,29.9,206.9
+out of step,lopsided_15,0.85,-89.18,52.6,196.5
+out of step,lopsided_16,0.0,0.0,0.0,0.0
+out of step,lopsided_16,0.05,0.22,0.4,1.8
+out of step,lopsided_16,0.1,7.68,-3.6,4.7
+out of step,lopsided_16,0.15,18.27,-8.4,7.7
+out of step,lopsided_16,0.2,5.39,-1.6,17.1
+out of step,lopsided_16,0.25,-0.99,2.5,27.9
+out of step,lopsided_16,0.3,0.86,0.8,39.9
+out of step,lopsided_16,0.35,20.55,-10.6,48.5
+out of step,lopsided_16,0.4,53.16,-20.1,52.3
+out of step,lopsided_17,0.0,0.0,0.0,0.0
+out of step,lopsided_17,0.05,1.86,-1.8,1.9
+out of step,lopsided_17,0.1,10.21,-9.7,5.3
+out of step,lopsided_17,0.15,16.17,-14.5,6.2
+out of step,lopsided_17,0.2,19.62,-19.0,13.1
+out of step,lopsided_17,0.25,19.66,-23.5,25.7
+out of step,lopsided_17,0.3,30.95,-35.9,37.7
+out of step,lopsided_17,0.35,58.49,-47.4,44.0
+out of step,lopsided_17,0.4,76.48,-55.9,53.2
+out of step,lopsided_17,0.45,77.22,-62.3,64.4
+out of step,lopsided_17,0.5,80.21,-77.9,69.5
+out of step,lopsided_17,0.55,101.97,-97.9,59.7
+out of step,lopsided_17,0.6,114.13,-113.2,51.5
+out of step,lopsided_17,0.65,118.66,-113.8,48.4
+out of step,lopsided_17,0.7,129.91,-108.8,43.9
+out of step,lopsided_17,0.75,143.96,-106.5,42.2
+out of step,lopsided_17,0.8,147.82,-108.5,43.7
+out of step,lopsided_17,0.85,157.87,-105.6,38.4
+out of step,lopsided_17,0.9,162.75,-108.0,23.0
+out of step,lopsided_17,0.95,162.6,-114.1,4.1
+out of step,lopsided_17,1.0,162.72,-115.8,-5.4
+out of step,lopsided_17,1.05,175.56,-108.0,-10.5
+out of step,lopsided_17,1.1,190.8,-101.8,-11.6
+out of step,lopsided_17,1.15,201.0,-100.0,-15.8
+out of step,lopsided_17,1.2,206.63,-100.6,-25.1
+out of step,lopsided_17,1.25,216.54,-91.3,-41.3
+out of step,lopsided_17,1.3,221.29,-76.1,-54.7
+out of step,lopsided_17,1.35,231.68,-64.2,-61.5
+out of step,lopsided_17,1.4,242.27,-54.5,-60.2
+out of step,lopsided_17,1.45,261.66,-47.2,-52.9
+out of step,lopsided_17,1.5,274.0,-41.2,-49.2
+out of step,lopsided_17,1.55,282.88,-31.8,-46.8
+out of step,lopsided_17,1.6,288.81,-15.1,-46.8
+out of step,lopsided_17,1.65,302.95,6.6,-40.0
+out of step,lopsided_17,1.7,302.41,27.2,-35.7
+out of step,lopsided_17,1.75,300.89,37.2,-28.2
+out of step,lopsided_17,1.8,317.86,31.2,-9.1
+out of step,lopsided_17,1.85,347.18,19.4,5.5
+out of step,lopsided_18,0.0,0.0,0.0,0.0
+out of step,lopsided_18,0.05,1.8,-1.5,1.3
+out of step,lopsided_18,0.1,10.17,-7.7,2.7
+out of step,lopsided_18,0.15,-1.88,-3.4,4.6
+out of step,lopsided_18,0.2,-8.64,2.1,11.4
+out of step,lopsided_18,0.25,-10.81,6.7,24.0
+out of step,lopsided_18,0.3,5.97,2.3,37.7
+out of step,lopsided_18,0.35,8.66,4.5,49.8
+out of step,lopsided_18,0.4,52.64,-4.7,65.0
+out of step,lopsided_18,0.45,72.01,-11.0,80.6
+out of step,lopsided_18,0.5,97.47,-27.8,93.2
+out of step,lopsided_18,0.55,107.96,-48.3,96.6
+out of step,lopsided_18,0.6,124.36,-63.6,89.9
+out of step,lopsided_18,0.65,129.45,-70.2,84.7
+out of step,lopsided_18,0.7,139.5,-74.9,77.4
+out of step,lopsided_18,0.75,138.35,-88.2,68.9
+out of step,lopsided_18,0.8,140.3,-96.8,56.9
+out of step,lopsided_18,0.85,154.94,-88.8,40.9
+out of step,lopsided_18,0.9,178.69,-78.0,28.5
+out of step,lopsided_18,0.95,196.52,-69.2,18.1
+out of step,lopsided_18,1.0,211.58,-59.9,5.8
+out of step,lopsided_18,1.05,220.41,-52.9,-12.6
+out of step,lopsided_18,1.1,208.48,-54.1,-38.3
+out of step,lopsided_18,1.15,197.3,-55.8,-60.5
+out of step,lopsided_18,1.2,202.24,-45.8,-63.8
+out of step,lopsided_18,1.25,217.41,-33.1,-63.0
+out of step,lopsided_18,1.3,222.08,-28.9,-63.2
+out of step,lopsided_18,1.35,227.79,-27.3,-63.6
+out of step,lopsided_18,1.4,233.68,-28.8,-66.7
+out of step,lopsided_18,1.45,224.38,-34.7,-78.6
+out of step,lopsided_18,1.5,218.73,-31.7,-90.5
+out of step,lopsided_18,1.55,221.16,-20.1,-97.9
+out of step,lopsided_18,1.6,235.4,0.5,-104.8
+out of step,lopsided_18,1.65,241.99,21.1,-114.5
+out of step,lopsided_18,1.7,228.15,36.9,-133.7
+out of step,lopsided_18,1.75,234.93,56.0,-143.5
+out of step,lopsided_18,1.8,258.23,79.1,-142.8
+out of step,lopsided_18,1.85,279.7,97.3,-141.3
+out of step,lopsided_18,1.9,297.65,111.7,-140.6
+out of step,lopsided_18,1.95,303.91,128.4,-138.4
+out of step,lopsided_18,2.0,308.7,148.7,-137.3
+out of step,lopsided_18,2.05,291.89,179.6,-142.2
+out of step,lopsided_18,2.1,274.79,206.7,-148.5
+out of step,lopsided_18,2.15,239.8,216.9,-166.4
+out of step,lopsided_19,0.0,0.0,0.0,0.0
+out of step,lopsided_19,0.05,1.58,-1.4,1.8
+out of step,lopsided_19,0.1,13.04,-9.6,3.8
+out of step,lopsided_19,0.15,23.99,-18.3,7.5
+out of step,lopsided_19,0.2,1.31,-5.9,20.5
+out of step,lopsided_19,0.25,-17.17,4.3,32.6
+out of step,lopsided_19,0.3,-3.26,1.2,52.1
+out of step,lopsided_19,0.35,20.85,-5.6,71.1
+out of step,lopsided_19,0.4,4.58,2.7,92.3
+out of step,lopsided_19,0.45,-17.94,13.3,115.0
+out of step,lopsided_19,0.5,-8.73,17.1,143.9
+out of step,lopsided_19,0.55,2.16,18.5,172.1
+out of step,lopsided_19,0.6,-20.69,31.9,193.9
+out of step,lopsided_19,0.65,-41.87,43.6,214.0
+out of step,lopsided_19,0.7,-55.3,47.6,230.7
+out of step,lopsided_19,0.75,-64.26,49.2,246.0
+out of step,lopsided_20,0.0,0.0,0.0,0.0
+out of step,lopsided_20,0.05,-1.32,0.8,2.3
+out of step,lopsided_20,0.1,4.2,-4.2,5.1
+out of step,lopsided_20,0.15,-0.32,-4.3,6.3
+out of step,lopsided_20,0.2,-2.93,-4.4,11.8
+out of step,lopsided_20,0.25,-4.01,-3.1,22.6
+out of step,lopsided_20,0.3,-6.31,-1.0,28.4
+out of step,lopsided_20,0.35,-13.23,2.2,27.7
+out of step,lopsided_20,0.4,-4.26,-2.0,27.4
+out of step,lopsided_20,0.45,-2.28,-1.4,32.1
+out of step,lopsided_20,0.5,0.19,-3.2,42.8
+out of step,lopsided_20,0.55,-13.05,2.5,58.5
+out of step,lopsided_20,0.6,-27.23,5.2,70.6
+out of step,lopsided_20,0.65,-40.2,9.6,82.9
+out of step,lopsided_20,0.7,-46.58,20.4,92.6
+out of step,lopsided_20,0.75,-52.11,36.2,102.8
+out of step,lopsided_20,0.8,-62.68,51.4,111.3
+out of step,lopsided_20,0.85,-65.26,69.0,120.6
+out of step,lopsided_20,0.9,-64.67,85.6,128.8
+out of step,lopsided_20,0.95,-55.75,85.9,141.7
+out of step,lopsided_20,1.0,-24.83,81.5,152.5

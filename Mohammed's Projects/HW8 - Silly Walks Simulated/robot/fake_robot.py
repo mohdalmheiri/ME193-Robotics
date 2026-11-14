@@ -37,6 +37,19 @@ How it works
             (read()/send(), units.py) uses config.py, i.e. what it BELIEVES - exactly like the
             real robot. The calibration tests give the fake hub a different truth and check
             that the calibration scripts find it.
+  v2 extras  With a v2 policy (policy_meta.json has them) each robot also draws its motor
+            inertia (log-uniform), gearbox friction and contact stiffness from v2's ranges.
+  Robustness options (not used by the normal checks):
+            body_mass_kg=0.080   set the body's mass (inertia scaled with it)
+            motor="regulated"    the SPEC MOTOR (config.MOTOR_SPEC: ~334 rpm no load, ~0.16 N m
+                                 stall), with the hub holding the commanded speed: training's
+                                 speed controller (torque = 0.05 x speed error), but limited by
+                                 what a DC motor can give at its current speed,
+                                 stall x (1 - speed / no-load speed) (minus that when braking)
+            motor="pwm"          the SPEC MOTOR with NO speed control: the percent sets the
+                                 motor voltage, torque = stall x (percent/100 - speed / no-load
+                                 speed), so the speed sags under load
+            Each side gets its own stall torque and no-load speed from the spec ranges.
   Test hooks (for the safety tests): disconnect(), freeze_sensors(), tip_over().
 """
 
@@ -62,7 +75,8 @@ class FakeRobot(RobotInterface):
     def __init__(self, seed: int = 0, realtime: bool = False, randomize: bool = True,
                  noise: bool = True, legs_in_step: bool = False, start_q=None,
                  start_yaw: float | None = None, hub: dict | None = None,
-                 armature: float | None = None):
+                 armature: float | None = None, body_mass_kg: float | None = None,
+                 motor: str | None = None):
         # the fake hub's TRUE wiring/conventions (default: exactly what config.py assumes)
         self.hub = {k: getattr(C, k) for k in HUB_KEYS}
         self.hub.update(hub or {})
@@ -82,12 +96,14 @@ class FakeRobot(RobotInterface):
         self.qadr = {s: self.m.jnt_qposadr[self.m.joint(j).id] for s, j in JOINT.items()}
         self.vadr = {s: self.m.jnt_dofadr[self.m.joint(j).id] for s, j in JOINT.items()}
         self.act = {s: self.m.actuator(j).id for s, j in JOINT.items()}
-        if armature is not None:
-            # motor inertia override. v1's model has 1e-5, which makes the simulated speed
-            # controller chatter; an unloaded leg then averages ~81 rpm WHATEVER the command
-            # (docs/process_log.md). v2 trains with 2e-4 nominal.
-            for s in LEGS:
-                self.m.dof_armature[self.vadr[s]] = armature
+        # motor inertia override (applied after the randomization). v1's model has 1e-5, which
+        # makes the simulated speed controller chatter; an unloaded leg then averages ~81 rpm
+        # WHATEVER the command (docs/process_log.md). v2 trains with 2e-4 nominal.
+        self.armature_override = armature
+        self.body_mass_kg = body_mass_kg
+        assert motor in (None, "regulated", "pwm"), motor
+        self.motor = motor
+        self.kv_train = float(self.m.actuator_gainprm[self.act["right"], 0])   # 0.05 N m / (rad/s)
         self._connected = False
         self._sensors_frozen = False
         self._tip_until = -1.0
@@ -113,7 +129,35 @@ class FakeRobot(RobotInterface):
             m.body_ipos[self.body, 0] += rng.uniform(-R["com_shift_x_m"], R["com_shift_x_m"])
             for s in ("right", "left"):
                 m.actuator_forcerange[self.act[s]] *= rng.uniform(*R["motor_strength_scale"])
-            mujoco.mj_setConst(m, self.d)     # recompute quantities that depend on mass
+            if "armature_kg_m2" in R:         # v2's extra randomizations
+                lo, hi = (math.log(x) for x in R["armature_kg_m2"])
+                for s in LEGS:
+                    m.dof_armature[self.vadr[s]] = self.info[f"armature_{s}"] = math.exp(rng.uniform(lo, hi))
+                    m.dof_frictionloss[self.vadr[s]] *= rng.uniform(*R["joint_friction_scale"])
+                tc = self.info["contact_timeconst"] = rng.uniform(*R["contact_timeconst_s"])
+                for g in ("robot/body_box", "robot/hub_right", "robot/hub_left",
+                          "robot/leg_right_box", "robot/leg_left_box"):
+                    m.geom_solref[m.geom(g).id, 0] = tc
+        if self.armature_override is not None:
+            for s in LEGS:
+                m.dof_armature[self.vadr[s]] = self.armature_override
+        if self.body_mass_kg is not None:
+            k = self.body_mass_kg / m.body_mass[self.body]
+            m.body_mass[self.body] *= k
+            m.body_inertia[self.body] *= k
+        self.spec = {}
+        if self.motor:
+            # spec motor: per side, a stall torque and no-load speed from the published ranges
+            S = C.MOTOR_SPEC
+            pick = (lambda r: rng.uniform(*r)) if self.randomize else (lambda r: sum(r) / 2)
+            for s in LEGS:
+                self.spec[s] = {"stall": pick(S["stall_torque_Nm"]),
+                                "w0": pick(S["no_load_rpm"]) * 2 * math.pi / 60}
+                a = self.act[s]
+                kv = self.kv_train if self.motor == "regulated" else self.spec[s]["stall"] / self.spec[s]["w0"]
+                m.actuator_gainprm[a, 0], m.actuator_biasprm[a, 2] = kv, -kv
+            self.info["spec_motor"] = self.spec
+        mujoco.mj_setConst(m, self.d)         # recompute quantities that depend on mass
         self.motor_scale = {s: rng.uniform(*R["motor_speed_scale"]) if self.randomize else 1.0
                             for s in ("right", "left")}
         self.delay_range = R["command_delay_physics_steps"]
@@ -333,7 +377,27 @@ class FakeRobot(RobotInterface):
         if self.rng.random() > self.hold_prob:
             self.lag = int(self.rng.integers(self.delay_range[0], self.delay_range[1] + 1))
         applied = self.history[-1 - min(self.lag, len(self.history) - 1)]
-        self.d.ctrl[self.act["right"]], self.d.ctrl[self.act["left"]] = applied
+        if not self.motor:
+            self.d.ctrl[self.act["right"]], self.d.ctrl[self.act["left"]] = applied
+        else:
+            # spec motor, still as MuJoCo's velocity actuator (torque = kv x (ctrl - speed),
+            # computed implicitly, so it stays stable with light legs), with limits redone each step
+            w_full = self._rpm_tbl[-1] * 2 * math.pi / 60      # leg speed at 100 % in the hub table
+            for i, s in enumerate(LEGS):
+                a, sp = self.act[s], self.spec[s]
+                w = self.d.qvel[self.vadr[s]]
+                if self.motor == "regulated":
+                    # training's controller, but a DC motor at speed w can give at most
+                    # stall x (1 - w/w0) forwards and stall x (1 + w/w0) braking
+                    self.d.ctrl[a] = applied[i]
+                    self.m.actuator_forcerange[a] = (sp["stall"] * (-1 - w / sp["w0"]),
+                                                     sp["stall"] * (1 - w / sp["w0"]))
+                else:
+                    # pwm: voltage fraction u = percent / 100 -> torque = stall x (u - w/w0)
+                    #     = (stall/w0) x (u w0 - w): a velocity actuator with kv = stall/w0
+                    u = max(-1.0, min(1.0, applied[i] / w_full))
+                    self.d.ctrl[a] = u * sp["w0"]
+                    self.m.actuator_forcerange[a] = (-2 * sp["stall"], 2 * sp["stall"])
         if getattr(self, "_stand_pose", None) is not None:       # clamped on a stand
             self.d.qpos[:7] = self._stand_pose
             self.d.qvel[:6] = 0.0

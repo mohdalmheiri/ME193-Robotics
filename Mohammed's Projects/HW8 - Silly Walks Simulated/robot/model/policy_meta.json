@@ -1,10 +1,12 @@
 {
-  "checkpoint": "train/logs/rsl_rl/walk_straight/2026-11-12_22-50-21_first_check/model_299.pt",
-  "training_round": 299,
+  "checkpoint": "train/logs/rsl_rl/walk_straight_v2/2026-11-13_18-36-30_v2/model_799.pt",
+  "training_round": 799,
   "physics_timestep_s": 0.002,
   "decision_dt_s": 0.05,
+  "task": "v2",
   "max_speed_rpm": 120.0,
-  "action": "2 numbers (right leg, left leg), clipped to -1..1; leg speed in the upright direction = max_speed_rpm * (a + 1) / 2   (-1 = stopped, +1 = full speed). In the simulator's joint coordinates the upright direction is a NEGATIVE speed.",
+  "action_mode": "top_speed_fraction",
+  "action": "2 numbers (right leg, left leg), clipped to -1..1; leg speed in the upright direction = (a + 1) / 2 x this motor's TOP speed (-1 = stopped, +1 = top speed). Training drew each robot's top speed from top_speed_rpm_range; on a real motor the robot side picks one top speed inside that range (config.POLICY_TOP_RPM). In the simulator's joint coordinates the upright direction is a NEGATIVE speed.",
   "joints": [
     "right",
     "left"
@@ -33,7 +35,7 @@
     [
       "leg_speed",
       2,
-      "joint speed (right, left) / max speed in rad/s"
+      "(leg angle now - leg angle at the last decision) / decision_dt_s, / leg_speed_norm_rpm in rad/s (the encoder average)"
     ],
     [
       "last_command",
@@ -50,7 +52,7 @@
     "heading_drift_rad_s": 0.008726646,
     "leg_angle_rad": 0.034906585,
     "leg_calib_rad": 0.034906585,
-    "leg_speed_frac": 0.05
+    "leg_speed_frac": 0.02
   },
   "randomization": {
     "motor_speed_scale": [
@@ -66,15 +68,44 @@
       0.9
     ],
     "mass_scale": [
-      0.8,
-      1.3
+      0.6,
+      1.6
     ],
     "com_shift_x_m": 0.003,
     "command_delay_physics_steps": [
       0,
       20
     ],
-    "command_delay_hold_prob": 0.95
+    "command_delay_hold_prob": 0.95,
+    "armature_kg_m2": [
+      5e-05,
+      0.0005
+    ],
+    "armature_distribution": "log_uniform",
+    "joint_friction_scale": [
+      0.5,
+      2.5
+    ],
+    "contact_timeconst_s": [
+      0.004,
+      0.008
+    ],
+    "pushes_training_only": {
+      "interval_s": [
+        3.0,
+        6.0
+      ],
+      "spin_rad_s": {
+        "roll": [
+          -5.0,
+          5.0
+        ],
+        "pitch": [
+          -5.0,
+          5.0
+        ]
+      }
+    }
   },
   "reset": {
     "leg_box_extent_m": [
@@ -85,5 +116,10 @@
     ],
     "table_height_below_axle_m": 0.015,
     "drop_height_m": 0.002
-  }
+  },
+  "top_speed_rpm_range": [
+    80.0,
+    140.0
+  ],
+  "leg_speed_norm_rpm": 120.0
 }

@@ -40,9 +40,29 @@ from policy import Policy  # noqa: E402
 from run_policy import run  # noqa: E402
 
 N, SECONDS = 100, 20.0
-# evaluate.py's results (docs/eval_results_dt0.002.md, first_check model_299): mean / median / worst 5 %
-EVAL = {"baseline": {"side": (453, 448, 998), "head": (72, 65, 168), "fwd": (596, 614, -175), "flips": 0},
-        "policy": {"side": (67, 58, 148), "head": (6, 5, 14), "fwd": (1144, 1090, 840), "flips": 0}}
+# evaluate.py's results for THIS policy (v1: docs/eval_results_dt0.002.md, v2:
+# docs/eval_results_v2_dt0.002.md), read from its table: mean / median / worst 5 %
+EVAL_MD = HW8 / "docs" / ("eval_results_v2_dt0.002.md" if U.V2 else "eval_results_dt0.002.md")
+
+
+def read_eval(path):
+    rows = [ln.split("|")[1:-1] for ln in path.read_text().splitlines() if ln.startswith("| ")]
+    head = [c.strip() for c in rows[0]]
+    col = {"baseline": next(i for i, h in enumerate(head) if h.startswith("Baseline")),
+           "policy": head.index("Trained policy")}
+    out = {k: {} for k in col}
+    keys = {"Sideways drift": "side", "Heading error": "head", "Forward distance": "fwd", "Flipped": "flips"}
+    for r in rows[1:]:
+        name = next((v for k, v in keys.items() if r[0].strip().startswith(k)), None)
+        if name is None:
+            continue
+        for d, i in col.items():
+            nums = [float(x) for x in __import__("re").findall(r"-?\d+(?:\.\d+)?", r[i])]
+            out[d][name] = int(nums[0]) if name == "flips" else tuple(nums[:3])
+    return out
+
+
+EVAL = read_eval(EVAL_MD)
 
 
 class Recorder:
@@ -92,7 +112,7 @@ print(f"{N} fake robots x {SECONDS:.0f} s each, physics step {U.META['physics_ti
 C.LEG_SPEED_SOURCE = "encoder"
 P_enc = drive(Policy, "policy, encoder")
 C.LEG_SPEED_SOURCE = "hub_speed"
-P_hub = drive(Policy, "policy, hub speed")
+P_hub = drive(Policy, "policy, hub speed")     # v2: NOT the source v2 trained on
 C.LEG_SPEED_SOURCE = "encoder"
 c = float(np.mean(P_enc["actions"]))
 rpm = U.MAX_RPM * (c + 1) / 2
@@ -112,9 +132,14 @@ lines = ["# FakeRobot check: does the robot-side code reproduce the evaluation?"
          f"- Policy: `{U.META['checkpoint']}`. Physics: `robot/model/scene.xml` (the training model, "
          "elliptic friction, checked field by field against MJLab).",
          f"- Baseline: both legs at a constant {rpm:.0f} rpm (the policy's average command).",
-         "- evaluate.py columns: from `docs/eval_results_dt0.002.md` (MJLab, 100 robots, seed 7). "
+         f"- evaluate.py columns: from `docs/{EVAL_MD.name}` (MJLab, 100 robots, seed 7). "
          "The robots are drawn from the same ranges but are not the same 100, so expect "
-         "similar statistics, not identical numbers.",
+         "similar statistics, not identical numbers."
+         + (f" v2: evaluate.py draws each robot's top speed from 80-140 rpm; here the robot side "
+            f"fixes it at config.POLICY_TOP_RPM = {U.MAX_RPM:.0f} rpm." if U.V2 else ""),
+         "- Leg speed input: v2 trained on the encoder average (the 'encoder' column is the real "
+         "set-up); the 'hub speed' column is the instantaneous speed, which v2 never saw." if U.V2 else
+         "- Leg speed input: v1 trained on the instantaneous speed ('hub speed' column).",
          "- Values: mean / median / worst 5 % of the absolute value (forward: mean / median / "
          "lowest 5 %).", "",
          "| Measure | Baseline: evaluate.py | Baseline: FakeRobot | Policy: evaluate.py | "

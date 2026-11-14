@@ -27,7 +27,15 @@ pressing "go" on the hub.
 Outputs: docs/hand_tests_sim.md  (table with an empty "Julian (real)" column to fill in)
          docs/media/hand_tests_sim_paths.png  (paths from above, like his video)
          docs/data/hand_tests_sim.csv  (every robot's numbers)
+Spec motor (Julian's published specs, config.MOTOR_SPEC; see robot/fake_robot.py):
+  --motor regulated|pwm   the real motor's torque curve (hub holds speed / percent = voltage)
+  --percent P             power setting like on the hub; leg speed from config.RPM_AT_PERCENT
+                          (placeholder 334 rpm at 100 %), replaces --rpm
+  --body-mass-kg 0.080    body mass (motor weight 80 g)
+  --tag NAME              write docs/hand_tests_sim_NAME.md (and _NAME .csv/.png) instead of
+                          overwriting the default files
 Run from the HW8 folder:  ../../.venv/bin/python robot/sim_hand_tests.py [--rpm 120] [--phase-deg 180]
+  ../../.venv/bin/python robot/sim_hand_tests.py --motor regulated --percent 35 --body-mass-kg 0.080 --tag spec_35
 """
 
 import argparse
@@ -58,35 +66,57 @@ p.add_argument("--seconds", type=float, default=10.0)
 p.add_argument("--lopsided", type=int, default=20)
 p.add_argument("--armature", type=float, default=None,
                help="motor inertia override (default: the exported model's; v2 = 2e-4)")
+p.add_argument("--motor", choices=["training", "regulated", "pwm"], default="training")
+p.add_argument("--percent", type=float, default=None, help="hub power setting (replaces --rpm)")
+p.add_argument("--body-mass-kg", type=float, default=None)
+p.add_argument("--tag", default="")
 a = p.parse_args()
+if a.percent is not None:
+    a.rpm = U.percent_to_rpm(a.percent)       # the rpm table's speed for this percent
 RAD_S = a.rpm * 2 * math.pi / 60
+SUFFIX = f"_{a.tag}" if a.tag else ""
+FAKE_KW = {"armature": a.armature, "body_mass_kg": a.body_mass_kg,
+           "motor": None if a.motor == "training" else a.motor}
+SPEED_TXT = (f"{a.percent:.0f} % (= {a.rpm:.0f} rpm no-load from the rpm table)" if a.percent is not None
+             else f"{a.rpm:.0f} rpm")
 
 
 def constant_run(seed, randomize, q_start, seconds, direction=-1):
     """Both motors at one fixed speed, no laptop in the loop. direction -1 = the simulator's
     upright walking direction (negative joint speed), +1 = the other way.
-    Returns the result dict and the path [(sideways mm, forward mm, time s, heading deg)]."""
+    Returns the result dict and the path [(sideways mm, forward mm, time s, heading deg)].
+    A robot that flips (tilt past 70 deg) is stopped there: its distance and turn are the
+    values at the moment it flipped (as in evaluate.py), because what a robot on its back
+    does afterwards (e.g. spinning around for 7000 deg) says nothing about walking.
+    At 100 % power on the spec motor a flipped robot can be thrown into the air, spinning
+    faster than the 0.002 s physics step can follow; the simulation then breaks down
+    ("unstable"). That only happens after it has tipped, so it also counts as a flip."""
     f = FakeRobot(seed=seed, randomize=randomize, noise=False, start_q=q_start, start_yaw=0.0,
-                  armature=a.armature)
+                  **FAKE_KW)
     f.connect()
     f.wanted = direction * RAD_S * np.array([f.motor_scale["right"], f.motor_scale["left"]])
-    path, max_tilt = [], 0.0
-    while f.now() < seconds - 1e-9:
-        f.wait_until(f.now() + 0.05)
+    path, max_tilt, unstable = [(0.0, 0.0, 0.0, 0.0)], 0.0, False
+    while f.now() < seconds - 1e-9 and max_tilt <= 70:
+        try:
+            f.wait_until(f.now() + 0.05)
+        except RuntimeError:
+            unstable = True
+            break
         t = f.truth()
         path.append((t["side_mm"], t["fwd_mm"], f.now(), t["heading_deg"]))
         max_tilt = max(max_tilt, t["tilt_deg"])
-    t = f.truth()
     path = np.array(path)
     # keep counting past +/-180 deg, so a robot that turns 1.5 times reads 540, not 180
     path[:, 3] = np.degrees(np.unwrap(np.radians(path[:, 3])))
-    return {"distance_mm": math.hypot(t["side_mm"], t["fwd_mm"]), "forward_mm": t["fwd_mm"],
-            "sideways_mm": t["side_mm"], "turn_deg": float(path[-1, 3]), "max_tilt_deg": max_tilt,
-            "flipped": max_tilt > 70}, path
+    side, fwd = path[-1, 0], path[-1, 1]
+    return {"distance_mm": math.hypot(side, fwd), "forward_mm": fwd, "sideways_mm": side,
+            "turn_deg": float(path[-1, 3]), "max_tilt_deg": max_tilt,
+            "flipped": max_tilt > 70 or unstable, "flip_time_s": float(path[-1, 2]),
+            "unstable": unstable}, path
 
 
 # ------------------------------------------------------------------ 1-3 static numbers
-f = FakeRobot(seed=0, randomize=False, noise=False, start_q=[0.0, 0.0], start_yaw=0.0)
+f = FakeRobot(seed=0, randomize=False, noise=False, start_q=[0.0, 0.0], start_yaw=0.0, **FAKE_KW)
 mass_g = sum(f.m.body_mass[f.m.body(b).id] for b in ("robot/body", "robot/leg_right", "robot/leg_left")) * 1000
 f.connect()
 f.wait_until(1.0)
@@ -127,13 +157,30 @@ for label, phase in (("in step", 0.0), ("out of step", a.phase_deg)):
 
 # ------------------------------------------------------------------ outputs
 def lop_cell(rs, key):
-    x = np.array([r[key] for r in rs])
-    return f"{np.median(x):+.0f} (range {x.min():+.0f} to {x.max():+.0f})"
+    """Median (range) over the lopsided robots that stayed UPRIGHT (a flipped robot's distance
+    and turn are not a walking result)."""
+    x = np.array([r[key] for r in rs if not r["flipped"]])
+    if len(x) == 0:
+        return "all flipped"
+    note = "" if len(x) == len(rs) else f", {len(x)} upright robots"
+    return f"{np.median(x):+.0f} (range {x.min():+.0f} to {x.max():+.0f}{note})"
+
+
+def nom_cell(r, key, fmt):
+    return format(r[key], fmt) + (f" (flipped at {r['flip_time_s']:.1f} s)" if r["flipped"] else "")
+
+
+def flip_cell(rs):
+    k = [r for r in rs if r["flipped"]]
+    times = f", median at {np.median([r['flip_time_s'] for r in k]):.1f} s" if k else ""
+    return f"{len(k)} of {len(rs)}{times}"
 
 
 lines = ["# Julian's hand tests, simulated", "",
          f"Simulator: `robot/model/scene.xml` (the training model), motor inertia "
-         f"{a.armature if a.armature else 'as exported'}, leg speed {a.rpm:.0f} rpm at full speed, "
+         f"{a.armature if a.armature else 'as exported'}, motor: "
+         f"{ {'training': 'the training motor (0.10 N m limit)', 'regulated': 'SPEC motor, hub holds speed', 'pwm': 'SPEC motor, percent = voltage'}[a.motor] }"
+         f"{f', body {a.body_mass_kg * 1000:.0f} g' if a.body_mass_kg else ''}, setting {SPEED_TXT}, "
          f"{a.seconds:.0f} s runs, legs start at {a.start_deg:.0f} deg (0 = pointing forward); "
          f"'out of step' = legs {a.phase_deg:.0f} deg apart. Lopsided robots: {a.lopsided}, randomized "
          "as in training. Generated by `robot/sim_hand_tests.py`.", "",
@@ -141,20 +188,23 @@ lines = ["# Julian's hand tests, simulated", "",
          "|---|---|---|---|",
          f"| Weight (g) | {mass_g:.0f} | body mass x{MASS[0]:g}-{MASS[1]:g} | |",
          f"| Axle height above table, legs forward, at rest (mm) | {axle_mm:.1f} | | |",
-         f"| Leg speed at full speed (rpm) | {a.rpm:.0f} (assumed) | x0.9-1.1 per side | |",
-         f"| Spin direction that walks (5 s) | {walk['forward_mm']:.0f} mm forward, max tilt {walk['max_tilt_deg']:.0f} deg | | |",
-         f"| Other spin direction (5 s) | {'FLIPS' if other['flipped'] else 'does not flip'} (max tilt {other['max_tilt_deg']:.0f} deg), "
-         f"{other['forward_mm']:.0f} mm forward | | |"]
+         f"| Leg speed at this setting (rpm) | {a.rpm:.0f} (assumed{', no load' if a.motor != 'training' else ''}) | x0.9-1.1 per side | |",
+         f"| Spin direction that walks (5 s) | {walk['forward_mm']:.0f} mm forward, max tilt {walk['max_tilt_deg']:.0f} deg"
+         f"{' - FLIPPED at %.1f s' % walk['flip_time_s'] if walk['flipped'] else ''} | | |",
+         f"| Other spin direction (5 s) | {'FLIPS at %.1f s' % other['flip_time_s'] if other['flipped'] else 'does not flip'} "
+         f"(max tilt {other['max_tilt_deg']:.0f} deg), {other['forward_mm']:.0f} mm forward | | |"]
 for label, T in tests.items():
     n = T["nominal"]
-    lines += [f"| {label}: distance (mm) | {n['distance_mm']:.0f} | {lop_cell(T['lops'], 'distance_mm')} | |",
-              f"| {label}: sideways offset (mm, + = right) | {n['sideways_mm']:+.0f} | {lop_cell(T['lops'], 'sideways_mm')} | |",
-              f"| {label}: turn angle (deg, + = left) | {n['turn_deg']:+.0f} | {lop_cell(T['lops'], 'turn_deg')} | |",
-              f"| {label}: flipped | {'yes' if n['flipped'] else 'no'} | {sum(r['flipped'] for r in T['lops'])} of {a.lopsided} | |"]
-lines += ["", f"Spin direction in words: {words}"]
-(HW8 / "docs" / "hand_tests_sim.md").write_text("\n".join(lines) + "\n")
+    lines += [f"| {label}: distance (mm) | {nom_cell(n, 'distance_mm', '.0f')} | {lop_cell(T['lops'], 'distance_mm')} | |",
+              f"| {label}: sideways offset (mm, + = right) | {nom_cell(n, 'sideways_mm', '+.0f')} | {lop_cell(T['lops'], 'sideways_mm')} | |",
+              f"| {label}: turn angle (deg, + = left) | {nom_cell(n, 'turn_deg', '+.0f')} | {lop_cell(T['lops'], 'turn_deg')} | |",
+              f"| {label}: flipped | {'yes, at %.1f s' % n['flip_time_s'] if n['flipped'] else 'no'} | {flip_cell(T['lops'])} | |"]
+lines += ["", "A robot that flips is stopped at that moment; its distance/sideways/turn are the values when it "
+          "flipped, and lopsided medians use only the robots that stayed upright.", "",
+          f"Spin direction in words: {words}"]
+(HW8 / "docs" / f"hand_tests_sim{SUFFIX}.md").write_text("\n".join(lines) + "\n")
 (HW8 / "docs" / "data").mkdir(exist_ok=True)
-with open(HW8 / "docs" / "data" / "hand_tests_sim.csv", "w", newline="") as fh:
+with open(HW8 / "docs" / "data" / f"hand_tests_sim{SUFFIX}.csv", "w", newline="") as fh:
     w_ = csv.writer(fh)
     w_.writerow(["test", "robot", "distance_mm", "forward_mm", "sideways_mm", "turn_deg", "max_tilt_deg", "flipped"])
     for label, T in tests.items():
@@ -162,7 +212,7 @@ with open(HW8 / "docs" / "data" / "hand_tests_sim.csv", "w", newline="") as fh:
             w_.writerow([label, name] + [round(r[k], 1) if isinstance(r[k], float) else r[k]
                                          for k in ("distance_mm", "forward_mm", "sideways_mm", "turn_deg", "max_tilt_deg", "flipped")])
 # heading over time for every robot, for robot/compare_drift.py
-with open(HW8 / "docs" / "data" / "hand_tests_sim_heading.csv", "w", newline="") as fh:
+with open(HW8 / "docs" / "data" / f"hand_tests_sim_heading{SUFFIX}.csv", "w", newline="") as fh:
     w_ = csv.writer(fh)
     w_.writerow(["test", "robot", "t", "heading_deg", "sideways_mm", "forward_mm"])
     for label, T in tests.items():
@@ -175,14 +225,14 @@ for ax, (label, T) in zip(axes, tests.items()):
         ax.plot(pth[:, 0], pth[:, 1], color="tab:blue", lw=0.8, alpha=0.5)
     ax.plot(T["nom_path"][:, 0], T["nom_path"][:, 1], color="black", lw=2, label="nominal robot")
     ax.axvline(0, color="green", lw=1, label="start line")
-    ax.set(title=f"Legs {label}, {a.rpm:.0f} rpm, {a.seconds:.0f} s", xlabel="sideways (mm, + = right)")
+    ax.set(title=f"Legs {label}, {SPEED_TXT}, {a.seconds:.0f} s", xlabel="sideways (mm, + = right)")
     ax.set_aspect("equal", adjustable="box")
     ax.grid(alpha=0.3)
     ax.legend(loc="lower right")
 axes[0].set_ylabel("forward (mm)")
 fig.suptitle("Simulated hand tests, seen from above (blue = 20 lopsided robots)")
 fig.tight_layout()
-fig.savefig(HW8 / "docs" / "media" / "hand_tests_sim_paths.png", dpi=110)
+fig.savefig(HW8 / "docs" / "media" / f"hand_tests_sim_paths{SUFFIX}.png", dpi=110)
 print("\n".join(lines))
-print("\nSaved docs/hand_tests_sim.md, docs/data/hand_tests_sim.csv, docs/data/hand_tests_sim_heading.csv, "
-      "docs/media/hand_tests_sim_paths.png")
+print(f"\nSaved docs/hand_tests_sim{SUFFIX}.md, docs/data/hand_tests_sim{SUFFIX}.csv, "
+      f"docs/data/hand_tests_sim_heading{SUFFIX}.csv, docs/media/hand_tests_sim_paths{SUFFIX}.png")

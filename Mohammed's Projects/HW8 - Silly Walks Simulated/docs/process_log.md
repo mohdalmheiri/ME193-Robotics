@@ -655,10 +655,158 @@ Plus sensor noise, gyro yaw drift (±0.5°/s) and leg calibration error (±2°).
 - The chatter was making the simulated robot tip over more.
 - `docs/hand_tests_sim.md` currently shows these armature-2e-4 numbers. It will be regenerated from the v2 export.
 
+## 2026-11-14 night: v2 results, the real motor's specs, robustness test
+
+**Committed** steps 3–4 as `f78d827` (calibration scripts, checklist, sim drift comparison). Not pushed.
+
+**v2 training finished** (`train/logs/rsl_rl/walk_straight_v2/2026-11-13_18-36-30_v2/`)
+- All 800 rounds ran (4 h 25 min; the Mac stayed plugged in). Latest checkpoint: `model_799.pt`.
+- Curves: `docs/media/training_2026-11-13_18-36-30_v2.png`.
+  - Total reward rose from −0.19 to 12.4 and levelled off by about round 300.
+  - Zero flips in training after the first rounds.
+  - Every episode ran the full 20 s.
+  - Exploration noise shrank to 0.02.
+
+**Julian's real specs** (logged with their sources, not yet confirmed)
+- Motor weight **80 g**. Source: the merlinsbricks.com set database; approximate, and it may include packaging.
+- Motor at 4.2 V (full battery), source to be confirmed:
+  - no-load speed **322–346 rpm**;
+  - **192–220 rpm at 50 mN·m**;
+  - stall torque **148–173 mN·m**.
+- **Compared with our simulator's motor** (0.10 N·m limit at any speed, top speed guessed at 80–140 rpm): the real one is about 2.5× faster and 1.6× stronger at a standstill.
+- **Torque falls with speed:** a DC motor's torque drops as it speeds up, stall × (1 − speed / no-load speed). At 110 rpm it has about 0.11 N·m, almost exactly the simulator's 0.10.
+- **The numbers are only roughly consistent:** a straight line through 334 rpm and 0.16 N·m gives about 230 rpm at 50 mN·m, against the quoted 192–220.
+- All stored in `robot/config.py` as `MOTOR_SPEC`, used only by simulator tests.
+
+**1. Export and the usual checks**
+- `train/export_policy.py --task v2` is new. It exports the v2 meaning:
+  - `action_mode` "top_speed_fraction";
+  - `top_speed_rpm_range` 80–140;
+  - `leg_speed_norm_rpm` 120;
+  - v2's randomizations;
+  - the reference recording with pushes off.
+- The physics model again matches MJLab in all 45 fields.
+- **evaluate.py** (MJLab, the same 100 lopsided robots, seed 7, training pushes off): `docs/eval_results_v2_dt0.002.md`, `docs/media/eval_v2_dt0.002_paths.png`, videos `eval_v2_dt0.002_{baseline,controller,policy}.mp4`.
+
+| Measure (mean / median / worst 5%) | Baseline (equal speeds) | Trained policy v2 | v1 policy, for comparison (`eval_results_dt0.002.md`) |
+|---|---|---|---|
+| Sideways drift (mm) | 566 / 551 / 1222 | 101 / 74 / 237 | 67 / 58 / 148 |
+| Heading error (deg) | 94 / 95 / 163 | 7 / 6 / 18 | 6 / 5 / 14 |
+| Forward distance (mm) | 392 / 338 / −462 | 1609 / 1587 / 1033 | 1144 / 1090 / 840 |
+| Flipped | 0 of 100 | 0 of 100 | 0 of 100 |
+
+  - **v2 vs v1 on straightness:** about as straight, slightly more drift.
+  - **Distance:** v2 walks 40% farther.
+  - **Conditions are harder for v2:** unknown top speed, a wider mass range, and an uncertain motor and contact model. Its baseline is also worse than v1's (heading 94° vs 72°).
+- **FakeRobot check** (`robot/check_fake_vs_eval.py`, now reading evaluate.py's table instead of hardcoded numbers; `docs/fake_robot_check.md`):
+
+| | Baseline: evaluate / FakeRobot | Policy: evaluate / FakeRobot (encoder) |
+|---|---|---|
+| Sideways drift (mm, mean) | 566 / 523 | 101 / 101 |
+| Heading error (deg, mean) | 94 / 82 | 7 / 8 |
+| Forward (mm, mean) | 392 / 457 | 1609 / 1538 |
+| Flipped | 0 / 0 | 0 / **1 of 100** |
+
+  - **Flip target met:** v1 flipped 6–9 robots in 100 in FakeRobot; v2 flips 1, which meets the "at most 1" target.
+  - **The one flip** was robot 60, the heaviest end of the range (mass ×1.59, about 158 g), on the stiffest contacts (0.004 s) with a low-friction left leg. The real 80 g motor is ×0.8.
+  - **The two simulators now agree** within a few percent, with v2's encoder leg-speed input (what the robot really measures).
+  - FakeRobot gained v2's extra randomizations: armature log-uniform, gearbox friction, contact stiffness.
+
+**2. Robustness test: the real motor's specs** (`robot/check_spec_motor.py` → `docs/spec_motor_check.md`, `docs/media/spec_motor_paths.png`)
+- **Setup:** 100 FakeRobots (seeds 0–99, the same robots in every row), 20 s each, through the real control loop.
+- **Spec motor:** each side draws its stall torque and no-load speed from the ranges above. Body 80 g.
+- **How the hub drives the motor is unknown**, so both cases are tested:
+  - **"hub holds speed"** (`motor="regulated"`): training's speed controller, but limited to what the DC motor can give at its current speed;
+  - **"no speed control / PWM"** (`motor="pwm"`): percent = voltage, torque = stall × (percent/100 − speed/no-load speed), so the speed sags under load.
+- Both are built on MuJoCo's own velocity actuator, with the limits updated every physics step, so they stay numerically stable with light legs.
+
+| Setup (full action = 110 rpm unless noted) | Policy: heading mean (deg) | Policy: drift mean (mm) | Policy: forward (mm) | Policy flips | Baseline: heading mean (deg) | Baseline flips |
+|---|---|---|---|---|---|---|
+| Training motor | 8 | 101 | 1538 | 1 | 82 | 0 |
+| Spec motor, hub holds speed, 80 g | 8 | 86 | 1543 | 1 | 87 | 0 |
+| Spec motor, PWM, 80 g | 6 | 86 | 1245 | 0 | 95 | 0 |
+| Spec, hub holds speed, top 80 rpm | 7 | 72 | 1354 | 0 | 82 | 0 |
+| Spec, hub holds speed, top 140 rpm | 9 | 113 | 1694 | 2 | 87 | 2 |
+
+- **Verdict: v2 passes.** On the spec motor with an 80 g body it still walks straight (heading 6–8° vs the baseline's 82–95°) and flips 0–1 of 100 at the default 110 rpm.
+- **At 140 rpm** 2 robots flip, but the constant-speed baseline flips the same 2 robots. These lopsided robots tip at that speed, whoever drives.
+- **Lower top speed is a little safer and straighter:** at 80 rpm, 0 flips and the least drift.
+- **PWM case:** the legs slow down under load, so the robot walks about 20% less far. It still walks straight.
+- **So no v3 is needed for Saturday.**
+
+**3. The rpm table placeholder → the specs**
+- `config.RPM_AT_PERCENT` is now a straight line through **334 rpm at 100%**, the middle of the no-load range. Monday's `measure_rpm.py` replaces it.
+- Under load and with a part-empty battery the real speed will be lower.
+
+**4. The action → rpm FIRST, inside the trained range** (`robot/units.py`, `config.POLICY_TOP_RPM = 110`)
+- **The problem:** v2's action is "a fraction of the top speed". Sending percent = 100·(a+1)/2 to the hub (as planned yesterday) would drive the ~334 rpm motor at up to 334 rpm, far outside the 80–140 rpm the policy trained on.
+- **The fix:** the laptop now converts the action first to rpm = `POLICY_TOP_RPM` × (a+1)/2, with `POLICY_TOP_RPM` inside the trained range. Only then does it convert to percent through the rpm table.
+- **Result:** a full action is now **33%** (110 of 334 rpm). A faster motor just means smaller percents.
+- **Safety checks:**
+  - `units.py` refuses to start if `POLICY_TOP_RPM` is outside the trained range;
+  - every command asserts its rpm stays at or below the range's top;
+  - the speed warning now fires only if the motor cannot reach `POLICY_TOP_RPM`, and suggests lowering it.
+- **Leg-speed input:** it keeps its own fixed 120 rpm scale (`leg_speed_norm_rpm`), as in training.
+- **New tests in `robot/tests/test_units.py`** (now 31/31; section 3b):
+  - over 301 actions from −1.5 to 1.5, the fastest rpm the motor is asked for is 110.2 (≤ 110 + whole-percent rounding, ≤ 140);
+  - a full action gives 33%, not 100%;
+  - **end to end:** a spec-motor FakeRobot on a stand, legs free (the fastest they can go), full action: the legs ran at **109.8 rpm** (hub holds speed) and **106.1 rpm** (PWM), not ~330;
+  - `POLICY_TOP_RPM` = 200 or 50 is refused.
+- **Leg-speed comparison against the v2 training recording:**
+  - the encoder-average input now **matches training** (max difference 0.028, the whole-degree limit);
+  - the hub's instantaneous speed report is now the mismatched one, which v2 never saw.
+- **All robot-side tests pass:** units 31/31, policy 3/3, safety 17/17, dry run 19/19, calibration 34/34.
+- `measure_rpm.py`'s warning was rewritten the same way.
+
+**5. Julian's hand tests with the spec motor** (`robot/sim_hand_tests.py --motor regulated|pwm --percent 35|100 --body-mass-kg 0.080 --tag ...` → `docs/hand_tests_sim_spec_{regulated,pwm}_{35,100}.md`, plus csv/png)
+
+| Spec motor, 80 g body | 35% (≈117 rpm no load): in step | 35%: out of step | 100% (≈334 rpm): in step | 100%: out of step |
+|---|---|---|---|---|
+| Hub holds speed: nominal robot | 461 mm, 0°, upright | 706 mm, −139°, upright | **flipped at 0.4 s** | **flipped at 0.6 s** |
+| Hub holds speed: 20 lopsided, flips | 0 of 20 | 1 of 20 | **19 of 20** (median 0.4 s) | **20 of 20** |
+| PWM: nominal robot | 472 mm, 0°, upright | 501 mm, +4°, upright | **flipped at 0.8 s** | **flipped at 0.8 s** |
+| PWM: 20 lopsided, flips | 0 of 20 | 0 of 20 | **20 of 20** | **19 of 20** |
+
+- **At full power the simulated robot flips within about half a second**, in both motor models. At 35% it walks like the 120 rpm runs before.
+- **What this means for the session:**
+  - if the real motor is as fast as the specs say, the 100% hand tests will mostly be flips;
+  - the checklist's drift tests now use **`--percent 35`** first;
+  - try 100% only afterwards, with a hand ready.
+  - It also means the policy's ≤110 rpm cap matters.
+- **Script fixes found while running these:**
+  - At 100%, a robot spinning its legs the other way flips, is thrown into the air and spins at hundreds of rad/s, faster than the 0.002 s step can follow (MuJoCo "unstable", `MUJOCO_LOG.TXT`, deleted). Such a run now counts as a flip.
+  - A flipped robot's run now stops when it flips, and its distance and turn are taken at that moment. Before, a robot on its back reported turns like 7200°.
+  - Lopsided medians use only the robots that stayed upright.
+- `compare_drift.py` gained `--sim <heading csv>` to compare with these files.
+
+**Step 5: simple controller vs policy** (in `train/evaluate.py`; results above in `docs/eval_results_v2_dt0.002.md`)
+- **The controller:** a proportional heading controller on the policy's own noisy, drifting heading input: right = c − K·h, left = c + K·h, with c = the baseline's speed.
+- **Fair tuning:** K was tuned on 100 *other* robots (seed 1), then tested on the evaluation robots (seed 7).
+- **The first grid (K = 0.25–8) chose its largest gain**, so I reran with K up to 32 so as not to sell the controller short. The tuning flattens out: 7.5° at K = 8, 7.0° at 16, 6.8° at 32. The policy and baseline numbers were identical in both runs (deterministic).
+- Test robots (seed 7), K = 32:
+
+| Measure (mean / median / worst 5%) | Baseline | Simple controller (K = 32) | Trained policy v2 |
+|---|---|---|---|
+| Sideways drift (mm) | 566 / 551 / 1222 | **59 / 49 / 137** | 101 / 74 / 237 |
+| Heading error (deg) | 94 / 95 / 163 | 7 / 6 / 18 | 7 / 6 / 18 |
+| Forward distance (mm) | 392 / 338 / −462 | 853 / 814 / 566 | **1609 / 1587 / 1033** |
+| Flipped | 0 | 0 | 0 |
+
+- **Honest verdict:**
+  - **For walking straight, the simple controller does as well as the policy:** the same heading error, and *less* sideways drift.
+  - **The policy's real advantage is distance:** at the same average command it walks **1.9× farther** (1609 vs 853 mm in 20 s). It also never flips, like the controller.
+  - **What the controller gives up:** with a gain this high, a 2° heading error already sends one leg to full speed and stops the other. It steers by stopping a leg, which costs forward progress, and on the real robot would look jerky. The policy has learned to time each leg's speed within the stride, so it corrects without losing speed.
+  - **So "is the network needed?"** Not to go straight; yes, to go straight *and* keep walking at speed.
+- Videos of the same typical robot under all three drivers: `docs/media/eval_v2_dt0.002_{baseline,controller,policy}.mp4` (baseline −94°, controller +5°, policy +1°).
+
 ## Open questions / next steps
-- Julian's hand measurements (weight, axle height, rpm at full speed, walking direction, 10 s runs in/out of step): fill in `docs/hand_tests_sim.md`; use them for v2's motor speed and randomization ranges.
-- v2 training setup (proposed, waiting for OK): realistic armature, leg-speed input as the robot measures it, tilt margin. See the proposal in the conversation; to be logged here once decided.
-- ~~Calibration scripts (step 3), sim fixed-speed test (step 4)~~ Done. Simple-controller comparison (step 5) still to do.
-- When v2 finishes: plot, evaluate (MJLab), FakeRobot check (target: at most 1 flip in 100), export to `robot/model/`, and update `units.py` for v2's action meaning (percent = 100·(a+1)/2); rerun `sim_hand_tests.py`.
-- ~~Decide the training step size.~~ Done: trained at 0.002 s, and the policy holds up at 0.001 s.
-- ~~Export the policy for the real robot~~ Done (`robot/`).
+- Monday's session (`docs/real_robot_checklist.md`):
+  - calibrate;
+  - check whether the hub holds speed under load (step 3b: regulated vs PWM);
+  - set `POLICY_TOP_RPM` (110 by default; 80 was slightly safer in simulation);
+  - do the drift tests at 35% before any 100% run.
+- Confirm the motor spec source and the 80 g (packaging?). Weigh the robot.
+- Julian's hand measurements: fill in `docs/hand_tests_sim*.md`. If the real top speed or weight is far outside v2's ranges, recentre and retrain (none needed for the published specs: see the robustness test).
+- ~~v2: plot, evaluate, FakeRobot check, export, units for v2, rerun hand tests~~ Done 2026-11-14.
+- ~~Simple-controller comparison (step 5)~~ Done; see above.
+- ~~Calibration scripts, sim fixed-speed test~~ Done.
