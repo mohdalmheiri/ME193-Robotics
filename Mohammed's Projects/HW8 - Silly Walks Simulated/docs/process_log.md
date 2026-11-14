@@ -799,7 +799,63 @@ Plus sensor noise, gyro yaw drift (±0.5°/s) and leg calibration error (±2°).
   - **So "is the network needed?"** Not to go straight; yes, to go straight *and* keep walking at speed.
 - Videos of the same typical robot under all three drivers: `docs/media/eval_v2_dt0.002_{baseline,controller,policy}.mp4` (baseline −94°, controller +5°, policy +1°).
 
+## 2026-11-14: Class demo (live sim + demo script)
+
+**Goal:** a live demo for Tuesday's class, with the v2 policy and the baseline walking side by side in the MuJoCo viewer on the same lopsided robot, plus a demo script with a backup plan.
+
+**What was built:**
+- **`robot/demo_live.py`.** One command: `../../.venv/bin/mjpython robot/demo_live.py`. On a Mac the live viewer only opens through `mjpython`.
+  - **Robots:** two FakeRobots with the same seed, so they are the same lopsided robot.
+    - Left, orange: the baseline, both legs at the policy's average command on this robot (19%).
+    - Right, blue: the policy.
+  - **Pacing:** real time, 15 s per run (default).
+  - **On screen:** green start lines, a trail for each robot, and a text box with heading error, drift and both leg commands.
+  - **Controls:** SPACE pauses.
+  - **Options:** `--loop`, `--seed`, `--motor regulated|pwm`, `--record` (video, no window), `--headless`.
+  - **How it drives the robots:** it uses `run_policy.py`'s functions in the same order (read → stale check → inputs → tip-over check → policy → percent → send), one decision every 0.05 s. Only the CSV log is left out.
+  - **Display:** the robots are drawn in a separate two-robot model that is never simulated. Each robot's pose is turned so that its own random start heading points up the screen.
+- **`robot/tests/test_demo.py`, 14/14.**
+  - For seeds 6, 3, 17 and 60, with both drivers, the headless demo ends **exactly** where `run_policy.run` ends (same heading, drift and number of decisions). The demo shows the tested loop, not a look-alike.
+  - The default robot is a clear example.
+  - The display model is right.
+  - A 2 s video renders.
+- **`docs/media/demo_side_by_side.mp4`:** the backup video (the same view, 15 s + 3 s hold, H.264).
+- **`docs/demo_script.md`:**
+  - before class (the night before and the morning)
+  - sim demo commands and what to say
+  - real-robot commands
+  - backup plan
+- **Two values in the script are deliberately left blank** until Monday's calibration: the baseline percent and `POLICY_TOP_RPM`.
+
+**How the demo robot was picked (said openly in the demo):**
+- **Scan:** I ran seeds 0–99 headless for 15 s.
+  - Over all 100, the policy's mean heading error was 5.6° and the baseline's 80.5°, with 0 flips.
+  - Candidates had to meet all of these:
+    - the policy within 5° and 60 mm;
+    - the policy walked more than 1 m;
+    - the baseline turned 60–150° but still moved forward;
+    - nobody flipped.
+- **Result:** 8 robots qualified. Default: **seed 6**.
+  - Baseline: turned +131°, drifted 710 mm left, forward 334 mm.
+  - Policy: −4.9°, 4 mm drift, forward 1053 mm.
+- **It also holds with the spec motor:**
+
+  | Motor | Baseline turn | Policy heading | Policy drift |
+  |---|---|---|---|
+  | Regulated | 141° | +0.1° | 102 mm |
+  | PWM | 84° | −5.3° | 116 mm |
+
+- **Second example: seed 34**, which curves the other way (baseline −121°; policy −4.8°, 48 mm).
+- **This robot is chosen, not typical.** That is why the script says so and then shows the 100-robot path plot (`eval_v2_dt0.002_paths.png`) as the overall result.
+
+**Problems and fixes:**
+- **Hang:** the first live launch hung. `viewer.set_texts` takes the viewer's lock itself, and I called it inside `with viewer.lock()`, which deadlocks. Moved it outside the lock.
+  - Tested by launching with `--close-after 6`: the window opened, ran and closed, with exit code 0.
+- **Camera:** in the first recorded video, the camera followed the robots' average forward distance, so the baseline curved out of the picture. It now frames both robots and backs off as they spread apart.
+- **Text:** outlined text left ghost letters in the video, so it now uses a darkened box behind the text.
+
 ## Open questions / next steps
+- Monday night: fill in the two blanks in `docs/demo_script.md` (baseline percent, `POLICY_TOP_RPM`) and rehearse the demo once.
 - Monday's session (`docs/real_robot_checklist.md`):
   - calibrate;
   - check whether the hub holds speed under load (step 3b: regulated vs PWM);
