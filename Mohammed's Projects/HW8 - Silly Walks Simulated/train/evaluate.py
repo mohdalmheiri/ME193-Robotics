@@ -30,6 +30,7 @@ How it works:
   5. Saves to docs/:
        eval_results_<tag>.md          the comparison table (means, medians, worst 5 %)
        media/eval_<tag>_paths.png     every robot's path, seen from above, both drivers
+       data/eval_<tag>_paths.npz      (with --save-paths) the paths and end results as numbers
        media/eval_<tag>_baseline.mp4  one typical lopsided robot under each driver,
        media/eval_<tag>_policy.mp4    filmed from above-behind, start line in green,
                                       path so far in white dots (played at 2x speed)
@@ -78,6 +79,9 @@ parser.add_argument("--seconds", type=float, default=20.0)
 parser.add_argument("--timestep", type=float, default=V1.TIMESTEP)
 parser.add_argument("--seed", type=int, default=7)
 parser.add_argument("--no-video", action="store_true")
+parser.add_argument("--save-paths", action="store_true",
+                    help="also save every robot's path and end results to docs/data/eval_<tag>_paths.npz "
+                         "(for train/presentation_figures.py)")
 args = parser.parse_args()
 T = T2 if args.task == "v2" else V1
 EXP = "walk_straight_v2" if args.task == "v2" else "walk_straight"
@@ -254,6 +258,19 @@ fig.suptitle(f"{args.robots} lopsided robots, {args.seconds:.0f} s, physics step
              "(red = flipped)")
 fig.tight_layout()
 fig.savefig(HW8 / "docs" / "media" / f"eval_{TAG}_paths.png", dpi=120)
+if args.save_paths:
+    # every robot's path (mm, start-line frame) and end results, per driver
+    out = {}
+    for key, (_, R) in zip(("baseline", "controller", "policy"), DRIVERS):
+        out[f"{key}_xy"] = np.asarray(R["xy"], dtype=np.float32)
+        out[f"{key}_flipped"] = np.asarray(R["flipped"])
+        for k in ("side", "head", "fwd"):
+            out[f"{key}_{k}"] = R["res"][k].numpy()
+    out["K"] = K_BEST
+    out["seconds"] = args.seconds
+    (HW8 / "docs" / "data").mkdir(exist_ok=True)
+    np.savez_compressed(HW8 / "docs" / "data" / f"eval_{TAG}_paths.npz", **out)
+    print(f"Saved docs/data/eval_{TAG}_paths.npz")
 
 
 # ------------------------------------------------------------------ 6. videos

@@ -37,20 +37,10 @@ from fake_robot import FakeRobot, HUB_KEYS  # noqa: E402
 from run_policy import run  # noqa: E402
 
 DEFAULTS = {k: copy.deepcopy(getattr(C, k)) for k in HUB_KEYS + ("RPM_MEASURED",)}
-TRUTHS = {
-    "sensor turned 90 deg": {
-        "ROBOT_RIGHT_IS_LEGO": "left", "UPRIGHT_PERCENT_SIGN": {"right": -1, "left": +1},
-        "ENCODER_SIGN": {"right": +1, "left": -1}, "LEG_ZERO_DEG": {"right": 200.0, "left": 37.0},
-        "RPM_AT_PERCENT": [(0, 0.0), (100, 95.0)],
-        "BODY_FROM_HUB": {"x": "-y", "y": "+x", "z": "+z"}, "ANGLE_UNIT_DEG": 0.1,
-        "PITCH_SIGN": -1, "ROLL_SIGN": +1, "YAW_SIGN": -1, "GYRO_SIGN": -1, "PITCH_ROLL_SWAPPED": True},
-    "sensor upside down": {
-        "ROBOT_RIGHT_IS_LEGO": "right", "UPRIGHT_PERCENT_SIGN": {"right": -1, "left": -1},
-        "ENCODER_SIGN": {"right": -1, "left": +1}, "LEG_ZERO_DEG": {"right": 355.0, "left": 90.0},
-        "RPM_AT_PERCENT": [(0, 0.0), (100, 130.0)],
-        "BODY_FROM_HUB": {"x": "+x", "y": "-y", "z": "-z"}, "ANGLE_UNIT_DEG": 1.0,
-        "PITCH_SIGN": +1, "ROLL_SIGN": -1, "YAW_SIGN": +1, "GYRO_SIGN": +1, "PITCH_ROLL_SWAPPED": False},
-}
+from _fake_hubs import FAKE_HUBS  # noqa: E402
+
+# the same two mis-wired hubs calibrate.py's test and --fake rehearsal use
+TRUTHS = {"sensor turned 90 deg": FAKE_HUBS["turned-90"], "sensor upside down": FAKE_HUBS["upside-down"]}
 results = []
 
 

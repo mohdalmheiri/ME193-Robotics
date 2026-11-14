@@ -79,3 +79,5 @@ Mohammed's Projects/HW8 - Silly Walks Simulated/train/wandb/
 Mohammed's Projects/HW8 - Silly Walks Simulated/train/**/*.pt
 # HW8 robot-side run logs (one CSV per run, real or FakeRobot); cited runs are copied to docs/data/
 Mohammed's Projects/HW8 - Silly Walks Simulated/robot/runs/
+# HW8: config.py backups that robot/calibrate.py makes before writing (git history keeps the committed ones)
+**/config_backups/

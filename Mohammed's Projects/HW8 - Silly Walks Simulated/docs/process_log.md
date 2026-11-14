@@ -854,7 +854,87 @@ Plus sensor noise, gyro yaw drift (±0.5°/s) and leg calibration error (±2°).
 - **Camera:** in the first recorded video, the camera followed the robots' average forward distance, so the baseline curved out of the picture. It now frames both robots and backs off as they spread apart.
 - **Text:** outlined text left ghost letters in the video, so it now uses a darkened box behind the text.
 
+## 2026-11-14 afternoon: Preparing Monday's robot session (time-boxed plan, one-command calibration, presentation figures)
+
+**1. Session plan: `docs/real_robot_checklist.md` rewritten as a time-boxed plan.**
+- Each step is marked ESSENTIAL or OPTIONAL, with a time estimate and a running clock.
+- **The ESSENTIAL path takes about 55 min:**
+
+  | Step | Time |
+  |---|---|
+  | Connect | 5 min |
+  | Calibration | 12 min |
+  | Stand check | 3 min |
+  | 35 % drift tests, in step and out of step (filmed) | 2 × 5 min |
+  | Policy ×3 (filmed) | 10 min |
+  | Baseline ×2 (filmed) | 7 min |
+  | Demo rehearsal | 5 min |
+  | Saving data and weighing the robot | 3 min |
+
+- **Policy before baseline:** the policy runs come before the baseline because the baseline needs the policy's average command. A tested one-liner computes it from the logs.
+- **Running late:** a "cut here" line marks the end of the essential steps. The optional steps follow in priority order: rpm under load, lost-connection test, more runs, 100 % drift tests, Julian's hand tests.
+- **Julian measures the robot during calibration** (ESSENTIAL, in parallel, no extra time). There is a table for body length, width and height; axle height; hub diameters; how far each hub sticks out; which leg hole the axle uses; and leg length and thickness. Each row has the current model value next to it, for updating the CAD and the drawing.
+  - The model values come from the collision shapes in `robot/model/scene.xml`:
+    - body box 80 × 48 × 30 mm
+    - hubs 25 mm across, standing 8 mm out from the body box
+    - leg 64 mm, short arm 16 mm and long arm 48 mm
+    - axle 15.0 mm above the table
+
+**2. One-command calibration: `robot/calibrate.py`.**
+- It runs motor_direction → leg_zero → measure_rpm → imu_axes by calling the existing scripts' `measure()` functions. The questions and the maths are unchanged.
+- **Backup:** it first copies `config.py` to `robot/config_backups/config_<date-time>.py`. That folder is git-ignored (`**/config_backups/`), and the undo command is printed.
+- **How values are written:** after each step it replaces only that step's assignment lines.
+  - It finds them with Python's own parser, so multi-line values work.
+  - Trailing comments are kept, and a `# measured by calibrate.py on <date> (was: <old value>)` note is added, replaced rather than stacked on reruns.
+  - The new text is checked before saving (it must run and give back exactly the measured values), then swapped in all at once.
+- **Bad measurements:** a warning (quarter-turn check off, motor too slow for the trained range, the motion sensor never matching) asks whether to keep the result. The fake robot says no and stops. `--from <step>` restarts partway through.
+- **New, found while testing:** the "turned-90" fake hub's motor reaches only 95 rpm, below `POLICY_TOP_RPM` = 110. The first version stopped there; that was safe, but on Monday it would have left the robot unusable.
+  - It now **proposes lowering `POLICY_TOP_RPM`** to 90 % of the motor's top speed (here 85), never below the trained 80 rpm, and asks before writing it.
+  - This can happen for real if the motor under a part-charged battery is slower than the specs.
+- **At the end it prints:**
+  - a before → after table;
+  - what percent a full action becomes;
+  - a **suggested baseline percent** (the policy's average command on 10 simulated robots with the new config). The real policy logs confirm it.
+- The two mis-wired fake hubs moved from `test_calibration.py` into `robot/calibration/_fake_hubs.py`, shared by both tests and `--fake --fake-hub`.
+- `measure_rpm.report()` gained `paste=False`; its printed output is otherwise unchanged.
+- **`robot/tests/test_calibrate.py`: 54/54.** For both mis-wired hubs, run on a temporary copy of `config.py`:
+  - every value in the **written file** (read on its own) matches the hidden truth (leg zeros within 1.5°, rpm within 2 %);
+  - `POLICY_TOP_RPM` fits the motor;
+  - the backup equals the original, and every comment is kept;
+  - there is one note per value;
+  - the policy walks 5 robots with that wiring using the written config (0/5 flips, median heading 2–3°), but with the original config 5/5 flip;
+  - `--from imu_axes` rewrites only the imu values, without stacking notes;
+  - a failed leg_zero check stops calibration without writing that step;
+  - the real `robot/config.py` is never touched (checksum before and after).
+
+  `test_calibration.py` still passes 34/34.
+- **An honest note on the walk check:** at first it was one symmetric robot, as in `test_calibration.py`. With the lowered top speed of 85 rpm it ended at −36° (it walked the full 10 s, but past the 20° limit).
+  - Probe: at 80 or 90 rpm the same robot ends at −11° / −8°. At 85 rpm, four random robots end within 3°.
+  - So it was a single-run outlier, not a calibration error. The check now uses 5 robots and requires no flips and a median heading under 15°.
+
+**3. Presentation figures: `train/presentation_figures.py` → `docs/media/presentation/`** (1920×1080, 20–30 pt text, a one-line message as each title, the same colors throughout).
+- **Colors:** the first three slots of the validated reference palette (baseline orange, controller aqua, policy blue), plus grey for v1. Every bar and panel is also labeled in text, so color is never the only cue.
+- **Not run:** the palette validator script needs Node, which isn't installed. I used that palette's documented all-pairs validation for its first three slots.
+
+| Figure | Message (title) | Data |
+|---|---|---|
+| `1_three_drivers.png` | "Both steer straight; the policy walks 1.9× farther" | heading / drift / distance means |
+| `2_tipping_fix.png` | "v2 fixed the tipping: 1 flip in 100 robots instead of 6–9" | **Recorded numbers, sources on the figure.** v1 FakeRobot 6 (encoder) / 9 (hub speed): `docs/fake_robot_check.md` at commit 445323c. v2: 1. MJLab: 0 / 0 |
+| `3_training_curve.png` | "v2 training: straight within ~100 rounds, then faster" | v2 TensorBoard log |
+| `4_paths_100_robots.png` | "100 lopsided robots, 20 s each, seen from above" | saved paths, one panel per driver, means in the panel titles |
+
+- **The path figure needed the paths as numbers:** `evaluate.py` only saved a picture. `--save-paths` now writes `docs/data/eval_v2_dt0.002_paths.npz`.
+  - I reran the v2 evaluation with the same seeds and gains.
+  - **The table came out byte-identical** to the committed `docs/eval_results_v2_dt0.002.md`, and the old path plot too.
+  - The figure script also checks that the means match that table before drawing.
+- **Corrections made while checking the figures:**
+  - My first training-curve title ("then kept straightening") was wrong: the heading penalty levels off by about round 100. The reward keeps rising because the robots walk farther (forward-progress reward 1.14 at round ~100 → 1.33 at the end). Retitled.
+  - Figure 1 lost its worst-5 % markers, which collided with the value labels; one message per figure. They are in the evaluation table.
+  - Text wrapping fixed so nothing runs off the edge.
+- **From the training log:** v2 had **no flip terminations in any of its 800 training rounds**.
+
 ## Open questions / next steps
+- Monday: follow the time-boxed plan in `docs/real_robot_checklist.md` (calibration with `robot/calibrate.py`; Julian's ruler measurements → CAD and drawing).
 - Monday night: fill in the two blanks in `docs/demo_script.md` (baseline percent, `POLICY_TOP_RPM`) and rehearse the demo once.
 - Monday's session (`docs/real_robot_checklist.md`):
   - calibrate;

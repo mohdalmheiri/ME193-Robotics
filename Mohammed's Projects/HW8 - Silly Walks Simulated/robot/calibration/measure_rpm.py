@@ -54,7 +54,8 @@ def measure(robot, ask=None) -> dict:
     return {"rows": rows}
 
 
-def report(res):
+def report(res, paste=True):
+    """Prints the checks; paste=False leaves out the lines to paste (calibrate.py writes them)."""
     rows = res["rows"]
     table = [(0, 0.0)] + [(p, round((r["right"] + r["left"]) / 2, 1)) for p, r, _ in rows]
     top = table[-1][1]
@@ -85,9 +86,10 @@ def report(res):
             print(f"\nOK: the motor reaches {top:.0f} rpm at 100 %; a full action asks for "
                   f"POLICY_TOP_RPM = {C.POLICY_TOP_RPM:.0f} rpm (trained range {lo:.0f}-{hi:.0f}), "
                   f"about {100 * C.POLICY_TOP_RPM / top:.0f} % power.")
-    print("\nPaste into robot/config.py:")
-    config_line(f"RPM_AT_PERCENT = {table}")
-    config_line("RPM_MEASURED = True")
+    if paste:
+        print("\nPaste into robot/config.py:")
+        config_line(f"RPM_AT_PERCENT = {table}")
+        config_line("RPM_MEASURED = True")
     return table
 
 
