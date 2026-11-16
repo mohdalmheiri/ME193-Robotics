@@ -153,6 +153,7 @@ HW8 - Silly Walks Simulated/
 | [hand_tests_sim.md](docs/hand_tests_sim.md) | Julian's tests, simulated, with an empty column for his real numbers. `hand_tests_sim_spec_<regulated/pwm>_<35/100>.md`: the same with the spec motor at 35% and 100% |
 | `data/` | Numbers behind the tables and real runs cited in the log |
 | [process_log.md](docs/process_log.md) | What was tried, what failed and what fixed it |
+| [cad_drawing.png](docs/media/cad_drawing.png) | **CAD drawing** of the robot (Onshape, 1:2): body 80 × 48 × 30 mm, hubs Ø25 mm (64 mm hub to hub), legs 64 × 9.6 × 7.8 mm pivoting 16 mm from the end, axle 15 mm above the table. Confirmed against the LEGO part model and the real robot, within 1 mm |
 | `media/presentation/` | **Figures for the demo and Notion** (1920×1080, large fonts): three drivers, the tipping fix, the training curve, 100 robots' paths. Made by `train/presentation_figures.py` |
 | `media/` | `demo_side_by_side.mp4` (the class demo's backup video), `rest_pose.png`, plus `walk_test_*.mp4`, `walk_test_frames_*.png` and `walk_trajectory_*.png` for +60 and −60 rpm |
 
