@@ -933,6 +933,53 @@ Plus sensor noise, gyro yaw drift (±0.5°/s) and leg calibration error (±2°).
   - Text wrapping fixed so nothing runs off the edge.
 - **From the training log:** v2 had **no flip terminations in any of its 800 training rounds**.
 
+## 2026-11-16: Julian runs the robot session alone, on his own laptop
+
+**Why:** Mohammed is sick, so Julian runs Monday's session alone on his laptop.
+
+**`docs/partner_setup.md`, the fresh-laptop guide (Mac and Windows):**
+- **Steps:** install Python 3.12+ and Git → clone → create `.venv` **at the repo root** → `pip install -r robot/requirements.txt` → tests → calibration rehearsal → Bluetooth check → demo.
+- **Why the repo root:** the root `.gitignore` ignores everything there except the project folders. A virtual environment inside the HW8 folder would show up as thousands of untracked files, and the checklist's `../../.venv/...` commands expect the root.
+- **Windows differences:**
+  - `.venv\Scripts\python.exe`
+  - PowerShell activation
+  - `$env:TEMP` instead of `/tmp`
+  - no mjpython (plain `python` opens the viewer)
+- **macOS Bluetooth:** a terminal must be allowed to use Bluetooth, which macOS asks about the first time.
+- **New `robot/requirements.txt`:** only the robot side's 5 packages (numpy, mujoco, matplotlib, opencv-python, legoeducation, which brings in bleak), pinned to the versions already working in the shared `.venv`. The shared `.venv` has many more packages (torch, scipy, onshape-to-robot, …) that the robot side doesn't use.
+- **Tested from the guide only.** A fresh `git clone` of the repo, with a new Python **3.12** `.venv` at its root and only `robot/requirements.txt` installed:
+
+  | Check | Result |
+  |---|---|
+  | All 7 test scripts | units 31/31, policy 3/3, safety 17/17, dry run 19/19, calibration 34/34, calibrate 54/54, demo 14/14 |
+  | `calibrate.py --fake --fake-hub upside-down` on a temporary copy | same table as on the main `.venv`; the clone's `config.py` untouched |
+  | Demo, headless | same numbers |
+  | `legoeducation` + `bleak` import | OK |
+  | `mjpython` | present |
+  | Activate shortcut | OK |
+  | Option A branch commands (except the push) | OK |
+
+  `git status` stayed clean with `.venv` at the root.
+- **Not tested: Windows.** The guide says so.
+- **Found while testing:** without a robot, `run_policy.py --real` stops with a Python traceback whose last line is the friendly "Could not connect…" message. Nothing is sent to the motors (it fails while connecting). The guide now says to expect exactly that. The code is not changed today; a tidier message could come later.
+
+**`docs/real_robot_checklist.md`: new section "Running the session alone":**
+- floor, not table
+- the laptop within reach (Ctrl-C)
+- the phone propped up, filming from above, one long recording with each run's name said out loud
+- answering the calibration questions yourself
+- ruler measurements during measure_rpm or afterwards
+- **time:** about 65 min instead of 55
+- **skip order:** optional steps → ruler measurements (at home later) → second baseline run → third policy run → demo rehearsal (only if Mohammed presents)
+- **never skip:** calibration, the stand check, both 35 % drift tests, at least 1 policy and 1 baseline run, saving the data
+
+Step 0 now also lists `test_demo.py` and points Windows users to the guide.
+
+**Sending results back (in the guide):**
+- **Option A:** a branch `julian-robot-session`, with the CSVs copied into `docs/data/session_julian/` (because `robot/runs/` is git-ignored) and `config.py`. This needs push access (collaborator).
+- **Option B:** a zip of `robot/runs/`, `config.py`, `config_backups/` and photos, through Google Drive.
+- **Videos:** always through Google Drive, never git.
+
 ## Open questions / next steps
 - Monday: follow the time-boxed plan in `docs/real_robot_checklist.md` (calibration with `robot/calibrate.py`; Julian's ruler measurements → CAD and drawing).
 - Monday night: fill in the two blanks in `docs/demo_script.md` (baseline percent, `POLICY_TOP_RPM`) and rehearse the demo once.

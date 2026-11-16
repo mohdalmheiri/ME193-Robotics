@@ -1,0 +1,9 @@
+# HW8 ROBOT SIDE only: robot/ scripts, the real Double Motor, and the simulated FakeRobot
+# rehearsals and tests. NOT training (MJLab), NOT the Onshape export.
+# Setup steps: docs/partner_setup.md.   Install:  pip install -r robot/requirements.txt
+# Versions: the ones tested together (Mac, Python 3.12 and 3.14, 2026-11-16).
+numpy==2.5.3            # all the maths, the policy network
+mujoco==4.0.1           # the simulator behind FakeRobot, the demo and the tests
+matplotlib==3.11.2      # plots (compare_drift, check scripts)
+opencv-python==5.0.0.93 # writes the demo's backup video (demo_live.py --record; test_demo.py)
+legoeducation==1.2.0    # the LEGO Double Motor over Bluetooth (brings bleak with it)

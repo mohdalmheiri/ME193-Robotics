@@ -30,6 +30,8 @@ Every command runs from the HW8 folder (`Mohammed's Projects/HW8 - Silly Walks S
 | | [O4. Drift tests at 100 %](#o4-drift-tests-at-100-), with a hand ready | *OPTIONAL* | 5 min | ☐ |
 | | [O5. Julian's hand tests](#o5-julians-hand-tests) (`docs/hand_tests_sim.md` column) | *OPTIONAL* | 10 min | ☐ |
 
+**Running the session ALONE?** Read [Running the session alone](#running-the-session-alone) first. **On your own laptop?** Set it up with [`docs/partner_setup.md`](partner_setup.md) the evening before; it also covers Windows.
+
 **If something breaks:**
 - **A calibration step goes wrong:** rerun from that step with `robot/calibrate.py --from <step>`.
 - **Bluetooth keeps failing:** skip to step 9 and rehearse the backup plan in `docs/demo_script.md`.
@@ -38,6 +40,40 @@ Every command runs from the HW8 folder (`Mohammed's Projects/HW8 - Silly Walks S
 - **FRONT** = the end of the robot next to the motor axle. The body sticks out mostly *behind* the axle.
 - **Legs at 0°** = pointing straight forward and flat, with the long arm (48 mm) in front of the axle.
 - **Walking direction:** when a leg points down, its tip sweeps toward the robot's *back*, like a wheel rolling forward. The other direction flips the robot over.
+
+---
+
+## Running the session alone
+
+One person at the laptop, no helper. The plan above still works with these changes.
+
+**Set-up:**
+- **Floor, not table.** Run everything on the floor, so a robot that tips or walks off has nowhere to fall. Keep the laptop **within arm's reach of the start line**: **Ctrl-C** is your emergency stop, and the run also stops by itself if the robot tips past 70°.
+- **Phone filming from above, propped up:** put it on a chair, a shelf or a stack of books, camera down, with the whole 1.5 m strip in view (test once).
+  - **Start recording before you start the run, and stop it after.** For ease, record the drift tests and runs as one long video, and say the run's name out loud ("policy run 2") before each one.
+- **Calibration:** you answer the questions yourself. The laptop waits for Enter before each move, so take your time. Do the robot moves first, then type.
+- **Julian's ruler measurements (step 3)** can't run in parallel any more. Do them **during measure_rpm** (16 s with nothing to do) and at the end, or after the session if time is short; the robot doesn't need power for them.
+
+**Time:** about 65 min for the ESSENTIAL steps instead of 55.
+
+**If time runs short, skip in this order (first item = skip first):**
+1. All *OPTIONAL* steps (O1–O5).
+2. Julian's ruler measurements: do them later at home (no power needed).
+3. The second baseline run (keep 1).
+4. The third policy run (keep 2).
+5. The demo rehearsal, but only if Mohammed is presenting on Tuesday. If **you** present, keep it.
+
+**Never skip:**
+- calibration
+- the stand check (safety: the legs spin the walking way and Ctrl-C stops them)
+- both 35 % drift tests
+- at least 1 policy run and 1 baseline run, filmed
+- saving the data (step 10)
+
+**Sending the results back:** see the end of [`docs/partner_setup.md`](partner_setup.md):
+- **Option A:** a branch with the CSVs and `config.py`.
+- **Option B:** a zip on Google Drive.
+- **Videos:** in both cases, through Google Drive.
 
 ---
 
@@ -52,8 +88,9 @@ Every command runs from the HW8 folder (`Mohammed's Projects/HW8 - Silly Walks S
    robot/tests/test_real_robot_dryrun.py
    robot/tests/test_calibration.py
    robot/tests/test_calibrate.py
+   robot/tests/test_demo.py
    ```
-3. **Rehearse the calibration once** with a wrongly wired fake robot. It writes into a copy, not your config:
+3. **Rehearse the calibration once** with a wrongly wired fake robot. It writes into a copy, not your config. On Windows, use the commands in `docs/partner_setup.md` step 5:
    ```bash
    cp robot/config.py /tmp/config_rehearsal.py
    robot/calibrate.py --fake --fake-hub upside-down --config /tmp/config_rehearsal.py
