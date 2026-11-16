@@ -58,8 +58,8 @@ Use `mjpython`, not `python`. A MuJoCo window opens. Make it full screen (green 
 ## 2. Real robot, about 3 min
 
 **Calibration values (fill in Monday night):**
-- Baseline percent, from `pct_r` / `pct_l` in Monday's policy log: **`____ %`**
-- `POLICY_TOP_RPM` in `robot/config.py`: **`____ rpm`** (110 unless the calibration changed it)
+- Baseline percent, from `pct_r` / `pct_l` in Monday's policy log: **`40 %`** (Julian, 2026-11-16)
+- `POLICY_TOP_RPM` in `robot/config.py`: **`110 rpm`** (110 unless the calibration changed it)
 
 **Steps:**
 1. **On the stand** (legs in the air, 5 s). Both legs must spin the walking way and stop by themselves.
@@ -68,7 +68,7 @@ Use `mjpython`, not `python`. A MuJoCo window opens. Make it full screen (green 
    ```
 2. **Baseline on the floor.** Put the robot on the start line, facing along it.
    ```bash
-   ../../.venv/bin/python robot/run_policy.py --real --constant ____ --seconds 15 --name demo_baseline
+   ../../.venv/bin/python robot/run_policy.py --real --constant 40 --seconds 15 --name demo_baseline
    ```
 3. **Policy on the floor.** Start from the same line and direction.
    ```bash
