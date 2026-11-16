@@ -112,7 +112,7 @@ python robot\calibrate.py --fake --fake-hub upside-down --config $env:TEMP\confi
 - a before → after table at the end, with most rows marked "changed"
 - "A full policy action now = … 85 % power" and "Suggested baseline percent: 49 %"
 
-Those last two numbers belong to the **fake** 130 rpm motor. With the real motor (~330 rpm) expect about 33 % and about 20 %.
+Those last two numbers belong to the **fake** 130 rpm motor. The real robot (2026-11-16) measured 165.8 rpm at 100 %, giving **66 %** and a suggested **38 %**; the real policy logs gave 40 %.
 
 ## 6. Bluetooth check (no robot needed)
 

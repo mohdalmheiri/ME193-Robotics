@@ -41,7 +41,7 @@ Order:
 Use `mjpython`, not `python`. A MuJoCo window opens. Make it full screen (green button) before the robots start moving far; the run lasts 15 s. SPACE pauses, and closing the window ends the demo. Add `--loop` to keep it repeating while people come in.
 
 **What the audience sees:** two copies of the **same** lopsided robot, with the same masses, friction, motors and Bluetooth delay. Both start on the green line.
-- **Left, orange: baseline.** Both motors run at one constant speed (19%).
+- **Left, orange: baseline.** Both motors run at one constant speed (36 % with the calibrated config: the policy's average command on this robot).
 - **Right, blue: trained policy.**
 
 **What to say:**
@@ -57,20 +57,20 @@ Use `mjpython`, not `python`. A MuJoCo window opens. Make it full screen (green 
 
 ## 2. Real robot, about 3 min
 
-**Calibration values (fill in Monday night):**
-- Baseline percent, from `pct_r` / `pct_l` in Monday's policy log: **`____ %`**
-- `POLICY_TOP_RPM` in `robot/config.py`: **`____ rpm`** (110 unless the calibration changed it)
+**Calibration values (measured by Julian, 2026-11-16; `docs/data/session_julian/SESSION_NOTES.md`):**
+- Baseline percent, from `pct_r` / `pct_l` in Monday's policy log: **`40 %`** (Julian, 2026-11-16)
+- `POLICY_TOP_RPM` in `robot/config.py`: **`110 rpm`**. Calibration did not lower it: the motor reaches 165.8 rpm at 100 %, so a full action is 66 % power.
 
 **Steps:**
 1. **On the stand** (legs in the air, 5 s). Both legs must spin the walking way and stop by themselves.
    ```bash
    ../../.venv/bin/python robot/run_policy.py --real --seconds 5 --name demo_standcheck
    ```
-2. **Baseline on the floor.** Put the robot on the start line, facing along it.
+2. **Baseline on the floor.** Put the robot on the start line, facing along it, with **both legs at 0°** (in step). Use the same start for the policy run, so the comparison is fair.
    ```bash
-   ../../.venv/bin/python robot/run_policy.py --real --constant ____ --seconds 15 --name demo_baseline
+   ../../.venv/bin/python robot/run_policy.py --real --constant 40 --seconds 15 --name demo_baseline
    ```
-3. **Policy on the floor.** Start from the same line and direction.
+3. **Policy on the floor.** Start from the same line and direction, again with both legs at 0°.
    ```bash
    ../../.venv/bin/python robot/run_policy.py --real --seconds 15 --name demo_policy
    ```
@@ -79,9 +79,13 @@ Use `mjpython`, not `python`. A MuJoCo window opens. Make it full screen (green 
 - The run also stops by itself if the robot tips past 70° or the sensors go silent. The reason it stopped is printed.
 - Keep a hand near the robot.
 - Each run saves a CSV in `robot/runs/`.
-- **Be honest if it curves:** the real robot is not the simulator.
-  - The motor is ~2.5× faster than the simulated one, so a full action is capped at 110 rpm (about 33%).
-  - Hub latency is a guess until it's measured.
+- **What to expect** (Julian's runs, 2026-11-16, on a smooth floor tile):
+  - **Policy:** about 0.7–0.8 m in 20 s (0.5–0.6 m in 15 s), ending within 13° of straight, from every start.
+  - **Baseline at 40 %, legs in step:** it mostly **rocks or spins in place**. In two runs it turned 231° and 296°. Out of step it walks but curls round. Either way, say so: that is the real result, and it's in his video.
+- **Be honest about the difference from the simulator:**
+  - The steering matches the simulator: the heading wobbles about ±20–30°, the same size as in simulation.
+  - The real robot covers only about **half the simulated distance** (0.8 m vs 1.6 m). Not yet explained; likely grip on the floor or the motor slowing under load.
+- **Backup to the live run:** `docs/media/real/real_vs_sim_policy.mp4` and `real_vs_sim_baseline.mp4`, real (left) next to simulated (right).
 
 ## 3. Backup plan
 
@@ -97,7 +101,7 @@ Use `mjpython`, not `python`. A MuJoCo window opens. Make it full screen (green 
 | 2 | `eval_v2_dt0.002_paths.png` | **The overall result**: 100 random robots seen from above (left: baseline, middle: a simple steering controller, right: the policy) |
 | 3 | `eval_v2_dt0.002_baseline.mp4`, then `eval_v2_dt0.002_policy.mp4` | One typical robot in the training simulator (MJLab), filmed from behind |
 | 4 | `spec_motor_paths.png` | Only if someone asks about the real motor: the policy still walks straight with the published motor specs and an 80 g body |
-| 5 | Monday's phone videos of the real robot | The real runs, if they worked |
+| 5 | `docs/media/real/real_vs_sim_policy.mp4`, `real_vs_sim_baseline.mp4` | Julian's real runs (left) next to the same run simulated (right) |
 
 **If the viewer window doesn't open:** check that the command uses `mjpython`, not `python`. If it still won't open, play video 1.
 

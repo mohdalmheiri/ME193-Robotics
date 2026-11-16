@@ -83,7 +83,10 @@ def wdesc(w):
 
 
 def comments(text):
-    return [l.strip() for l in text.splitlines() if l.strip().startswith("#")]   # noqa: E741
+    """The file's own comment lines. calibrate.py's "measured by ..." notes are left out: a rerun
+    REPLACES them by design (the real config.py has them since the 2026-11-16 session)."""
+    return [l.strip() for l in text.splitlines()                                  # noqa: E741
+            if l.strip().startswith("#") and not l.strip().startswith(K.MARK)]
 
 
 real_before = md5(REAL_CONFIG)

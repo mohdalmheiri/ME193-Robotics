@@ -1030,8 +1030,83 @@ Step 0 now also lists `test_demo.py` and points Windows users to the guide.
 - **Result:** every corner reads exactly white (255) and the shadow is a soft grey.
 - **Checked:** a full-resolution crop shows crisp edges, no fringes, and white showing through the motor's side holes.
 
+## 2026-11-16 evening: Julian's real-robot session, merged
+
+Julian ran the session alone (Mohammed was sick) on his own Mac, on a smooth acrylic floor tile, following the checklist's "Running the session alone". He pushed `julian-robot-session` (4 commits); it is merged into `main` with his calibrated `config.py`. His full write-up: `docs/data/session_julian/SESSION_NOTES.md`.
+
+**What came in, and the checks:**
+- **34 files, all inside the HW8 folder:**
+  - 18 run logs and 2 drift `.json` files;
+  - `SESSION_NOTES.md`;
+  - the calibrated `robot/config.py`;
+  - the filled-in `demo_script.md`;
+  - the sim drift comparison (`drift_real_vs_sim.md`, `hand_tests_sim_real_35.*`);
+  - his new `robot/real_vs_sim_video.py`;
+  - 4 videos and a heading plot in `docs/media/real/`.
+- **Largest file:** 1.4 MB, a video.
+- **Clean:** no `.env`, no environment, no backups or caches. A scan of the text changes found nothing secret-looking.
+- **His script:** `real_vs_sim_video.py` only reads and writes local files. The raw phone `.MOV` files it reads are not in git, correctly.
+- **The branch sat directly on top of `main`,** so the merge had no conflicts.
+- **Rechecked from the raw logs (all match his notes):**
+  - Baseline percent from the 3 policy runs: **39.8 % → 40 %**.
+  - Full action with 165.8 rpm at 100 %: **66 %**.
+  - Final headings, counting whole turns: policy +6.5 / −11.5 / −13.4 / −3.6 / +11.6°; baseline +170.2 / +71.1 / −230.6 / −295.7°.
+  - Every run ended at its time limit.
+
+**Calibration** (`calibrate.py`, three passes):
+- **What changed:** ENCODER_SIGN left +1; LEG_ZERO_DEG right 0.0, left 177.1; RPM_AT_PERCENT measured (165.8 rpm at 100 %); BODY_FROM_HUB x:−y, y:+x; ANGLE_UNIT_DEG 0.1; PITCH_ROLL_SWAPPED True.
+- **Unchanged:** POLICY_TOP_RPM stays 110.
+- **First pass warned "gyro adds up to +0".** My solo-session instruction ("do the robot moves first, then type") was **wrong for the last motion-sensor step**: the gyro only records after Enter.
+  - He redid that step cleanly.
+  - The checklist is now fixed: press Enter first, then turn within about 2 s.
+
+**Runs:**
+
+| Driver | Runs | Distance | Final heading | Flips |
+|---|---|---|---|---|
+| Policy | 5 (one a 15 s demo rehearsal) | **695–800 mm** in 20 s (4 measured) | **within 13°** in every run | 0 |
+| Constant 40 % | 4 | −115 mm (looped back), or about 0 (rocked or spun in place) | **+170°, +71°, −231°, −296°** | 0 |
+
+- **Drift tests at 35 %, 10 s:**
+  - in step: 120 mm, turned +60°;
+  - out of step: 390 mm, turned +47°.
+- **Start phase:** the constant-speed robot only walks when its legs start out of step. The policy walked from every start (phase −69° to +10°).
+
+**Measurements:**
+- **Size:** every CAD dimension within 1 mm: body 80 × 48 × 30 mm, front 16 mm ahead of the axle, axle 15 mm above the floor, hubs 25 mm across and standing 8 mm out, leg 63 mm long and 8 mm thick, pivot at hole 2 of 7.
+- **Weight:** **96 g**, against 105.6 g in the model (9 % heavier). That is inside training's ×0.6–1.6 range; his simulations used a 90.4 g body to match.
+
+**Simulator vs real:**
+- **Steering matches:** the real policy's heading wobbles about ±20–30°, like the simulation. Every real fixed-speed turn and sideways drift is inside the spread of 20 lopsided simulated robots; the real robot behaves like one lopsided robot.
+- **Distance does not match:** the real robot covers about **half** the simulated distance.
+  - Policy: 0.7–0.8 m vs 1.59 m simulated.
+  - Out of step: 390 vs 679 mm.
+  - In step: 120 vs 388 mm, below even the shortest lopsided robot.
+  - Untested suspects: grip on the smooth tile, the motor slowing under load (step O1 not done), the contact model.
+- **The fixed-speed turn direction can't be predicted:** the same robot turned 170° and 71° left in two runs, and 231° and 296° right in two others.
+
+**The motor:** it measured **165.8 rpm at 100 %**, half the published 322–346 rpm. **Decision (Mohammed):** keep `config.MOTOR_SPEC` (the published numbers), with a clear comment that our measurement contradicts it. The spec-motor robustness tests are a "what if the motor were faster (~334 rpm)" check, not a model of our motor. Noted in the README's real-robot section too.
+
+**Changes made during the merge:**
+- **`demo_script.md`:** Julian had filled in both blanks (40 %, 110 rpm), and they match the logs.
+  - Added a fair start (both runs with the legs in step at 0°).
+  - Added what to expect (the policy goes 0.7–0.8 m within 13°; the baseline rocks or spins in place).
+  - Added the honest sim-vs-real distance gap.
+  - Added the real-vs-sim videos as a backup.
+  - Updated the sim demo's baseline to **36 %**: with the calibrated rpm table the policy's average command maps to a different percent. Seed 6 is still a clear example: baseline +100°, 667 mm drift; policy −11°, 47 mm.
+  - **Re-recorded `docs/media/demo_side_by_side.mp4`,** so the backup video matches the live demo.
+- **`real_robot_checklist.md`:** the motion-sensor Enter-then-turn fix (see above).
+- **`partner_setup.md`:** the real 66 % / 38 % numbers.
+- **`config.py`:** comments only. The stale "PLACEHOLDER 334 rpm" note now describes the measured table; Julian's values are untouched.
+- **Two tests had assumptions from before the measurement:**
+  - **`test_units` 3b:** the published-spec motor (~334 rpm) was simulated with whatever table `config.py` holds. With the measured 165.8 rpm table, that fake hub contradicts itself (66 % "voltage" spins it at 217 rpm). The check now uses its own spec table, as designed. A **new check** confirms the calibrated table: a full action = 66 % gives **109.6 rpm** on the stand. 32/32.
+  - **`test_calibrate`:** "every comment kept" counted calibrate.py's own "measured by" notes, which a rerun replaces by design, as lost comments. Those notes are now excluded. 54/54.
+  - **All 7 test scripts pass with the calibrated config:** calibrate 54, calibration 34, demo 14, policy 3, dry run 19, safety 17, units 32.
+
 ## Open questions / next steps
-- Monday: follow the time-boxed plan in `docs/real_robot_checklist.md` (calibration with `robot/calibrate.py`; Julian's ruler measurements → CAD and drawing).
+- ~~Monday's robot session~~ Done by Julian 2026-11-16 (see above).
+- Why the real robot covers only about half the simulated distance: measure rpm under load (O1), and try a rougher floor or lower friction in the sim.
+- Update the model's body mass to the measured 96 g total (the CAD export has 105.6 g).
 - Monday night: fill in the two blanks in `docs/demo_script.md` (baseline percent, `POLICY_TOP_RPM`) and rehearse the demo once.
 - Monday's session (`docs/real_robot_checklist.md`):
   - calibrate;

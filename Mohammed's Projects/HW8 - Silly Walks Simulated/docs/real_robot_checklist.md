@@ -51,7 +51,7 @@ One person at the laptop, no helper. The plan above still works with these chang
 - **Floor, not table.** Run everything on the floor, so a robot that tips or walks off has nowhere to fall. Keep the laptop **within arm's reach of the start line**: **Ctrl-C** is your emergency stop, and the run also stops by itself if the robot tips past 70°.
 - **Phone filming from above, propped up:** put it on a chair, a shelf or a stack of books, camera down, with the whole 1.5 m strip in view (test once).
   - **Start recording before you start the run, and stop it after.** For ease, record the drift tests and runs as one long video, and say the run's name out loud ("policy run 2") before each one.
-- **Calibration:** you answer the questions yourself. The laptop waits for Enter before each move, so take your time. Do the robot moves first, then type.
+- **Calibration:** you answer the questions yourself, and the laptop waits for Enter, so take your time. Put the robot in each pose first, then press Enter. **Exception: the last motion-sensor step** ("turn it a quarter turn to the LEFT"): press Enter **first**, then turn within about 2 s. The gyro only records after Enter. Julian found this on 2026-11-16: turning first gives the warning "gyro adds up to +0".
 - **Julian's ruler measurements (step 3)** can't run in parallel any more. Do them **during measure_rpm** (16 s with nothing to do) and at the end, or after the session if time is short; the robot doesn't need power for them.
 
 **Time:** about 65 min for the ESSENTIAL steps instead of 55.
@@ -129,7 +129,7 @@ robot/calibrate.py
 | 1 motor_direction | **On the stand**, legs free | Watch each leg spin at 20 %; say which leg (r/l) and whether it turned the walking way (y/n) |
 | 2 leg_zero | **On the table**, motors off | Turn both legs by hand to 0° (Enter). Then turn the right leg so its long arm points straight up (Enter) |
 | 3 measure_rpm | **On the stand** | Nothing: 25 / 50 / 75 / 100 % for 4 s each (16 s) |
-| 4 imu_axes | **On the table** | Flat → front down (lift the back ~45°) → right side down (lift the left side) → flat → a quarter turn to the LEFT |
+| 4 imu_axes | **On the table** | Flat → front down (lift the back ~45°) → right side down (lift the left side) → flat → press Enter, **then** a quarter turn to the LEFT within ~2 s |
 
 **If something goes wrong:**
 - **A step warns:** it asks whether to keep the result. Answer **n** unless you know why, fix the set-up, then rerun from that step: `robot/calibrate.py --from leg_zero`.

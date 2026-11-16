@@ -179,7 +179,16 @@ expect = round(100 * U.MAX_RPM / U.RPM_AT_100)
 check("full action (+1) gives POLICY_TOP_RPM's percent, not 100 %", pct_full == expect,
       f"{pct_full} % (= {U.MAX_RPM:.0f} of {U.RPM_AT_100:.0f} rpm); "
       f"the naive 100 x (a + 1) / 2 would send 100 % = {U.RPM_AT_100:.0f} rpm")
-# end to end: a spec-motor FakeRobot on a stand (legs free = the fastest they can go), full action
+# end to end, on a stand (legs free = the fastest they can go), full action:
+#  - the motor from the PUBLISHED specs (~334 rpm, config.MOTOR_SPEC) described by its own table
+#    (the 334 rpm placeholder). It has to be its own table: the real robot's measured table
+#    (165.8 rpm at 100 %, 2026-11-16) describes a different, slower motor, and pairing the two
+#    makes a fake hub that contradicts itself.
+#  - the CALIBRATED robot: config.py's measured table with FakeRobot's normal motor
+SPEC_TABLE = [(0, 0.0), (25, 83.5), (50, 167.0), (75, 250.5), (100, 334.0)]
+calibrated_table = C.RPM_AT_PERCENT
+C.RPM_AT_PERCENT = SPEC_TABLE
+importlib.reload(U)
 for mode in ("regulated", "pwm"):
     fake = F.FakeRobot(seed=0, randomize=False, noise=False, start_q=[0.0, 0.0], motor=mode)
     fake.connect()
@@ -193,6 +202,21 @@ for mode in ("regulated", "pwm"):
     fake.close()
     check(f"spec motor ({mode}), legs free, full action: legs run at about POLICY_TOP_RPM, not ~330 rpm",
           abs(rpm - U.MAX_RPM) <= 0.05 * U.MAX_RPM and rpm <= U.TRAINED_TOP_RPM[1], f"{rpm:.1f} rpm")
+C.RPM_AT_PERCENT = calibrated_table
+importlib.reload(U)
+fake = F.FakeRobot(seed=0, randomize=False, noise=False, start_q=[0.0, 0.0])
+fake.connect()
+fake.on_stand()
+pct, _ = U.command(np.array([1.0, 1.0]))
+fake.send(pct["right"], pct["left"])
+fake.wait_until(1.0)
+q0 = {s_: fake.d.qpos[fake.qadr[s_]] for s_ in ("right", "left")}
+fake.wait_until(3.0)
+rpm = max(abs(fake.d.qpos[fake.qadr[s_]] - q0[s_]) / 2.0 * 60 / (2 * math.pi) for s_ in ("right", "left"))
+fake.close()
+check(f"calibrated table ({U.RPM_AT_100:.1f} rpm at 100 %), legs free, full action = {abs(pct['right'])} %: "
+      "legs run at about POLICY_TOP_RPM",
+      abs(rpm - U.MAX_RPM) <= 0.05 * U.MAX_RPM and rpm <= U.TRAINED_TOP_RPM[1], f"{rpm:.1f} rpm")
 # a POLICY_TOP_RPM outside the trained range is refused
 saved_top = C.POLICY_TOP_RPM
 for bad in (U.TRAINED_TOP_RPM[1] + 60, U.TRAINED_TOP_RPM[0] - 30):

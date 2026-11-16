@@ -1,0 +1,9 @@
+{
+  "legs": "in",
+  "percent": 35,
+  "seconds": 10.0,
+  "imu_turn_deg": 59.199999999999996,
+  "distance_mm": 120.0,
+  "sideways_mm": -70.0,
+  "turn_deg": 60.0
+}

@@ -2,7 +2,7 @@
 
 A LEGO robot with no wheels: one LEGO Education Double Motor with a 1x8 Technic brick "leg" on each motor, so spinning the motors makes it shuffle and flop across the table. The goal is to build a physics model of this robot in MuJoCo, exported straight from its Onshape CAD, check that the model matches the real robot, and later use MJLab to train a policy that makes it walk straight. The interesting part is that this robot's walking comes entirely from contact: the legs reach 48 mm below the axle but the table is only 15 mm below it, so every turn they dig in, lever the body up and throw it forward. The robot only gets anywhere through contact with the table, which makes it a good test of whether the simulator handles contact and friction correctly before any training happens.
 
-*Status: the CAD-to-MuJoCo model is built and checked. The v2 policy ([train/walk_straight_v2_task.py](train/walk_straight_v2_task.py), 800 rounds) cuts the mean heading error of 100 lopsided robots from 94° (both motors at one speed) to 7° in MJLab, with no flips, and gives the same result (1 flip in 100) in the robot-side "fake robot" check. It also passes with the real motor's published specs (~334 rpm, 80 g; `docs/spec_motor_check.md`). A simple proportional heading controller goes just as straight (7°, and less sideways drift), but the policy walks 1.9× farther in the same time (`docs/eval_results_v2_dt0.002.md`). The laptop-side code for the real robot (`robot/`) is built and tested; the real robot has not been driven yet (session checklist: [docs/real_robot_checklist.md](docs/real_robot_checklist.md)). Details in [docs/process_log.md](docs/process_log.md).*
+*Status: the CAD-to-MuJoCo model is built and checked. The v2 policy ([train/walk_straight_v2_task.py](train/walk_straight_v2_task.py), 800 rounds) cuts the mean heading error of 100 lopsided robots from 94° (both motors at one speed) to 7° in MJLab, with no flips, and gives the same result (1 flip in 100) in the robot-side "fake robot" check. It also passes with the real motor's published specs (~334 rpm, 80 g; `docs/spec_motor_check.md`). A simple proportional heading controller goes just as straight (7°, and less sideways drift), but the policy walks 1.9× farther in the same time (`docs/eval_results_v2_dt0.002.md`). **On the real robot** (Julian, 2026-11-16): the policy ended within 13° of straight in all 5 runs, from every start, and walked 695–800 mm in the 4 measured 20 s runs; both motors at a constant 40 % ended 71–296° off course, or rocked in place. The steering matches the simulator; the real robot covers about half the simulated distance (see *Real robot results* below). Details in [docs/process_log.md](docs/process_log.md).*
 
 ![Six frames of the simulated robot walking toward its leg tips](docs/media/walk_test_frames_-60rpm.png)
 
@@ -49,6 +49,39 @@ The origin is the centre of the motor axle. +X = robot's right, +Y = toward the 
   - Body: 80 × 48 × 30 mm, with the axle 15 mm from the front end.
   - Hubs: 25 mm across, sticking out 8 mm per side.
 - **Masses:** body ≈ 100 g (an estimate), legs 2.85 g each.
+
+## Real robot results (2026-11-16)
+
+Julian ran the session alone, following `docs/real_robot_checklist.md`, on a smooth acrylic floor tile. Everything is in `docs/data/session_julian/` (start with `SESSION_NOTES.md`).
+
+| | Trained policy (v2) | Both motors at a constant 40 % |
+|---|---|---|
+| Runs (20 s; demo rehearsal 15 s) | 5 | 4 |
+| Distance, start to end | **695–800 mm** (4 measured) | −115 mm (looped back) or about 0 (spun or rocked in place) |
+| Final heading (hub, counting whole turns) | **+12° to −13°** | **+170°, +71°, −231°, −296°** |
+| Flips | 0 | 0 |
+| Depends on the legs' start phase? | no (walked from −69° to +10°) | yes: in step it rocks in place; out of step it walks but curls round |
+
+![Real (left) vs simulated (right): heading over time](docs/media/real/real_vs_sim_heading.png)
+
+**Calibration** (`robot/calibrate.py`, now in `robot/config.py`):
+- **Speed:** the motor reaches **165.8 rpm at 100 %** on the stand, about **half** the published 322–346 rpm.
+  - So a full policy action (`POLICY_TOP_RPM` = 110 rpm) is 66 % power, not the ~33 % predicted from the specs.
+  - The baseline percent from the policy logs is 40 %.
+- **Leg zeros:** the left leg's encoder zero is a half turn from the right's.
+- **Motion sensor:** the hub reports angles in tenths of a degree, rotated 90° from the default mounting, with pitch and roll swapped.
+- **Check:** hand-measured turns agree with the hub's heading to within 1–4°.
+- **The published motor spec is wrong for our motor.** The spec says 322–346 rpm no-load (from Julian's spec search, source unconfirmed); we measured **165.8 rpm at 100 %**, about half. `config.MOTOR_SPEC` keeps the published numbers, with a comment saying they are contradicted. The spec-motor robustness tests (`docs/spec_motor_check.md`, `docs/hand_tests_sim_spec_*.md`) therefore answer "what if the motor were about twice as fast?", not "how does our motor behave?". Our real motor is the measured `RPM_AT_PERCENT` table.
+
+**Measurements:**
+- **Size:** every CAD dimension agrees within 1 mm (body 80 × 48 × 30 mm, axle 15 mm above the floor, hubs 25 mm, legs pivoting at hole 2 of 7).
+- **Weight:** the robot weighs **96 g**; the model has 105.6 g.
+
+**Simulator vs real** (`docs/drift_real_vs_sim.md`, the `docs/media/real/real_vs_sim_*.mp4` videos):
+- **Steering matches:**
+  - The real policy's heading wobbles about ±20–30°, the same as in simulation.
+  - Every real fixed-speed turn and sideways drift falls inside the range of 20 lopsided simulated robots.
+- **Distance does not match:** the real robot covers about **half** the simulated distance (policy: 0.7–0.8 m vs 1.6 m; legs in step at 35 %: 120 mm vs 388 mm). Not explained yet. Suspects: grip on the smooth tile, the motor slowing under load (not measured), and the leg contact model.
 
 ## Files
 
@@ -103,6 +136,7 @@ HW8 - Silly Walks Simulated/
 | [check_fake_vs_eval.py](robot/check_fake_vs_eval.py) | 100 fake robots through the real loop, compared with `evaluate.py` |
 | [check_spec_motor.py](robot/check_spec_motor.py) | Robustness test: 100 fake robots with the real motor's published specs and an 80 g body |
 | [demo_live.py](robot/demo_live.py) | **Class demo:** the policy and the baseline walking side by side on the same lopsided robot, live in the MuJoCo viewer (`--record` makes the backup video) |
+| [real_vs_sim_video.py](robot/real_vs_sim_video.py) | (Julian) The filmed real runs next to the same run simulated: side-by-side videos and heading plot (`docs/media/real/`) |
 | [compare_drift.py](robot/compare_drift.py) | Real drift-test runs next to the simulated ones: heading curves and a table |
 | [calibrate.py](robot/calibrate.py) | **One-command calibration:** runs the four calibration scripts in order and writes the results into `config.py` itself (backup first, comments kept; `--fake --fake-hub upside-down` rehearses against a mis-wired fake hub) |
 | `calibration/` | Scripts that make the robot measure itself, each printing the lines to paste into `config.py`: [motor_direction.py](robot/calibration/motor_direction.py), [leg_zero.py](robot/calibration/leg_zero.py), [measure_rpm.py](robot/calibration/measure_rpm.py), [imu_axes.py](robot/calibration/imu_axes.py), [drift_test.py](robot/calibration/drift_test.py) (`--fake` rehearses with the simulator) |

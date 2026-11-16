@@ -1,0 +1,45 @@
+run,robot,heading_deg,fwd_mm,side_mm
+baseline,real,-295.7,,
+baseline,sim nominal,-16.2,748,233
+baseline,sim lopsided 1,-244.4,-123,859
+baseline,sim lopsided 2,7.1,833,-288
+baseline,sim lopsided 3,-244.9,-312,276
+baseline,sim lopsided 4,89.8,407,-400
+baseline,sim lopsided 5,-219.7,-207,398
+baseline,sim lopsided 6,211.2,-143,-437
+baseline,sim lopsided 7,-70.3,1073,360
+baseline,sim lopsided 8,-157.9,560,1239
+baseline,sim lopsided 9,250.7,-311,-359
+baseline,sim lopsided 10,124.0,414,-646
+baseline,sim lopsided 11,-232.4,-144,94
+baseline,sim lopsided 12,-429.6,256,116
+baseline,sim lopsided 13,-149.5,21,880
+baseline,sim lopsided 14,132.0,361,-851
+baseline,sim lopsided 15,-27.0,1508,181
+baseline,sim lopsided 16,160.6,352,-1327
+baseline,sim lopsided 17,-95.7,138,711
+baseline,sim lopsided 18,94.0,467,-460
+baseline,sim lopsided 19,-99.4,411,652
+baseline,sim lopsided 20,2.1,1512,-205
+policy,real,11.6,,
+policy,sim nominal,-2.3,1586,-48
+policy,sim lopsided 1,5.7,2053,46
+policy,sim lopsided 2,7.8,1200,-40
+policy,sim lopsided 3,-3.4,1034,107
+policy,sim lopsided 4,0.7,1388,-53
+policy,sim lopsided 5,0.3,1797,84
+policy,sim lopsided 6,5.4,1432,-127
+policy,sim lopsided 7,-9.7,1645,291
+policy,sim lopsided 8,-3.2,1776,172
+policy,sim lopsided 9,-9.3,1263,16
+policy,sim lopsided 10,-6.0,1128,80
+policy,sim lopsided 11,3.1,1291,134
+policy,sim lopsided 12,-4.5,1747,-22
+policy,sim lopsided 13,10.5,1564,143
+policy,sim lopsided 14,14.4,1333,-150
+policy,sim lopsided 15,-10.5,1840,199
+policy,sim lopsided 16,3.7,1966,-99
+policy,sim lopsided 17,9.0,1312,-151
+policy,sim lopsided 18,-1.2,1804,39
+policy,sim lopsided 19,-9.8,1873,288
+policy,sim lopsided 20,7.4,1977,-69
