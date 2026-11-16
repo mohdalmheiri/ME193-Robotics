@@ -980,6 +980,38 @@ Step 0 now also lists `test_demo.py` and points Windows users to the guide.
 - **Option B:** a zip of `robot/runs/`, `config.py`, `config_backups/` and photos, through Google Drive.
 - **Videos:** always through Google Drive, never git.
 
+## 2026-11-16: LEGO-looking parts for pictures (`cad/visual/`)
+
+**Goal:** a LEGO-looking model for the Notion cover. **The simulation model is not touched:** nothing in `cad/robot.xml`, `sim/`, `train/` or `robot/` changed, and nothing there reads `cad/visual/`.
+
+**`cad/visual/ldraw_to_stl.py`:**
+- **Parts:** it downloads LDraw **118091p01** (Electric Bluetooth Double Motor, unofficial, Philippe Hurbain, CC BY 4.0) and **3702** (Technic Brick 1 x 8 with Holes, official, James Jessiman, CC BY 4.0), with all their subparts and primitives (145 files in total, 30 of them unofficial).
+- **Conversion:**
+  - It flattens all the references (matrix, offset, colour 16 inherited).
+  - It follows LDraw's face-orientation rules (BFC CCW/CW, INVERTNEXT, mirroring matrices).
+  - It writes binary STL in **mm** (1 LDU = 0.4 mm), turned into **our robot's axes** (x right, y front, z up) with a proper rotation, so nothing is mirrored.
+- **Origins:**
+  - motor = the middle of the axle, between the hub centres;
+  - brick = the centre of its **2nd hole**, laid out as our leg at angle 0 (long arm 48 mm forward, short arm 16 mm back).
+- **Checks** (all as expected):
+  - Enclosed volume positive (outward normals): motor 108 cm³, brick 2.9 cm³.
+  - Motor 64 × 80 × 30.4 mm, y −64…16 (the body behind the axle, as in our CAD: −65…15).
+  - Hub outer faces at **±32.0 mm**, the same as our CAD.
+  - Dark turquoise only at the bottom, confirming up is up.
+  - A rendered preview shows the legs on the hubs, turning about their 2nd hole.
+- **Colours:** the motor is also split into 6 colour STLs (main/white, dark turquoise, black, light bluish grey, metallic silver, trans medium blue), so each can get its own appearance in Onshape. The colour names come from the official LDConfig.ldr.
+- **`cad/visual/README.md`:** sources, licenses with an attribution line, axes, sizes, and the Onshape steps.
+  - Import as mm, with "Y up" unticked.
+  - Create a new Part Studio, "LEGO visual", and bring the parts in with Derived.
+  - Place the legs at **x = ±36 mm** (hub face 32 + half the brick's 8). The pivot is the 2nd hole, built into the leg file's origin.
+  - Create a new assembly, "LEGO visual assembly".
+  - **Untested in Onshape;** the README gives a fallback.
+
+**Problems and fixes:**
+- **Certificates:** Python from python.org on this Mac could not verify library.ldraw.org's certificate. It now uses certifi's certificates, with curl as a fallback; checking is never switched off.
+- **Rate limiting:** library.ldraw.org rate-limits (HTTP 429), and the first version wrongly treated that as "file missing". The converter now pauses 0.5 s between downloads and waits and retries on 429.
+- **Cache:** the download cache `cad/visual/ldraw_cache/` is git-ignored (`**/ldraw_cache/`); the STLs (2.1 MB) are kept.
+
 ## Open questions / next steps
 - Monday: follow the time-boxed plan in `docs/real_robot_checklist.md` (calibration with `robot/calibrate.py`; Julian's ruler measurements → CAD and drawing).
 - Monday night: fill in the two blanks in `docs/demo_script.md` (baseline percent, `POLICY_TOP_RPM`) and rehearse the demo once.

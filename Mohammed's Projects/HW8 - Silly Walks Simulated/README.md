@@ -68,6 +68,7 @@ HW8 - Silly Walks Simulated/
 | **cad/** | |
 | [config.json](cad/config.json) | onshape-to-robot settings: which document and assembly to export, MuJoCo format, no collision meshes and no default motors (those are added in `sim/`) |
 | [test_connection.py](cad/test_connection.py) | Read-only check that the API keys work: lists the document's tabs |
+| [visual/](cad/visual/README.md) | **Pictures only, not simulated:** LEGO-looking STLs (LDraw Double Motor 118091p01 and Technic brick 3702, CC BY 4.0) in our robot's axes, and the Onshape steps |
 | `robot.xml`, `assets/` | The export: the robot model and each part's mesh (`.stl`) and Onshape IDs (`.part`). **Generated; don't edit by hand.** |
 | `scene.xml` | Preview file that onshape-to-robot also writes. Its robot is bolted in place, so use `sim/scene.xml` instead. |
 | **sim/** | |

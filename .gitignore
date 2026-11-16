@@ -81,3 +81,5 @@ Mohammed's Projects/HW8 - Silly Walks Simulated/train/**/*.pt
 Mohammed's Projects/HW8 - Silly Walks Simulated/robot/runs/
 # HW8: config.py backups that robot/calibrate.py makes before writing (git history keeps the committed ones)
 **/config_backups/
+# HW8 cad/visual: LDraw files downloaded by ldraw_to_stl.py (re-downloadable; the STLs are kept)
+**/ldraw_cache/
