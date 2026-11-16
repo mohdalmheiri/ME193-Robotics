@@ -75,7 +75,7 @@
 | 12 | 15:43 | `..._15-43-21_real_constant40_baseline.csv` | demo rehearsal: baseline 15 s | +89 | not measured | not measured | — / +129.4 | no | time limit |
 | 13 | 15:43 | `..._15-43-46_real_policy.csv` | demo rehearsal: policy 15 s | +6 | not measured | not measured | — / −3.6 | no | time limit |
 | 14 | 15:55 | `..._15-55-58_real_constant40_baseline_video.csv` | video: baseline 40 %, 20 s, legs in step | +7 | not measured | not measured | — / +64.3 | no | time limit |
-| 15 | 15:56 | `..._15-56-40_real_policy_video.csv` | video: policy 20 s, legs in step | −1 | 800 | 130 (direction not noted) | — / +11.6 | no | time limit |
+| 15 | 15:56 | `..._15-56-40_real_policy_video.csv` | video: policy 20 s, legs in step | −1 | 800 | +130 | — / +11.6 | no | time limit |
 
 **Average commands (pct_r / pct_l):**
 - Policy runs: 45.4 / 36.1, 42.4 / 35.9, 48.7 / 30.4, and 42.3 / 38.9 for the video run.
