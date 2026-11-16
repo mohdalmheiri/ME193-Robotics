@@ -13,7 +13,7 @@
 
 | | Policy (5 real runs + 1 demo) | Constant 40 % baseline (3 real runs + 1 demo) |
 |---|---|---|
-| Distance in 20 s | **695–720 mm** in all 3 measured runs | −115 mm (looped back) or ~0 (stuck) |
+| Distance in 20 s | **695–800 mm** in all 4 measured runs | −115 mm (looped back) or ~0 (stuck) |
 | Final heading | **within 13°** of straight in every run | **64–170° left** in every run |
 | Flips | none | none |
 | Depends on the start leg phase? | **no** (walked from offsets −69° to +10°) | **yes**: legs in step → rocks in place; out of step → walks but curls left |
@@ -75,7 +75,7 @@
 | 12 | 15:43 | `..._15-43-21_real_constant40_baseline.csv` | demo rehearsal: baseline 15 s | +89 | not measured | not measured | — / +129.4 | no | time limit |
 | 13 | 15:43 | `..._15-43-46_real_policy.csv` | demo rehearsal: policy 15 s | +6 | not measured | not measured | — / −3.6 | no | time limit |
 | 14 | 15:55 | `..._15-55-58_real_constant40_baseline_video.csv` | video: baseline 40 %, 20 s, legs in step | +7 | not measured | not measured | — / +64.3 | no | time limit |
-| 15 | 15:56 | `..._15-56-40_real_policy_video.csv` | video: policy 20 s, legs in step | −1 | not measured | not measured | — / +11.6 | no | time limit |
+| 15 | 15:56 | `..._15-56-40_real_policy_video.csv` | video: policy 20 s, legs in step | −1 | 800 | 130 (direction not noted) | — / +11.6 | no | time limit |
 
 **Average commands (pct_r / pct_l):**
 - Policy runs: 45.4 / 36.1, 42.4 / 35.9, 48.7 / 30.4, and 42.3 / 38.9 for the video run.
