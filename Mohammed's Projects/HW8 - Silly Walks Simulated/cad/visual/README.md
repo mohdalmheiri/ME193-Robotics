@@ -10,7 +10,7 @@ These meshes are for **pictures only** (Notion cover, slides). **The simulation 
 | `technic_brick_1x8_leg.stl` | **3702**, Technic Brick 1 x 8 with Holes (official part) | James Jessiman | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 
 - **Other authors:** the subparts and primitives they use come from the LDraw library (library.ldraw.org), also CC BY 4.0, by their respective authors. Every file used, with its download address, is listed in `ldraw_sources.txt`, and each file's header names its author.
-- **Converted** to STL by `ldraw_to_stl.py` (this folder). Its downloads are cached in `ldraw_cache/`, which git ignores.
+- **Converted** to STL by `ldraw_to_stl.py` (this folder). `render_lego.py` makes the picture. Its downloads are cached in `ldraw_cache/`, which git ignores.
 - **Attribution for pictures:** "LEGO motor and brick models from the LDraw library (library.ldraw.org), CC BY 4.0: Double Motor by Philippe Hurbain, Technic brick by James Jessiman." LEGO® is a trademark of the LEGO Group, which does not sponsor or endorse this project.
 
 ## Units and axes
@@ -49,6 +49,25 @@ Use either the single `double_motor.stl` (one colour) or all six colour files to
 
 None of this matters for pictures.
 
+## Picture without Onshape: `render_lego.py`
+
+```bash
+../../.venv/bin/python cad/visual/render_lego.py
+```
+
+This writes `docs/media/presentation/lego_model.png` (3200 × 1800), the Notion cover:
+- **The robot:** the motor in its real colours, legs in LEGO light bluish grey (`#A0A5A9`, like the real robot) on the hubs pivoting at their 2nd hole, the right leg flat forward and the left leg a quarter turn ahead.
+- **The view:** front-right and slightly above, like a product photo.
+- **The background:** plain white with a soft shadow, and the attribution line at the bottom.
+
+It uses MuJoCo's offscreen renderer with these STLs only. Three passes (full scene, bare floor, and a robot mask) make the background pure white while keeping the shadow.
+
+**Options:**
+- `--leg-color "#05131D"` (e.g. LEGO black)
+- `--left-deg` / `--right-deg` for the leg angles (0 = forward flat, 90 = long arm up)
+- `--azimuth`, `--elevation`, `--distance` for the camera
+- `--width`, `--height`
+
 ## Onshape: a NEW Part Studio and a NEW assembly
 
 I could not test these steps in Onshape from here. They are the standard import route. If a feature is greyed out for mesh parts, use the fallback given.
@@ -68,7 +87,7 @@ I could not test these steps in Onshape from here. They are the standard import 
 - **Left leg:** X = **−36 mm**, Y = 0, Z = 0.
 - **Pivot = the 2nd hole:** this is built into the leg file. Its origin is the centre of the 2nd hole, so after the move each leg turns about the motor axle through its 2nd hole, as on our robot.
 - **Optional pose for the picture:** **Transform → Rotate** a leg about a line through (±36, 0, 0) along X. 0° = long arm forward, flat; +90° = long arm straight up. The left leg a quarter turn ahead of the right gives the "legs out of step" gait.
-- **Appearance:** right-click each part → **Edit appearance**, and use the hex colours above. For the legs, a LEGO colour of your choice, e.g. red `#C91A09`.
+- **Appearance:** right-click each part → **Edit appearance**, and use the hex colours above. For the legs, a LEGO colour of your choice, e.g. light bluish grey `#A0A5A9`, as on the real robot.
 
 **4. Create the new assembly:**
 - **+** → **Create Assembly**, and rename it `LEGO visual assembly`. Leave Assembly 1 alone.

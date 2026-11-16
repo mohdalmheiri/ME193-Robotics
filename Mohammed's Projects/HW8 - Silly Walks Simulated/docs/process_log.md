@@ -1012,6 +1012,24 @@ Step 0 now also lists `test_demo.py` and points Windows users to the guide.
 - **Rate limiting:** library.ldraw.org rate-limits (HTTP 429), and the first version wrongly treated that as "file missing". The converter now pauses 0.5 s between downloads and waits and retries on 429.
 - **Cache:** the download cache `cad/visual/ldraw_cache/` is git-ignored (`**/ldraw_cache/`); the STLs (2.1 MB) are kept.
 
+## 2026-11-16: LEGO picture for the Notion cover (`docs/media/presentation/lego_model.png`)
+
+**What:** instead of importing into Onshape, `cad/visual/render_lego.py` renders the LEGO-looking robot directly from the `cad/visual/` STLs. **Pictures only;** the simulation is untouched.
+- **The robot:** the motor in its LDraw colours (white top, dark turquoise bottom, …), Technic 1×8 legs in LEGO light bluish grey (`#A0A5A9`, like the real robot's legs; first rendered in red) at x = ±36 mm on the hubs, pivoting at their 2nd hole. The right leg is at 0° (long arm forward) and the left leg at +90° (a quarter turn ahead, long arm up).
+- **The picture:** front-right three-quarter view, slightly from above, at 3200 × 1800, with the attribution line in small grey text at the bottom (it shrinks to fit the width).
+
+**Getting a plain white background took four tries:**
+
+| Try | Problem | Cause → fix |
+|---|---|---|
+| 1 | The floor's far edge showed as a grey band, and the camera looked at the back of the motor | MuJoCo's camera azimuth points the view direction; picked from a 4-angle comparison: 228° = front-right |
+| 2 | A black corner at the top | MuJoCo's clipping distances are relative to the model's size (tiny here), so the far floor was cut off → zfar raised |
+| 3 | The shadow vanished | the glowing floor was too bright → less glow |
+| 4 | Fall-off toward the horizon remained | **Final method:** three passes (full scene, bare floor without the robot, and a mask of robot pixels). Robot pixels come from the full scene; everything else is pure white, darkened only by the robot's shadow (full ÷ bare floor) |
+
+- **Result:** every corner reads exactly white (255) and the shadow is a soft grey.
+- **Checked:** a full-resolution crop shows crisp edges, no fringes, and white showing through the motor's side holes.
+
 ## Open questions / next steps
 - Monday: follow the time-boxed plan in `docs/real_robot_checklist.md` (calibration with `robot/calibrate.py`; Julian's ruler measurements → CAD and drawing).
 - Monday night: fill in the two blanks in `docs/demo_script.md` (baseline percent, `POLICY_TOP_RPM`) and rehearse the demo once.

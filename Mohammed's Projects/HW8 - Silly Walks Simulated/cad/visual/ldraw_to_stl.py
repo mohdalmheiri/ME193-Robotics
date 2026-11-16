@@ -58,7 +58,7 @@ LDU_MM = 0.4
 TO_ROBOT = np.array([[-1, 0, 0], [0, 0, -1], [0, -1, 0]], dtype=float) * LDU_MM
 assert abs(np.linalg.det(TO_ROBOT / LDU_MM) - 1) < 1e-9          # a rotation: no mirroring
 # LDraw colour codes (official LDConfig.ldr) -> file name. 16 = "main colour": the colour the
-# part is placed with (the real 45622 motor body is white).
+# part is placed with (the real 45651 motor body is white).
 COLOUR_NAMES = {16: "main", 41: "trans_medium_blue", 0: "black", 3: "dark_turquoise", 7: "light_grey", 15: "white", 71: "light_bluish_grey",
                 72: "dark_bluish_grey", 4: "red", 14: "yellow", 1: "blue", 2: "green", 25: "orange",
                 26: "magenta", 19: "tan", 80: "metallic_silver"}
