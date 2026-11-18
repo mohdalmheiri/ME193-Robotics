@@ -50,6 +50,7 @@ on the board and saves each test walk's live count next to the real one.
      Stairs and Arrived stay on until your next tap.
    - A red **Can't reach the board** warning means the numbers are frozen: stop and
      check the hotspot and the power bank.
-4. At Nolop, press **Arrived**, then stop recording.
+4. At Nolop, press **Arrived**, then stop recording. Keep the page open until the row
+   count says **all sent to the board**.
 5. Fill in this walk's row in the budget table in `data/README.md`, even if the walk
    went wrong.

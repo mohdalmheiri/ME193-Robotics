@@ -119,3 +119,71 @@ real phone or the real board.
    its rows, see Still open).
 6. Later: run the trained policy, for example `GET /api/predict`, or hand the page the
    policy table.
+
+## 2026-11-17: Rows sent to the board, and meters since the last turn
+
+Checkpoint commit `e188a6c` before this work.
+
+**Sending rows to the board** (`uno_q/assets/index.html`)
+- Every saved row goes into an *outbox* on the phone, a waiting line, oldest first. Each
+  tick sends the oldest waiting rows (up to 50) in one `POST /api/rows`. Only when the
+  board answers `{"ok": true}` do they leave the line. If not, they stay and are tried
+  again on the next tick. One send at a time, so the order is kept.
+- Every message has a *ticket* (the page's session id + a number). If the board saved a
+  batch but its "ok" got lost, the page sends it again and the board skips what it has.
+- The outbox is also kept in the phone's storage, so rows waiting to be sent survive a
+  page reload.
+- Undo: a row still waiting is just dropped; a row the board may already have gets an
+  "undo" message in the line, and the board removes it.
+- The reset now says who is walking and the kind of walk
+  (`/api/reset?walker=Raph&kind=demo`), and the board answers with its walk number,
+  which goes on every row. So each row lands in the right walk's file, and the board's
+  files and the phone's backup use the same numbers.
+- The row count shows "all sent to the board" or "N waiting to send"; ending a walk with
+  rows still waiting says to keep the page open.
+
+**Meters since the last turn**
+- `/api/state` gets `distance_at_last_turn` next to `steps_at_last_turn`. The CSV gets
+  `distance_since_turn` next to `steps_since_turn` (the CSV has no `steps_at_last_turn`
+  column, so the matching pair is the "since the turn" one). Both are worked out the same
+  way, from the board's count at the moment it counted the turn, so steps vs meters is
+  a fair comparison.
+
+**Checked:** 33 checks against the fake board, all passing. They cover the board going
+completely silent mid-walk (taps saved meanwhile wait on the phone, then arrive in order,
+and the board's copy matches the phone's exactly), only the rows request failing, a lost
+"ok" (no duplicates), undo before and after sending, rows waiting through a reload, two
+walks going to two files, and mock mode sending nothing. Not checked: undo while that
+row's batch is on its way (the code sends an undo in that case, but the test can't time
+it), and anything on a real phone or board.
+
+**Problems found while doing it**
+- The backup download built its columns from the first row's fields, so the new private
+  ticket would have become a junk column. It now writes exactly the CSV columns
+  (checked).
+- The first test run failed 11 checks: each tick sent waiting rows *before* saving that
+  tick's new row, so the newest row always waited an extra quarter-second. The send now
+  happens at the end of the tick.
+
+**TURN_GIVE_UP_STEPS = 10 is a guess.** It is how many steps after a Left/Right tap the
+page waits for the board to count the turn before going back to Straight. Check it on the
+first real walks: how many steps after the tap does the board really count each turn
+(rows where `turns` goes up)? It should be a few steps more than the slowest real turn,
+but small enough that a missed turn doesn't label a long stretch as Left.
+
+**What the board app must provide (replaces the earlier list)**
+1. The page itself: `assets/index.html` on port 7000 (`web_ui` brick).
+2. `GET /api/state` → `{"steps", "distance_m", "turns_left", "turns_right",
+   "steps_at_last_turn", "distance_at_last_turn", "heading_deg", "on_stairs"}`. Decimals
+   are fine; the page rounds.
+3. `GET /api/reset?walker=<name>&kind=<demo|dagger>` → set every count to 0 (steps,
+   distance, turns, both "at last turn" values, heading), start the next walk number,
+   answer `{"ok": true, "walk": <number>}`, or `{"ok": false, "error": "..."}`.
+4. `POST /api/rows` with `{"items": [...]}`, in order. Each item has `session` and `seq`,
+   and either `row` (the CSV columns: append it to walk `row.walk`'s CSV) or `undo` (the
+   `seq` of an earlier row from the same session: remove that row). Skip any item whose
+   `seq` is not higher than the last one handled for that session. Answer `{"ok": true}`
+   only once everything is saved to disk.
+5. Answer every request within 1.5 s, or the page treats it as failed.
+6. Later: run the trained policy, for example `GET /api/predict`, or hand the page the
+   policy table.

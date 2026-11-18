@@ -37,7 +37,7 @@ internet is needed on the walk.
 
 | Observation (input) | Action (output) |
 |---|---|
-| steps since the last turn (or meters: both are saved, to be compared) | Straight |
+| steps since the last turn (or meters since the last turn: both are saved, to be compared) | Straight |
 | turns so far (left, right) | Left |
 | on stairs (yes / no) | Right |
 | | Stairs |
@@ -70,9 +70,14 @@ small neural net only if the table isn't good enough.
 - Two tabs: **Record demo** (label a demonstration) and **Navigate + correct** (follow
   the policy; with "Save my corrections" ticked, every correction tap is saved for DAgger).
 - It reads the board's state from `GET /api/state`: `steps`, `distance_m`, `turns_left`,
-  `turns_right`, `steps_at_last_turn`, `heading_deg`, `on_stairs`.
-- Before every walk it calls `GET /api/reset`, and the walk only starts once the board
-  answers `{"ok": true}`, so each walk's counts start at 0.
+  `turns_right`, `steps_at_last_turn`, `distance_at_last_turn`, `heading_deg`,
+  `on_stairs`.
+- Before every walk it calls `GET /api/reset` (with who is walking and which kind of
+  walk), and the walk only starts once the board answers `{"ok": true}` with its walk
+  number, so each walk's counts start at 0.
+- It sends every saved row to the board (`POST /api/rows`). If the board doesn't answer,
+  the rows wait on the phone, even through a page reload, and go out in order when it
+  answers again.
 - If the board stops answering, a warning appears on both tabs and the instruction is
   greyed out until it answers again.
 - The board saves each walk as one CSV; the phone's download is a backup. The columns are

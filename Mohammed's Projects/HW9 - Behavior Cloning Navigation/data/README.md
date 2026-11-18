@@ -1,12 +1,18 @@
 # Walk data
 
 Every full walk of the route is saved as one CSV **by the board**, like HW7's Step
-Recorder saves each trial, and then copied into `walks/` on the laptop. The phone page's
-**Download CSV** button is only a backup. Both partners' walks go here, because the policy
+Recorder saves each trial, and then copied into `walks/` on the laptop. The phone page
+sends each row to the board as soon as it is saved. If the board doesn't answer, the rows
+wait on the phone and are sent when it answers again. The page's **Download CSV** button
+is only a backup. Both partners' walks go here, because the policy
 is trained on both. For the step-by-step routine, see
 [RECORDING_CHECKLIST.md](RECORDING_CHECKLIST.md).
 
 (The board app isn't written yet. Until it is, the phone download is the only copy.)
+
+The walk number on every row comes from the board: when a walk starts, the page tells the
+board who is walking and which kind of walk it is, and the board answers with the next
+walk number. So the board's files and the phone's backup use the same numbers.
 
 ## The 10-walk budget
 
@@ -59,7 +65,8 @@ walk, a snapshot of what the sensors said and which button was pressed then.
 | `t_ms` | The phone's clock when this row was saved, in milliseconds (1000 ms = 1 second). It is a standard computer clock (counting from 1 Jan 1970), so subtract a walk's first `t_ms` to get the time since that walk started. |
 | `steps` | How many steps the walker has taken since the walk began, as a whole number (the counter's running total, rounded down). |
 | `distance_m` | How far the walker has gone since the walk began, in meters (to 0.1 m), from the same step counter. Saved next to `steps` to compare the two on the first walks: a person with shorter strides takes more steps for the same corridor, but should cover the same meters. |
-| `steps_since_turn` | How many steps since the last turn. The count starts over at 0 at every turn. **The policy uses this.** |
+| `steps_since_turn` | How many steps since the last turn. The count starts over at 0 at every turn. **The policy uses this** (or the next column). |
+| `distance_since_turn` | How many meters since the last turn (to 0.1 m), measured the same way: the distance now minus the distance at the moment the board counted the turn. Saved next to `steps_since_turn` so the two can be compared fairly on the first walks. |
 | `turns` | How many turns so far, left and right together. |
 | `turns_left` | How many of those turns were to the left. **The policy uses this.** |
 | `turns_right` | How many were to the right. **The policy uses this.** |
@@ -68,8 +75,9 @@ walk, a snapshot of what the sensors said and which button was pressed then.
 | `label` | The button the walker had pressed: what they were doing. One of `Straight`, `Left`, `Right`, `Stairs`, `Arrived`. This is the answer the policy learns to copy. |
 | `predicted` | Only on `dagger` rows: what the policy told the walker to do, before any correction. Where it differs from `label`, the policy was wrong and the walker corrected it. Empty on `demo` rows. |
 
-`turns` is always `turns_left` + `turns_right`, and `steps_since_turn` is `steps` minus
-the step count at the last turn. They are saved anyway because they make the files easy
+`turns` is always `turns_left` + `turns_right`, `steps_since_turn` is `steps` minus the
+step count at the last turn, and `distance_since_turn` is `distance_m` minus the distance
+at the last turn. They are saved anyway because they make the files easy
 to read by eye.
 
 Raw labels are never edited in these files. Label cleanup is done by a training script,
