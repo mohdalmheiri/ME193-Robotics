@@ -27,6 +27,9 @@ from arduino.app_utils import Bridge
 FIELDS = 7                                   # running number + 6 values per reading
 FAILED_READ = (-1 / 2048.0, -1 / 16.4)       # a raw -1 (no answer), converted like the sketch does
 STALE_S = 0.5                                # no real reading for this long = not reading
+# Times here use time.monotonic(), a clock that only counts forward. The wall clock
+# (time.time()) jumps when the board syncs its clock over the network after a restart (about
+# 50 s on 2026-11-18), which made the sensor look silent for a moment.
 MAX_FILL = 400                               # at most 4 s of placeholders for one gap
 
 
@@ -44,8 +47,8 @@ class Sensor:
     def __init__(self, logger):
         self.logger = logger
         self.last_number = None              # running number of the last reading received
-        self.last_good_time = time.time()    # starts as "now" so nothing warns during start-up
-        self.last_batch_time = time.time()
+        self.last_good_time = time.monotonic()    # starts as "now" so nothing warns during start-up
+        self.last_batch_time = time.monotonic()
         self.last_problem = None             # "zeros" or "no_answer", from the latest bad reading
         self.last_values = None              # the latest reading (6 values), for the log
         # Totals since the app started
@@ -53,7 +56,7 @@ class Sensor:
 
     def status(self):
         """{"ok": True}, or {"ok": False, "problem": "zeros" / "no_answer" / "no_data"}."""
-        now = time.time()
+        now = time.monotonic()
         if now - self.last_good_time < STALE_S:
             return {"ok": True}
         if now - self.last_batch_time > STALE_S:
@@ -72,7 +75,7 @@ class Sensor:
             self.logger.warning(f"Dropped a batch of {len(batch)} values (not whole readings)")
             return []
         out = []
-        now = time.time()
+        now = time.monotonic()
         for i in range(0, len(batch), FIELDS):
             number, values = int(batch[i]), [float(v) for v in batch[i + 1:i + FIELDS]]
             if self.last_number is not None and number != self.last_number + 1:

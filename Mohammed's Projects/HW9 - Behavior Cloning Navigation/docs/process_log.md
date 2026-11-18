@@ -636,3 +636,72 @@ fresh one on the next start). Only the old log lines were affected.
 **Known limit of the live counter:** while a 4 s window holds a "not real" reading (a lost
 or bad one), the nets don't run, so a cut-short batch while walking loses the strides of
 about 1.6 s around it (2-4 steps). Cut-short batches came about 6 times an hour today.
+
+**Restart test** (19:21, Nolop Navigator set as the default app over USB, then the USB cable
+unplugged and plugged back in = power off/on): the app **started by itself and readings
+flowed from the start, without a reflash** (about 1,000 per 10 s, 0 lost, nets 49 ms). The
+router again logged one burst of "invalid packet" messages (37, at once, during start-up)
+and this time it did no harm. So the earlier failure (19:16) is still unexplained; it came
+after manual starts (start, then a fresh container, no reflash). One good restart of one
+tried: to repeat tomorrow with the power bank.
+- What first looked like a one-minute gap was the board's clock: after a restart it starts
+  from a saved time about 50 s behind and jumps forward when it syncs over the network
+  (19:23:18). The app measured intervals with the wall clock, so it saw "60.3 s" and briefly
+  "no reading for 0.5 s"; in fact 884 readings (about 9 s of data) had arrived since it
+  started. Fixed: `sensor.py` and `main.py` now use `time.monotonic()`, a clock that only
+  counts forward. On NolopNav (no internet) the board's clock never syncs: its time of day
+  may be wrong, but it won't jump.
+
+**Sketch not answering after some starts: what we found.** Starts today, and whether the
+sketch answered Python:
+
+| Time | How the app started | Router: burst of 37 "invalid packet" before Python connects | Sketch answered |
+|---|---|---|---|
+| 19:09 | `restart` while running | (not checked) | yes |
+| 19:16, 19:17 | `start` from stopped, after the board restarted on plugging in | burst at 19:16:24 | no |
+| 19:18 | `restart` while running | (flash) | yes |
+| 19:22 | by itself at power-up (default app), restart test 1 | yes, 19:22:10 | yes |
+| 19:26 | `restart` while running | yes, 19:26:34 | yes |
+| 19:35 | `restart`: stopped the app but didn't start it again (no error shown) | — | — |
+| 19:36 | `start` from stopped | **none** | **no** |
+| 19:37 | `restart` while running | **none** | **no** |
+| 19:38 | power off/on (USB unplugged and plugged in), default app, restart test 2 | yes, 19:38:41 | **yes** |
+
+The burst is the sketch starting up (its first bytes on the link to Linux before the two
+sides are in step), so **no burst = the microcontroller isn't running the sketch after
+flashing** (the flashing tool halts it to write the program; it seems not to have been let
+go). After the half-failed restart at 19:35, neither `start` nor `restart` got it running
+again; a full power-off did. Restart test 2 passed: the app started by itself and readings
+flowed without a reflash.
+- **For walking days:** after any deploy, check the router log shows the burst and the app
+  log shows readings (`Sensor: ~1000 readings in 10 s`). If the sketch doesn't answer, power
+  the board off and on (unplug the cable or power bank for 5 s); that has worked every time.
+- The 19:16 failure fits too, if plugging in the USB cable restarted the board while
+  the microcontroller was being flashed or held; not proven.
+
+**Build steps 5-7 run on the board** (`/api/state`, `/api/reset`, `/api/rows`; `python/walks.py`
+saves each walk's rows to `walks/Person_kind_Wnn.csv` with tickets, undo and safe rewrites).
+Laptop tests first (10 checks on the walk store, including a resent batch, undo and a
+restart; the whole app with stand-in libraries). **Live test with the page** (Mohammed on
+the laptop, Raph swinging the board): steps went 2 -> 16 in twos; taps Left, Straight,
+Stairs, then Undo. **The board's walk file matches the page's Download CSV exactly, row by
+row** (10 rows); the Stairs row reached the board and was removed by the undo ("+0 -1").
+Walk 1 on the board is empty (started, no rows). Files in `data/live_test/`.
+
+**Build step 9 (turns, `python/turns.py`) runs on the board.** First version (60° within
+2 s, then from the last turn) on the 8 Step 0 recordings: 6 of 8 exact; Raph's 180° spot
+turns counted as 3 + 3 (it counted every 60°), and one of Mohammed's corners was missed (it
+took about 4 s with a pause: 49° -> 119°, no 2 s stretch reached 60°). The live heading also
+drifts more than the offline script's (Mohammed's LoopRight -413° live vs -356°), because
+"up" can only be averaged over the past second. **Final rule:** 60° within **3 s** (as
+decided for slow corners: widen the window, don't lower 60°), and after a turn the next one
+in the same direction is measured as a quarter turn (60° beyond 30° past the last one).
+**`training/check_turns.py`: all 8 recordings counted exactly** (every corner of the 6
+loops, including Raph's paired corners, and 2 + 2 for the 180° spot turns), no false turns;
+straight walking at most 19-31° within 3 s. **On the board:** board flat on the table, Start,
+5 s still (offset gx 38.3°/s, 0.007 g), then 90° left -> Turn L, 90° right -> Turn R; the
+page's Left label went back to Straight by itself. Raph's sensor's gx offset moved 36.1 ->
+38.3°/s in two minutes (warming up), so measuring it at every Start is right.
+
+**Back to Raph's setup at the end of the day:** How Many Steps (`Steps-UnoQ`) running and
+the default app again; Nolop Navigator stopped (its files and saved walks stay on the board).

@@ -5,8 +5,9 @@ and serves the phone page, all on the board. No laptop or internet is needed on 
 on walking days the board makes its own Wi-Fi network, **NolopNav**, and the phone opens
 the page at **http://10.42.0.1:7000** (see "Walking days" below).
 
-**Status:** build steps 1 and 3 run on the board (the page is served; the ankle sensor is
-read and checked); step 4 (the step counter) is next. The build order is near the end.
+**Status (2026-11-18):** build steps 1, 3-7 and 9 run on the board (page, sensor, Raph's
+step counter, `/api/state`, `/api/reset`, `/api/rows`, turn counting); 2 and 8 are skipped.
+Next: walking tests with the board on the ankle. The build order is near the end.
 
 ## How the phone and the board talk
 
@@ -143,7 +144,7 @@ too, rethink before building the app.
 | 6 | `GET /api/reset` | Zero the counts; walk number = highest walk number among saved files + 1 (as HW7 numbers trials) | Start walk works; the walk number goes up each time |
 | 7 | `POST /api/rows` | Keep each walk's rows in memory as a list (with their seq), skip seqs already handled, remove a row on undo, then rewrite that walk's whole CSV and answer ok (a walk is only ~1000 rows) | A straight walk ends with a CSV on the board matching the phone's download |
 | 8 | *Only if Step 0 fails:* read the waist sensor | Add the second MPU-6050 at 0x69 to the sketch (the backup test's sketch already does this) | Both read on a real walk (the long wire especially) |
-| 9 | Count turns (ankle sensor) | The method of `training/ankle_turn_check.py`, running live: **measure the gyro bias of each axis (gx, gy, gz) while the walker stands still for 5 s right after `/api/reset`** (before the first step) and subtract it from the raw gyro readings from then on, *before* taking the part around "up" (one number around "up" doesn't work: Step 0 showed it depends on the leg's tilt); find "up" from the accelerometer averaged over 1 s; add up the turning rate around "up" to get the heading. A turn = the heading changes by more than 60° within 2 s (Step 0: corners 68-89° and 0.9-1.7 s long, straights under 23°), then a pause **shorter than 1 s** before the next one can count (corners can come only 1-1.5 s apart); its sign says left or right. Fill `turns_left/right`, both "at last turn" values and `heading_deg` | Turn on the spot and around corners; every turn counted once, left and right right |
+| 9 | Count turns (ankle sensor) | **Done: `python/turns.py`.** The method of `training/ankle_turn_check.py`, live: measure the gyro offset of each axis while the walker stands still for 5 s right after `/api/reset` and subtract it; "up" from the accelerometer averaged over the last 1 s; add up the turning rate around "up". A turn = the heading changes by more than 60° within **3 s** (one corner took ~4 s with a pause, so 2 s missed it); after a turn, the next one in the same direction is measured as a quarter turn (60° beyond 30° past the last one), so a 180° counts as two turns and paired corners 1 s apart both count. Fills `turns_left/right`, both "at last turn" values and `heading_deg` | `training/check_turns.py`: all 8 Step 0 recordings counted exactly (every corner, no false turns; straights at most 31° within 3 s). On the board: 90° left and right on the table counted L, R |
 
 After step 7 a straight walk can be recorded from start to end. After step 9 the first
 real route walk can be recorded.

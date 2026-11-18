@@ -35,7 +35,7 @@ internet is needed on the walk.
   found from the accelerometer averaged over 1 s (the leg's swing averages out), so it
   works however the sensor sits on the leg. The gyro's bias (a false turning rate when
   still) is measured while the walker stands still for 5 s at the start of every walk. A
-  turn is counted when the heading changes by more than about 60° within 2 s. The heading
+  turn is counted when the heading changes by more than 60° within 3 s. The heading
   itself slowly drifts over a long walk, so the policy never uses it directly. It only
   uses the number of turns. A first test on Raph's recorded walk showed every turnaround
   clearly ([`media/ankle_turns_raph.png`](media/ankle_turns_raph.png)); 90° corners are
@@ -120,14 +120,21 @@ HW9 - Behavior Cloning Navigation/
 |---|---|
 | [uno_q/README.md](uno_q/README.md) | What the board app does and how to deploy it |
 | [uno_q/app.yaml](uno_q/app.yaml) | App Lab settings: name, port 7000, web page brick |
+| [uno_q/python/main.py](uno_q/python/main.py) | The board app: reads the sensor, counts steps and turns, answers the page (`/api/state`, `/api/reset`, `/api/rows`) |
+| [uno_q/python/sensor.py](uno_q/python/sensor.py) | Collects and checks the sensor readings from the sketch (lost and bad readings) |
+| [uno_q/python/turns.py](uno_q/python/turns.py) | Counts turns live from the ankle gyro (offset per axis, heading around "up", 60° within 3 s) |
+| [uno_q/python/walks.py](uno_q/python/walks.py) | Saves each walk's rows to a CSV on the board (tickets, undo, safe rewrites) |
+| [uno_q/sketch/sketch.ino](uno_q/sketch/sketch.ino) | HW7's sketch: reads the MPU-6050 100 times a second |
 | [uno_q/python/stride_counter.py](uno_q/python/stride_counter.py) | Raph's step counter in plain numpy, with a live counter for the board app |
 | `uno_q/python/raph_step_model.npz` | Raph's 5 trained nets and counting settings, exported for the board |
 | [training/export_raph_cnn.py](training/export_raph_cnn.py) | Exports Raph's PyTorch model to that file (weights unchanged) |
 | [training/check_numpy_port.py](training/check_numpy_port.py) | Checks the numpy port gives the same scores, peaks and counts as his PyTorch version |
 | [training/compare_raph_cnn.py](training/compare_raph_cnn.py) | Runs Raph's counter on our recordings (with and without the axis swap) |
 | [training/ankle_turn_check.py](training/ankle_turn_check.py) | Heading from the ankle gyro, to check turns (Step 0) |
+| [training/check_turns.py](training/check_turns.py) | Runs the board's turn counter on the 8 Step 0 recordings with known turns |
 | [training/requirements.txt](training/requirements.txt) | Laptop packages for label cleanup, training and the checks |
 | `data/step0/`, `data/sensor_swap/` | Raw ankle recordings from Step 0 and the sensor-swap experiment |
+| `data/live_test/` | Test walks saved by the board during the Live-mode test, and the page's download of walk 2 |
 | [data/README.md](data/README.md) | Walk file naming, CSV columns and the 10-walk log |
 | [data/RECORDING_CHECKLIST.md](data/RECORDING_CHECKLIST.md) | Step-by-step for testing the counter and recording each walk |
 | [docs/process_log.md](docs/process_log.md) | Dated record of decisions and results |
