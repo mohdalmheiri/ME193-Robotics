@@ -111,8 +111,14 @@ No step counting, no page, no turn logic.
   long wire), or a slower I2C speed.
 
 *(b) Do turns stand out in the waist gyro?*
-- Plot the waist gyro's turning rate around the up-and-down direction over time (at
-  first, simply the gyro axis that points up when standing).
+- **First find which axis points up.** The waist sensor won't sit perfectly upright on the
+  belt. In the 5 s of standing still at the start, look at the waist *accelerometer*: the
+  axis that reads close to 1 g (or −1 g) is the one lined up with gravity. The gyro sits
+  in the same chip with its axes pointing the same way, so the gyro axis with the same
+  letter (`az` → `gz`) is the one that measures turning left and right. If two axes share
+  gravity (say 0.7 g each), the sensor is tilted between them; use the one with more for
+  now.
+- Plot that gyro axis over time.
 - Walking straight, it should wobble around zero: the hips sway a little with every step.
 - Each turn should be a clear hump: bigger and longer than the walking wobble, lasting
   about 1-2 s, pointing one way for left turns and the other way for right turns.

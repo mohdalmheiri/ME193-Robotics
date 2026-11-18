@@ -187,3 +187,38 @@ but small enough that a missed turn doesn't label a long stretch as Left.
 5. Answer every request within 1.5 s, or the page treats it as failed.
 6. Later: run the trained policy, for example `GET /api/predict`, or hand the page the
    policy table.
+
+## 2026-11-17: End of day 1 summary
+
+**Decided**
+- Layout as in the README; the phone page lives in `uno_q/assets/`.
+- Start with Mohammed's HW7 step counter (runs on the board in plain numpy); Raph's CNN
+  counter is the alternative being compared. Testing it on Raph's walking is the first
+  checklist item. To confirm with Raph.
+- Policy: a lookup table first (AnnaCode Table Cloner), a small net only if needed.
+- The walk table in `data/README.md` is the official walk count (10 at most).
+- The board saves one CSV per walk; the phone's download is the backup.
+- Steps and meters are both saved (also since the last turn), to compare on the first
+  walks.
+- Phone hotspot rather than the board as its own Wi-Fi network.
+
+**Built**
+- Phone page fixes: reset the board before each walk (and only start once it confirms),
+  a "can't reach the board" warning on both tabs with the instruction greyed out, turn
+  labels that end when the board counts the turn (10-step safety net, a guess to check),
+  whole steps, matching title.
+- Row sending: a waiting line on the phone, tickets against duplicates, undo messages,
+  walk numbers from the board, rows kept through a page reload. 33 checks against a fake
+  board pass; not yet tried on a real phone or board.
+- `uno_q/README.md`: the page ↔ board protocol in plain words, one example walk, and the
+  build order (Step 0, then steps 1-9).
+- Checklist: Live mode, Auto-Lock Never, tap Straight after a mis-tap, keep the page open
+  until all sent, don't restart the hotspot mid-walk.
+
+**Next (2026-11-18, with Raph)**
+- Step 0, the hardware risk test: a sketch that records both sensors raw, one short walk
+  with turns each, then check for dropouts and whether turns stand out in the waist gyro.
+  If either fails, rethink before building the board app.
+- Then the board app, in the build order in `uno_q/README.md`.
+- The step-counter test on Raph's walking (checklist part 1) can be done with HW7's Step
+  Recorder as it is.
