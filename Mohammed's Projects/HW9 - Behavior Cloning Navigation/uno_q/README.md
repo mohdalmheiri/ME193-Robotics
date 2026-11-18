@@ -1,10 +1,12 @@
 # 🧭 Nolop Navigator (board app)
 
-The UNO Q app for HW9. It reads both sensors, counts steps and turns, saves each walk and
-serves the phone page, all on the board. No laptop or internet is needed on the walk.
+The UNO Q app for HW9. It reads the ankle sensor, counts steps and turns, saves each walk
+and serves the phone page, all on the board. No laptop or internet is needed on the walk:
+on walking days the board makes its own Wi-Fi network, **NolopNav**, and the phone opens
+the page at **http://10.42.0.1:7000** (see "Walking days" below).
 
-**Status:** `app.yaml` and the phone page (`assets/index.html`) exist. The board code
-(`python/`, `sketch/`) is next; the build order is at the end.
+**Status:** build steps 1 and 3 run on the board (the page is served; the ankle sensor is
+read and checked); step 4 (the step counter) is next. The build order is near the end.
 
 ## How the phone and the board talk
 
@@ -66,7 +68,7 @@ Raph records a demo walk; it's the third walk on this board.
 | 3 | Steps reach 1: the page saves a row, ticket seq 1 | `POST /api/rows` with seq 1 | Appends it to walk 3's CSV: `{"ok": true}` |
 | 4 | … one row per step, seq 2, 3, … 24 | (same) | (same) |
 | 5 | Raph taps **Left** before the corner: a row labeled Left, seq 25 | `POST /api/rows` with seq 25 | saved |
-| 6 | The board's waist gyro sees the turn | — | `/api/state` now says `turns_left: 1, steps_at_last_turn: 26.1, distance_at_last_turn: 18.3`; the page's label goes back to Straight |
+| 6 | The board's ankle gyro sees the turn | — | `/api/state` now says `turns_left: 1, steps_at_last_turn: 26.1, distance_at_last_turn: 18.3`; the page's label goes back to Straight |
 | 7 | The hotspot hiccups for 2 s: rows seq 30-33 wait on the phone; the page shows a red warning | (requests fail) | — |
 | 8 | The board answers again: the waiting rows go in one batch, in order | `POST /api/rows` with seq 30-33 | saved, `{"ok": true}`; the warning clears |
 | 9 | That "ok" is lost on the way back, so the page sends seq 30-33 again | `POST /api/rows` with seq 30-33 | All already handled: skipped, `{"ok": true}` |
@@ -134,9 +136,9 @@ too, rethink before building the app.
 | # | Piece | Simplest version | Test |
 |---|---|---|---|
 | 1 | Serve the page | `python/main.py` with the `web_ui` brick, nothing else | Phone opens the page; Mock mode works |
-| 2 | Board address on the LED matrix | Reuse HW7's address service and scrolling code. The service writes only to the Step Recorder's folder, so add a second output file in this app's folder | Address scrolls on the matrix on the hotspot |
+| 2 | ~~Board address on the LED matrix~~ **Skipped** | Not needed: on walking days the board makes its own network, NolopNav, where its address is always 10.42.0.1 (see "Walking days") | — |
 | 3 | Read the ankle sensor | HW7's `sketch.ino` as is (one MPU-6050 at 0x68, 100 Hz, with its reconnect fix) | Samples arrive in Python |
-| 4 | Count steps and meters | HW7's `step_counter.py` + `step_model.npz`, unchanged | Walk 20 counted steps; the count is close |
+| 4 | Count steps and meters | Raph's counter, ported: `stride_counter.py` + `raph_step_model.npz` (`LiveStrideCounter`, same controls as HW7's `LiveCounter`); meters = steps × 0.41 | Walk 20 counted steps; the count is close; time it on the board |
 | 5 | `GET /api/state` | The real `steps` and `distance_m`; every other field fixed at 0 / false | The page in Live mode shows steps going up |
 | 6 | `GET /api/reset` | Zero the counts; walk number = highest walk number among saved files + 1 (as HW7 numbers trials) | Start walk works; the walk number goes up each time |
 | 7 | `POST /api/rows` | Keep each walk's rows in memory as a list (with their seq), skip seqs already handled, remove a row on undo, then rewrite that walk's whole CSV and answer ok (a walk is only ~1000 rows) | A straight walk ends with a CSV on the board matching the phone's download |
@@ -152,8 +154,89 @@ version of step 7: if the board app restarts, it forgets which seqs it handled, 
 batch sent again right after a restart could be saved twice. Fine to start with; fix
 later by saving the last seq to a file.
 
-## How to deploy
+## How to deploy (from the terminal, no App Lab)
 
-Like HW7: a symlink in the ArduinoApps kit points to this folder, then
-`python3 tools/deploy.py <app name>`. Only one app runs at a time, so sharing port 7000
-with HW7's Step Recorder is fine.
+Copy this folder to the board (Python's `__pycache__` left out), then start it:
+
+```
+tar --exclude __pycache__ -cf - . | ssh arduino@<board> 'mkdir -p ~/ArduinoApps/nolop-navigator && tar -xf - -C ~/ArduinoApps/nolop-navigator'
+ssh arduino@<board> 'arduino-app-cli app restart /home/arduino/ArduinoApps/nolop-navigator'
+ssh arduino@<board> 'arduino-app-cli app logs --tail 30 /home/arduino/ArduinoApps/nolop-navigator'
+```
+
+`<board>` is the board's address on Tufts_Robot (check `hostname` says Raph first: campus
+addresses get reused), or `10.42.0.1` with the laptop joined to NolopNav. Only one app runs
+at a time: starting this one stops whichever app was running, and the first start installs
+numpy (about a minute). `arduino-app-cli app list` shows which app runs.
+
+## Walking days: the NolopNav network
+
+Mohammed's phone can't use Tufts_Robot and we don't use a phone hotspot, so on walking days
+the board makes its own Wi-Fi network. Raph agreed (it's his board), and Chris confirmed
+that running our own Wi-Fi network on campus is OK.
+
+**How it works.** NetworkManager (the board's network manager) has a hotspot mode: the
+board's only Wi-Fi radio (`wlan0`) becomes a small Wi-Fi router called **NolopNav**, with
+a WPA2 password. The board is always at **10.42.0.1**, and whatever joins gets a
+10.42.0.x address. So the page is always at **http://10.42.0.1:7000** (no address on the
+LED matrix needed). There is no internet on NolopNav: an iPhone says "No Internet
+Connection" but stays joined; nothing on the page needs the internet. Checked on Raph's
+board: its Wi-Fi chip supports hotspot mode, and the `arduino` user may change network
+settings without the admin password.
+
+**One radio:** while NolopNav is on, the board is **not** on Tufts_Robot (or Raph's home
+networks), so it can't be reached there. To deploy or read logs, either join the laptop
+to NolopNav (`ssh arduino@10.42.0.1`; no internet on the laptop meanwhile), or use the
+**USB-C cable**: `adb shell` reaches the board whatever the Wi-Fi does. adb comes with App
+Lab, off the PATH:
+
+```
+export PATH="$HOME/Library/Arduino15/packages/arduino/tools/adb/32.0.0:$PATH"
+adb devices          # the board must be listed; if not: data cable (not charge-only), plugged into the laptop
+adb shell hostname   # Raph
+```
+
+**Test the USB route before the first switch** (2026-11-18: not yet; the board showed no
+USB data link). Switch networks over USB, not over Wi-Fi: a command that turns Wi-Fi off
+can't cut off its own USB connection.
+
+**Once: create NolopNav (switched off).** Mohammed types this himself in `adb shell` (or an
+ssh session), so the password goes into the board's network settings only, never into this
+repo or a chat. `read -rs` asks for the password without showing it or keeping it in the
+shell history:
+
+```
+read -rs -p "NolopNav password (8+ characters): " PW; echo
+nmcli connection add type wifi ifname wlan0 con-name NolopNav ssid NolopNav \
+  802-11-wireless.mode ap 802-11-wireless.band bg \
+  ipv4.method shared ipv4.addresses 10.42.0.1/24 ipv6.method disabled \
+  wifi-sec.key-mgmt wpa-psk wifi-sec.proto rsn wifi-sec.pairwise ccmp wifi-sec.group ccmp \
+  wifi-sec.psk "$PW" connection.autoconnect no
+unset PW
+```
+
+**Morning of a walking day: NolopNav on, starts by itself after a power-off.** A hotspot is
+always "available", so with a higher priority than the saved networks (all 0) it wins
+every time the board starts. Nolop Navigator becomes the default app, so it starts too:
+
+```
+nmcli connection modify NolopNav connection.autoconnect yes connection.autoconnect-priority 10
+arduino-app-cli properties set default /home/arduino/ArduinoApps/nolop-navigator
+nmcli connection up NolopNav        # over Wi-Fi this drops the session: do it over USB
+```
+
+Check: the phone (and laptop) see NolopNav; http://10.42.0.1:7000 opens the page.
+
+**Evening: back to Tufts_Robot.** Over USB:
+
+```
+nmcli connection modify NolopNav connection.autoconnect no
+nmcli connection down NolopNav      # NetworkManager rejoins Tufts_Robot within seconds
+arduino-app-cli properties set default /home/arduino/ArduinoApps/Steps-UnoQ
+```
+
+`arduino-app-cli` can set a default app but has no command to clear one, so the evening step
+sets Raph's **How Many Steps** app (`Steps-UnoQ`), the app that was running when HW9 started
+on his board, so each evening the board goes back to how Raph had it (his choice). Check: `nmcli -t -f NAME,DEVICE
+connection show --active` shows Tufts_Robot on wlan0. To remove NolopNav for good:
+`nmcli connection delete NolopNav`.

@@ -562,3 +562,44 @@ side-by-side check above.
 again" at 18:44:05). Still test on the table (`data/sensor_swap/RaphSensor_Still.csv`,
 board `Raph_Test_T04`): gyro offset **gx +35.1, gy -0.6, gz -2.5°/s**, noise 0.1°/s, no
 dropouts. gx of about +35°/s confirms it is Raph's sensor (Mohammed's: -3.0).
+
+## 2026-11-18: Board app step 1 on the board; walking days on the board's own network
+
+**Build step 1 runs on Raph's board** (from the terminal, `arduino-app-cli`): the page is
+served on port 7000, byte for byte the repo's page; Mock mode works (steps, since turn,
+turns, Start/End walk, Download CSV). Step Recorder stopped meanwhile; all of today's board
+recordings and the board's trial logs were copied to `data/` first.
+
+**Decided (Mohammed and Raph; Chris confirmed that running our own Wi-Fi network on campus
+is OK):** Mohammed's phone can't use Tufts_Robot and we don't use a phone hotspot, so on
+walking days the board makes its own Wi-Fi network, **NolopNav**, with the page always at
+http://10.42.0.1:7000. Build step 2 (the address on the LED matrix) is skipped.
+- NolopNav starts by itself on walking days (so a power-bank swap mid-walk brings it back),
+  and the board goes back to Tufts_Robot each evening.
+- Mohammed types the password himself; it stays in the board's network settings only, not
+  in the repo or any notes.
+- Nolop Navigator is the default app on walking days, switched back with the network.
+- Network changes go over the USB-C cable (adb), tested first. Checked today: the Wi-Fi
+  chip supports hotspot mode, the `arduino` user may change network settings without the
+  admin password, adb is on the laptop (App Lab's), but the board showed **no USB data link**
+  yet (not plugged in, or a charge-only cable). `arduino-app-cli` has no command to clear a
+  default app, so the evening step sets one Raph chooses.
+- Commands and the switch-back steps: `uno_q/README.md`, "Walking days". Not switched yet:
+  the build continues on Tufts_Robot until the app is ready for real walks.
+
+**Build step 3 runs on the board** (19:09): HW7's sketch (unchanged, new header comment) and
+`python/sensor.py`, which collects the readings 10 times a second, checks each one (all
+zeros = lost power, raw -1 = no answer), counts lost readings from the running numbers and
+logs a summary every 10 s. Raph's sensor flat on the table: **999 readings in 10.1 s, 0
+lost, 0 bad**, latest gx +34.9 to +35.1°/s (his sensor's offset), az -1.05 g. (The first
+summary showed 1,391: the readings queued while the app started, collected in one go.)
+Change from HW7: a batch that arrives cut short is still dropped, but the last running
+number is kept, so the next batch shows how many readings were lost; each lost reading
+becomes a "not real" placeholder, so the step counter's 4 s window stays 4 s (step 4).
+
+**Evening default app:** Raph's How Many Steps (`/home/arduino/ArduinoApps/Steps-UnoQ`), the
+app that was running when we started on his board, so each evening the board goes back to
+how Raph had it (Raph agreed). **USB test, second try (19:20):** still no link: adb listed no
+device and the laptop's USB list showed no board at all, with the cable that worked with App
+Lab this morning. The laptop had also left Tufts_Robot (address 10.243.41.251), so the board
+couldn't be reached over Wi-Fi either. To retry.
