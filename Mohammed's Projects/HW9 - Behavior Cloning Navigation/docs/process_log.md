@@ -222,3 +222,46 @@ but small enough that a missed turn doesn't label a long stretch as Left.
 - Then the board app, in the build order in `uno_q/README.md`.
 - The step-counter test on Raph's walking (checklist part 1) can be done with HW7's Step
   Recorder as it is.
+
+## 2026-11-17: Turns from the ankle sensor (test on Raph's recording, no hardware)
+
+**Test.** Mohammed ran `training/ankle_turn_check.py` on Raph's existing ankle recording
+(`How many steps/data/walk_20261103_030045.csv` in Raph's repo: 61 counted steps, back and
+forth over 2 m, 9 turnarounds, 100 Hz, about 6,000 rows). Method: "up" from the
+accelerometer averaged over 1 s; the gyro's turning rate around "up", added up over time
+into a heading; the gyro bias measured in the first 5 s, standing still, and subtracted.
+Plot: [`media/ankle_turns_raph.png`](../media/ankle_turns_raph.png).
+
+**What it showed**
+- Turns stand out clearly at the ankle: 9 climbs, one per turnaround, and a flat heading
+  while walking straight.
+- No dropouts (no gap over 25 ms in about 6,000 rows). Short wire, so this says nothing
+  about a long one.
+- Each turnaround reads about 157° instead of 180° (all 9 together: 1409° instead of
+  1620°), about 13% low. In any 2 s window each turnaround climbed 118-169°.
+- Bias about 7.5°/s. Left in, the heading drifts about 450° in a minute, so the board must
+  measure it while standing still at the start of every walk.
+- Rerun and checked by Claude: the same numbers. Added check: on 9 of Mohammed's straight
+  20 m HW7 walks (Test T21-T29, slow to fast, no turns), the ankle heading never changed
+  by more than 14-20° within any 2 s (bias there taken as the walk's average, since a
+  straight walk adds up to no turn). So ">60° within 2 s" sits between the walking wobble
+  and the turnarounds with room on both sides.
+
+**What it didn't prove**
+- One walk by one person; only 180° turnarounds, all in the same direction; no 90° corners
+  while walking; no left vs right; straight stretches of only 2 m.
+- Why turns read 13% low isn't known: the averaged "up" lags behind the leg's tilt, or
+  the walker didn't turn a full 180°. A loop that comes back to the start (known total:
+  360°) separates the two.
+
+**Decided**
+- Step 0 becomes a one-sensor test: board and sensor on the ankle as in HW7 (short wire),
+  loops with 90° left and right corners, the same heading plot. If it passes, the waist
+  sensor and the long wire are dropped. The two-sensor test stays as the backup.
+- Turn counting (build step 9) uses the ankle sensor and measures the bias while the
+  walker stands still for 5 s right after Start. The waist sensor (step 8) only if Step 0
+  fails.
+- Checklist: stand still 5 s after pressing Start.
+- `ankle_turn_check.py` now also reads HW7 recordings (`time` column), so Step 0 needs no
+  new code: HW7's Step Recorder records the walk. Comments added; the calculations are
+  unchanged (same output on Raph's walk).

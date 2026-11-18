@@ -26,7 +26,7 @@ on the board and saves each test walk's live count next to the real one.
 
 - [ ] Route fixed: start point, every turn, any stairs, the Nolop door. Written in
       `docs/process_log.md`.
-- [ ] Both sensors read on a real walk (the waist sensor's long wire especially).
+- [ ] Step 0 passed (`uno_q/README.md`): the ankle sensor counts the corners.
 - [ ] Phone hotspot on, board joined, page opens, **Data: Live (UNO Q)** selected. Mock
       mode never talks to the board, so a page that works in Mock can still fail on the
       board: test one short Live walk first.
@@ -38,12 +38,14 @@ on the board and saves each test walk's live count next to the real one.
 
 ## 3. Every route walk
 
-1. Board on, ankle sensor on the right lower leg, waist sensor on the belt (same spot
-   every time).
-2. Stand still at the start for 2 s, so the gyro's resting offset can be measured.
-3. **Record demo** tab (demo) or **Navigate + correct** with "Save my corrections" ticked
+1. Board and sensor on the right lower leg, near the ankle, as in HW7 (same spot every
+   time).
+2. **Record demo** tab (demo) or **Navigate + correct** with "Save my corrections" ticked
    (DAgger). Press **Start**, and wait until the page says the walk has started (the
-   board confirms its counts are back at 0). Tap the action as you start doing it.
+   board confirms its counts are back at 0).
+3. **Stand still for 5 s after pressing Start**, before the first step. The board measures
+   the gyro's bias (its false turning rate when still) then; moving spoils every turn of
+   the walk. Then walk, and tap the action as you start doing it.
    - **If you mis-tap, tap Straight right away** (or the right action). A wrong label
      stays on for every step until the next tap, and Undo only removes the tap itself.
    - Left and Right go back to Straight by themselves once the board counts the turn.

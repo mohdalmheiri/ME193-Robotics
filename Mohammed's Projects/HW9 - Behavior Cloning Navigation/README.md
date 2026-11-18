@@ -3,8 +3,8 @@
 A wearable guide that walks someone to Nolop without ever finding out where they are.
 It doesn't use GPS or Wi-Fi to find its position. It only knows two things about the
 walk so far: how many steps the person has taken since the last turn, and how many turns
-they have made. A trained step counter on the ankle and a gyroscope at the waist measure
-these, on an Arduino UNO Q. The navigation itself isn't programmed by hand. It is learned
+they have made. A trained step counter and the gyroscope of the same sensor on the ankle
+measure these, on an Arduino UNO Q. The navigation itself isn't programmed by hand. It is learned
 by **behavior cloning**: we walk the route ourselves, press what we are doing on a phone
 ("straight", "left", "right", "stairs", "arrived"), and a policy learns to give the same
 instruction in the same situation. The interesting part is doing this with very little
@@ -25,12 +25,17 @@ internet is needed on the walk.
   Mohammed's HW7 step counter ([HW7 - How Many Steps](../HW7%20-%20How%20Many%20Steps/README.md)),
   which already runs on the board in plain numpy, to be confirmed with Raph. Raph's
   stride-counting CNN is the alternative we're comparing it with (see Credits).
-- **Turns:** a second MPU-6050 at the waist (I2C address 0x69, AD0 tied to 3.3 V). Neither
-  sensor has a compass, so a turn is found by adding up the gyro's turning rate over time.
-  The rotation is measured around the direction of gravity, so it still works if the
-  sensor sits tilted on the belt. A turn is counted when the heading changes by a large
-  angle (the threshold is set from the route's real turns) within a couple of seconds. The heading itself slowly drifts over a long walk, so
-  the policy never uses it directly. It only uses the number of turns.
+- **Turns:** the gyroscope of the same ankle sensor. It has no compass, so a turn is found
+  by adding up the gyro's turning rate over time. The rotation is measured around "up",
+  found from the accelerometer averaged over 1 s (the leg's swing averages out), so it
+  works however the sensor sits on the leg. The gyro's bias (a false turning rate when
+  still) is measured while the walker stands still for 5 s at the start of every walk. A
+  turn is counted when the heading changes by more than about 60° within 2 s. The heading
+  itself slowly drifts over a long walk, so the policy never uses it directly. It only
+  uses the number of turns. A first test on Raph's recorded walk showed every turnaround
+  clearly ([`media/ankle_turns_raph.png`](media/ankle_turns_raph.png)); 90° corners are
+  tested next. **Backup:** a second MPU-6050 at the waist, if the ankle can't count
+  corners.
 - **Stairs (optional):** a small classifier that says "on stairs" or not.
 
 **What the policy sees and does**
@@ -86,7 +91,10 @@ small neural net only if the table isn't good enough.
 ## Hardware
 
 - Arduino UNO Q, on a USB power bank
-- 2 × MPU-6050 on one I2C bus: ankle at 0x68 (right lower leg, as in HW7), waist at 0x69
+- 1 × MPU-6050 at 0x68 with the board on the right lower leg, near the ankle: exactly
+  HW7's setup, short wire. It gives both the steps and the turns.
+- Backup only, if the ankle can't count corners: a second MPU-6050 at the waist (0x69, AD0
+  tied to 3.3 V) on a long wire
 - A phone for the page and the hotspot
 - The route: start point still to be decided, ending at Nolop
 
@@ -130,8 +138,12 @@ Not ready yet: the board code is next. The plan follows HW7:
 - **Step counter on a second person:** the HW7 counter has only been trained on
   Mohammed's walking and only tested on a straight 20 m course. Testing it on Raph's
   walking, and on walks with turns, is the first item in the recording checklist.
-- **Long sensor wire:** the board and the ankle sensor sit together, as in HW7, so the
-  waist sensor needs the long wire. I2C is meant for short wires, so check this early.
+- **Turns from the ankle:** on Raph's recorded walk the 180° turnarounds read about 13%
+  low (about 157°), still far above the walking wobble. 90° corners, left vs right and
+  both walkers are checked in Step 0 (`uno_q/README.md`). Only if that fails does the
+  waist sensor come back, with its long wire (I2C is meant for short wires).
+- **Gyro bias:** about 7.5°/s on Raph's sensor; left in, the heading drifts about 450° in
+  a minute. It changes with temperature, so it is measured at the start of every walk.
 - **Board as its own Wi-Fi network:** possible, but while it is on, the laptop can't reach
   the board to deploy. The phone hotspot (already set up on the board) is the plan.
 - **Still to decide:** start point, the exact route, and whether it stays inside a
