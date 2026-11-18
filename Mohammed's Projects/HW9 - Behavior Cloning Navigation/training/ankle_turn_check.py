@@ -18,9 +18,14 @@ How it works:
    the other); the leg's swing is rotation around a sideways axis and mostly drops out.
 3. Heading: adding up turning rate x time gives how far the walker has turned in total.
    A turn shows as a climb (or a drop), walking straight as a flat stretch.
-4. Bias: a gyro reads a small false turning rate even when still (about 7.5 deg/s on
-   Raph's sensor). Added up over a minute that alone is hundreds of degrees, so the first
-   5 s, when the walker stands still, are used to measure it and subtract it.
+4. Bias: a gyro reads a false rotation even when still (Raph's sensor: about 34 deg/s on
+   gx alone). Added up over a minute that is hundreds of degrees, so the first 5 s, when
+   the walker stands still, are used to measure it. It is measured and subtracted for
+   EACH gyro axis (gx, gy, gz) BEFORE taking the part around "up". (Measuring it as one
+   number around "up" doesn't work: how much of the gx offset shows up around "up"
+   depends on the leg's tilt, which differs between standing and walking and changes
+   every stride. On Step 0's loops that gave +350 and -276 deg; per axis gives +309 and
+   -318, the same ~12% short both ways.)
 """
 import numpy as np, sys, matplotlib; matplotlib.use("Agg"); import matplotlib.pyplot as plt
 
@@ -50,14 +55,22 @@ plt.xlabel("time (s)"); plt.ylabel("heading (deg)"); plt.legend(); plt.title("An
 plt.tight_layout(); plt.savefig("ankle_turns.png", dpi=110)
 print("heading samples every 2 s:", np.round(hs[::200]).astype(int).tolist())
 
-# 4. Remove the gyro bias, measured while standing still at the start (first 5 s). The
-#    accelerometer's spread is printed to check the walker really stood still then.
+# 4. Remove the gyro bias, measured while standing still at the start (first 5 s): the
+#    average of each gyro axis, subtracted from the raw readings, then the turning rate
+#    around "up" again. The accelerometer's spread is printed to check the walker really
+#    stood still then (under about 0.03 g; a little sway is fine).
 still = t < 5
-bias = yaw_rate[still].mean(); print("bias deg/s:", round(bias,2), " accel std while 'still':", np.round(acc[still].std(0),3))
-h2 = np.cumsum((yaw_rate-bias)*dt); h2s = np.convolve(h2, np.ones(200)/200, "same")
+bias = gyr[still].mean(0)
+print("bias per axis gx gy gz (deg/s):", np.round(bias,2), " accel std while 'still':", np.round(acc[still].std(0),3))
+yaw_rate2 = ((gyr-bias)*g).sum(1)
+h2 = np.cumsum(yaw_rate2*dt); h2s = np.convolve(h2, np.ones(200)/200, "same")
 print("bias-removed heading every 2 s:", np.round(h2s[::200]).astype(int).tolist())
-# The last 1 s is left off the plot: the 2 s smoothing runs past the end of the data there
-plt.figure(figsize=(10,4)); plt.plot(t[:-100], h2s[:-100], lw=2)
-for n in range(11): plt.axhline(n*180, color="gray", lw=.4)
-plt.xlabel("time (s)"); plt.ylabel("heading (deg)"); plt.title("Ankle heading after removing gyro bias (gray lines every 180°)")
+# The first and last 1 s are left off the plot: the 2 s smoothing runs past the ends of the
+# data there. The scale fits the data, with a gray line every 90° (one right-angle corner).
+shown = slice(100, len(t)-100)
+plt.figure(figsize=(10,4)); plt.plot(t[shown], h2s[shown], lw=2)
+lo, hi = h2s[shown].min(), h2s[shown].max()
+for n in range(int(np.floor(lo/90)), int(np.ceil(hi/90))+1): plt.axhline(n*90, color="gray", lw=.4)
+plt.ylim(lo - 20, hi + 20)
+plt.xlabel("time (s)"); plt.ylabel("heading (deg)"); plt.title("Ankle heading after removing gyro bias (gray lines every 90°)")
 plt.tight_layout(); plt.savefig("ankle_turns_bias.png", dpi=110)

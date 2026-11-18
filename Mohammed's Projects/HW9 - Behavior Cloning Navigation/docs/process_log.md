@@ -273,3 +273,115 @@ corners take longer than 2 s, **widen the turn window to 3 s instead of lowering
 threshold**: a lower threshold moves toward the walking wobble, while a wider window
 keeps clear of it (on HW7's straight walks the wobble stayed under 27° within 3 s,
 against under 20° within 2 s).
+
+## 2026-11-18: Step 0 on Raph's board (ankle sensor only)
+
+Run from the terminal with HW7's Step Recorder app (`arduino-app-cli`, no App Lab) on
+Raph's UNO Q; Raph's own app paused meanwhile, with his OK. Board and sensor on Raph's
+right ankle as in HW7. Recordings in `data/step0/`, plots in `media/step0_*.png`.
+
+**Tilt test:** the accelerometer reads ±1 g on each axis pointing up or down (others
+within 0.16 g of 0). The gyro has a large steady offset: **gx about +34°/s when still**
+(gy about 0, gz about -3), the same in all 7 still stretches. Raph's November recording
+starts with gx = 35°/s, so probably the same sensor.
+
+**LoopLeft** (Raph, 4 left corners, `Raph_Test_T01`) and **LoopRight** (Raph, 4 right
+corners, `Raph_Test_T02`):
+
+| | LoopLeft | LoopRight |
+|---|---|---|
+| Total heading change (per-axis bias) | +309° | -318° |
+| Corners | +68, +78, +73, +80° | -89, -84, -79, -87° |
+| How long each climb took | 1.0, 0.9, 1.6, 1.6 s | 1.6, 1.5, 1.4, 1.7 s |
+| Biggest change within 2 s at a corner | 74-92° | 92-117° |
+| Biggest change within 2 s walking straight | 17° | 23° |
+| Rows of zeros / -1s, gaps over 25 ms | none | none |
+| Steps: counted / live count | 28 / 26.4 ± 2.9 | 27 / 26.8 ± 3.8 |
+
+So every corner clears 60° within 2 s, every climb is under 2 s (the window stays 2 s,
+no need for 3 s), and the straights stay well under 60°. The HW7 step counter stayed
+within its ± on this sensor despite the gx offset (two trials only).
+
+**Finding: remove the gyro bias per axis, not as one number.** The script first measured
+the bias as one number, the turning rate around "up" while standing still. But how much
+of the gx offset shows up around "up" depends on how the shin is tilted, which differs
+between standing and walking and changes every stride, so the subtracted number was a
+little wrong the whole walk. Totals with one number: LoopLeft +350°, LoopRight -276°
+(74° apart; LoopLeft's near-360° was luck). With the bias of gx, gy and gz each
+subtracted before taking the part around "up": +309° and -318°, both about 12% short,
+like Raph's November turnarounds (13%). `ankle_turn_check.py` now does this, and build
+step 9 says so. (Raph's November walk barely changes: 1405° vs 1400°.) The steady ~12%
+shortfall is not corrected: turns are only compared with 60°.
+
+**Paired corners in LoopLeft.** Corners 1-2 and 3-4 came only 1-1.5 s apart. A simple
+corner finder merged each pair into one ~170° turn. For the turn rule: a 3 s window would
+also merge them, so widening it has a cost; and the pause before the next turn can count
+must be shorter than about 1 s.
+
+**Jump at the start of walking.** The heading rises +10° (LoopLeft) and +22° (LoopRight)
+in the first steps after standing, positive both times whatever the turn direction:
+probably the leg's angle changing from standing to walking. Under 60°, so it doesn't
+count as a turn, but it adds to the totals.
+
+**Possible left/right difference (needs more data).** Left corners read about 75° on
+average, right corners about 85°. With the sensor on the right ankle it could be real
+(a left turn swings the right foot around, a right turn pivots on it), but it is one
+loop each, by one walker.
+
+**Plots:** `ankle_turn_check.py`'s bias-removed plot now fits its scale to the data, with
+a gray line every 90°, so corners are visible (before, the 180° lines forced it up to
+1,800°). `media/ankle_turns_raph.png` is still the old plot.
+
+**SpotTurns** (Raph, `Raph_Test_T03`: a left turn of about 180° on the spot, a ~3 s pause,
+a right turn of about 180°; steps not counted, live count 2.8 ± 3.5 from the pivots):
+- Turn 1 **+182°** (climb 2.3 s, 146° within 2 s), turn 2 **-181°** (climb 2.1 s, 179°
+  within 2 s), total +1°. No rows of zeros or -1s, no gaps over 25 ms. Heading flat
+  before, between and after.
+- **Turns on the spot read the full angle; walking corners read about 12% short.** So
+  the gyro's scale is fine and the shortfall comes from walking (likely the 1 s average
+  of "up" while the shin swings). Not corrected, since turns are only compared with 60°.
+- Spot turns took just over 2 s but still cleared 60° within 2 s easily, so the window
+  stays 2 s. **Open for the turn rule:** with a pause under 1 s, a slow 180° turn could
+  be counted twice; decide how a U-turn counts.
+- The gx offset was 34.9°/s here (34.1 and 34.25 in the loops): it shifts a little
+  between trials, so measuring it at the start of every walk is right.
+
+**Mohammed's three trials** (`Mohammed_Test_T02`-`T04`; files renamed so both walkers fit:
+`data/step0/Raph_*.csv` and `Mohammed_*.csv`, plots `media/step0_raph_*.png` and
+`media/step0_mohammed_*.png`):
+
+| | LoopLeft | LoopRight | SpotTurns |
+|---|---|---|---|
+| Total heading change | +280° | -356° | -10° (right -174°, left +164°) |
+| Corners | +71, +73, +64, +83° | -89, -88, -95, -82° | -174°, +164° |
+| How long each climb took | 1.6, 1.4, 1.3, 0.9 s | 1.4, 1.0, 1.0, 0.9 s | 2.2, 2.4 s |
+| Biggest change within 2 s at a corner | 71-92° | 76-87° | 149°, 151° |
+| Biggest change within 2 s walking straight | 18° | 14° | — |
+| Rows of zeros / -1s, gaps over 25 ms | none | none | none |
+| Steps: counted / live count | 28 / **18.5 ± 3.7** | 28 / **21.7 ± 3.7** | 0 / 4.6 ± 4.0 |
+
+**Left vs right, both walkers:** left corners read lower for both: Mohammed 73° vs 88°
+on average, Raph 75° vs 85°. For Mohammed at least part of it is a slow drift while
+walking straight: his heading drifts *rightward* by about 3-5°/s on straight stretches
+(LoopLeft: -22°, -22°; LoopRight: -4 to -17°), which pulls each left corner down and
+pushes each right corner up by a few degrees, and takes 44° off his LoopLeft total.
+Raph's straights drift the other way and less (0 to +2°/s). It can't be told apart from
+a slightly curved path yet. Either way it is too slow to look like a turn (under 12°
+within 2 s).
+
+**Step 0 passes for both walkers.** No dropouts on any trial; every corner and spot turn
+is a clear step in the right direction; every one changes more than 60° within 2 s (the
+lowest: 71°, Mohammed's LoopLeft corner 2) and every climb is under 2 s except the slow
+180° spot turns (2.1-2.4 s, which still clear 60° easily); straight walking stays under
+23° within 2 s. **Decision: the waist sensor and the long wire are dropped; turns come
+from the ankle sensor.** Thinnest margin: corners 71° vs the 60° rule, against 23° for
+straights. A rule nearer the middle (about 45°) would leave more room both ways; to
+decide when building step 9.
+
+**New problem: the step counter undercounts Mohammed on this sensor.** Live counts were
+18.5 and 21.7 for 28 counted steps (34% and 22% low, outside the ±), while Raph's two
+loops were within the ± (26.4 and 26.8 for 28 and 27). The HW7 counter was trained on
+Mohammed, so this isn't about the walker it learned from. Candidates: this sensor's gx
+offset of about 34°/s (the counter's rotation-size features include it), a different
+strap position, or the small loops' many corners (counters miss steps in turns). This
+goes into the step-counter decision (checklist part 1).
