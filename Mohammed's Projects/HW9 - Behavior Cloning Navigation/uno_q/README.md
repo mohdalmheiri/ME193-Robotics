@@ -78,6 +78,54 @@ Raph records a demo walk; it's the third walk on this board.
 Each step can be tested on its own before the next. The simplest version first; better
 versions later.
 
+### Step 0: hardware risk test (before building anything)
+
+Two things could sink the whole design, so check them first with a plain recording:
+(a) whether the long wire to the second sensor drops readings, and (b) whether turns stand
+out clearly in the waist gyro. **If either fails, we rethink before building the app.**
+
+**Setup.** Wire both sensors on one I2C bus: ankle at 0x68 (short wire, as in HW7), waist
+at 0x69 (AD0 to 3.3 V, on the long wire). The recording script is the simplest possible: a
+copy of HW7's sketch that reads both sensors every 10 ms (100 times a second) and saves
+one CSV row per reading: `time`, then the ankle's `ax ay az gx gy gz`, then the waist's.
+No step counting, no page, no turn logic.
+
+**The walk** (about a minute):
+1. Stand still for 5 s. (The gyro reads a little even when still; this shows by how much.)
+2. Walk a short route with **2 left and 2 right turns** at corners, plus one turn on the
+   spot.
+3. Stand still 5 s at the end.
+4. Write down the order of the turns (for example L, R, R, L, spot-L). Do the walk twice:
+   once each by Mohammed and Raph.
+
+**What to look for**
+
+*(a) Do readings drop out?*
+- A sensor that lost power reads exactly 0 on all six channels. One that doesn't answer
+  reads −1 on all six (as in HW7). Count those rows for each sensor.
+- Count missing time: there should be one row every 10 ms. Gaps longer than that mean
+  readings were lost.
+- **Pass:** zero bad rows and no gaps for both sensors, over both walks. Then wiggle the
+  long wire while standing and check again.
+- **If it fails:** a shorter wire, the board at the waist instead (so the *ankle* gets the
+  long wire), or a slower I2C speed.
+
+*(b) Do turns stand out in the waist gyro?*
+- Plot the waist gyro's turning rate around the up-and-down direction over time (at
+  first, simply the gyro axis that points up when standing).
+- Walking straight, it should wobble around zero: the hips sway a little with every step.
+- Each turn should be a clear hump: bigger and longer than the walking wobble, lasting
+  about 1-2 s, pointing one way for left turns and the other way for right turns.
+- Add up the turning rate over each hump (rate × time). A 90° corner should come out at
+  roughly 90°.
+- **Pass:** you can point at every turn on your list without guessing, the left/right
+  direction matches, and the added-up angles are roughly right. Nothing in the straight
+  parts looks like a turn.
+- **If it fails:** try a different spot on the belt (closer to the middle of the back),
+  or check whether the ankle gyro shows turns better, before writing any turn logic.
+
+### Steps 1-9: the board app
+
 | # | Piece | Simplest version | Test |
 |---|---|---|---|
 | 1 | Serve the page | `python/main.py` with the `web_ui` brick, nothing else | Phone opens the page; Mock mode works |
@@ -87,7 +135,7 @@ versions later.
 | 5 | `GET /api/state` | The real `steps` and `distance_m`; every other field fixed at 0 / false | The page in Live mode shows steps going up |
 | 6 | `GET /api/reset` | Zero the counts; walk number = highest walk number among saved files + 1 (as HW7 numbers trials) | Start walk works; the walk number goes up each time |
 | 7 | `POST /api/rows` | Keep each walk's rows in memory as a list (with their seq), skip seqs already handled, remove a row on undo, then rewrite that walk's whole CSV and answer ok (a walk is only ~1000 rows) | A straight walk ends with a CSV on the board matching the phone's download |
-| 8 | Read the waist sensor | Add the second MPU-6050 at 0x69 to the sketch | Both read on a real walk (the long wire especially) |
+| 8 | Read the waist sensor | Add the second MPU-6050 at 0x69 to the sketch (Step 0's sketch already does this) | Both read on a real walk (the long wire especially) |
 | 9 | Count turns | Add up the waist gyro's turning around the direction of gravity; a turn = more than a set angle (say 60°) within 2 s, then a pause before the next one can count. Fill `turns_left/right`, both "at last turn" values and `heading_deg` | Turn on the spot and around corners; every turn counted once |
 
 After step 7 a straight walk can be recorded from start to end. After step 9 the first
