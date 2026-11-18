@@ -385,3 +385,112 @@ Mohammed, so this isn't about the walker it learned from. Candidates: this senso
 offset of about 34°/s (the counter's rotation-size features include it), a different
 strap position, or the small loops' many corners (counters miss steps in turns). This
 goes into the step-counter decision (checklist part 1).
+
+## 2026-11-18: Experiment: does the sensor explain the undercount? (before/after swap)
+
+**Question.** On Raph's sensor the HW7 step counter undercounted Mohammed's LoopLeft badly
+(18.5 for 28 steps) but not Raph's (26.4 for 28). Raph's sensor has a gyro offset of about
+34°/s on gx, and the HW7 counter was trained on Mohammed's own sensor. If the sensor is the
+cause, swapping in Mohammed's sensor should fix Mohammed's count.
+
+**What changed:** only the sensor (Mohammed's MPU-6050, the one the HW7 counter was trained
+on, same wiring, 0x68). Same board, same app, same loop, same walkers, right ankle. The
+sensor was swapped with the board on; the sketch's reconnect fix set it up again (log:
+"no_answer" at 18:20:19, "reading again" at 18:20:57). Recordings in
+`data/sensor_swap/`. Board trial T06 was walked by Raph but saved under Mohammed by
+mistake: the copy `Raph_LoopLeft_MohammedSensor.csv` has its `person` column set to Raph;
+the board's own files are unchanged.
+
+**Mohammed's sensor, 10 s still on the table** (`MohammedSensor_Still.csv`, board T05):
+gyro offset **gx -3.0, gy +2.2, gz -0.3°/s** (Raph's: gx +34.9, gy -0.3, gz -2.9),
+noise 0.1°/s per axis. No dropouts.
+
+**Step counts, LoopLeft, 28 counted steps each:**
+
+| Walker | Raph's sensor (before) | Mohammed's sensor (after) |
+|---|---|---|
+| Mohammed | 18.5 ± 3.7 (-34%) | **22.0 ± 3.7** (-21%), board T07 |
+| Raph | 26.4 ± 2.9 (-6%, within ±) | **32.1 ± 3.0** (+15%, outside ±), board T06 |
+
+**What it showed**
+- The swap raised *both* walkers' counts, by 3.5 and 5.7 steps: this sensor makes the
+  counter count more, for everyone. It didn't fix Mohammed specifically.
+- **On both sensors, Mohammed's walk counts about 8-10 steps fewer than Raph's** for the
+  same 28 steps (18.5 vs 26.4; 22.0 vs 32.1). So the main cause is how Mohammed walks
+  these small loops, not the sensor. The HW7 counter was trained on 20 m straight walks;
+  tight loops with four corners may look different in his gait.
+- Neither sensor gets both walkers right: Raph's sensor fits Raph, Mohammed's sensor
+  still undercounts Mohammed and now overcounts Raph.
+- Turns don't care about the sensor: LoopLeft totals +319° for Raph (+309° on his sensor)
+  and +273° for Mohammed (+280° on Raph's sensor). Mohammed's rightward drift on the
+  straights showed up again on the new sensor, so it follows the walker (gait or a
+  slightly curved path), not the sensor.
+
+**What it didn't prove:** one trial per walker and sensor, so the normal spread between
+repeats of the same walk is unknown (a few steps would be enough to blur this). The strap
+position also changed with every swap.
+
+**For the step-counter decision (checklist part 1):** the HW7 counter as it is can't be
+trusted on loops with corners: 22-34% off for Mohammed on either sensor. Options: test it
+on straight walks with each sensor (what it was trained for), retrain it with both
+walkers' walks including corners, or compare Raph's CNN counter on the same recordings.
+
+## 2026-11-18: Raph's CNN counter on today's recordings (offline, on the laptop)
+
+`training/compare_raph_cnn.py` runs Raph's counter (his `step_net.py` and
+`models/step_net.pt` from his repo, unchanged) over every recording from Step 0 and the
+sensor swap. Nothing on the board changed. His model is loaded with `weights_only=True`
+(his own loader allows the model file to run code). Check first: on his own November walk
+it counts 52 of 61 steps (his report: 50).
+
+**As recorded, it counts 0 steps on every walk.** The reason is how the sensor sits on the
+leg: in his recordings gravity is on the sensor's y axis and the leg swings on y and z;
+HW7's strap puts gravity on x and the swing on x and z. His training tilted the data up to
+25° and flipped signs but never swapped axes, so his nets have never seen a swing on our
+axes. With our axes renamed to his layout (his x = our y, his y = our x, his z = -our z, a
+plain rotation; the mirror-image version without the z flip does much worse):
+
+| Recording | Counted | HW7 counter (live) | Raph's CNN |
+|---|---|---|---|
+| Raph LoopLeft (Raph's sensor) | 28 | 26.4 | **28** |
+| Raph LoopRight (Raph's sensor) | 27 | 26.8 | **28** |
+| Raph SpotTurns | 0 | 2.8 | **2** |
+| Mohammed LoopLeft (Raph's sensor) | 28 | 18.5 | **26** |
+| Mohammed LoopRight (Raph's sensor) | 28 | 21.7 | **28** |
+| Mohammed SpotTurns | 0 | 4.6 | **0** |
+| Mohammed's sensor, still on the table | 0 | 0.2 | **0** |
+| Mohammed LoopLeft (Mohammed's sensor) | 28 | 22.0 | **28** |
+| Raph LoopLeft (Mohammed's sensor) | 28 | 32.1 | **28** |
+
+**What it shows:** once the axes match, Raph's counter is within 2 steps on every
+recording: both walkers, both sensors, loops with four corners. The HW7 counter was off by
+up to 10 steps and depended on walker and sensor. Raph's counter finds each stride of the
+strapped leg directly, which seems to hold up in corners and for both gaits, where HW7's
+counter (a rate estimated from 2 s clips, trained on straight walks) doesn't. It only
+counts whole strides, so counts come in steps of 2. Limits: one recording per walker,
+sensor and loop; the axis renaming was chosen from these recordings' orientation (where
+gravity and the swing are), not from the counts.
+
+## 2026-11-18: Step-counter decision so far
+
+**Decision:** no more dedicated step-counter tests (no straight walks). The counter is
+judged from the real route demos: both walkers walk the same route, and their step totals
+are compared.
+
+**Why that is enough for now:**
+- **The turn count does most of the work in the policy.** Which leg of the route the
+  walker is on comes from the number of left and right turns, and Step 0 showed the ankle
+  gyro counts every corner clearly for both walkers.
+- **Steps since the last turn only time the warnings:** when to say "turn left soon" on a
+  straight stretch. An error of a few steps there shifts a warning a little; it doesn't
+  send the walker the wrong way.
+- **The route demos will show how far apart our counts are.** Both walkers on the same
+  route, each stretch between turns the same length: if their steps since the last turn
+  disagree a lot, the policy will blur where the warnings go, and that shows up in the
+  labels and in training.
+
+**What today's comparison adds:** Raph's CNN counter, with the axes renamed, matched the
+counted steps on every recording, while the HW7 counter undercounted Mohammed by up to a
+third. It is the stronger candidate for the route demos. To use it live it needs: its
+nets in plain numpy on the board (as HW7's counter is), and the axis renaming built in.
+To decide before the first route demo.
