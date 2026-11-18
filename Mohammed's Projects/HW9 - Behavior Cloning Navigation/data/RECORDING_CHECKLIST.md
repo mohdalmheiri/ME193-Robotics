@@ -50,6 +50,14 @@ on the board and saves each test walk's live count next to the real one.
      Stairs and Arrived stay on until your next tap.
    - A red **Can't reach the board** warning means the numbers are frozen: stop and
      check the hotspot and the power bank.
+   - **Don't turn the hotspot off and on, or restart the board, during a walk.** The
+     board can come back at a different address (for example `172.20.10.4` instead of
+     `.3`). The open page keeps sending to the old address, and a page opened at the new
+     address can't see the rows waiting on the phone: the phone keeps saved data
+     separately for each address.
+   - **If the address changes anyway:** before opening the new address, press **Download
+     CSV** on the old page. It holds every row of the walk, sent or not. Then open the new
+     address and note in the walk table which walk needs its rows taken from the download.
 4. At Nolop, press **Arrived**, then stop recording. Keep the page open until the row
    count says **all sent to the board**.
 5. Fill in this walk's row in the budget table in `data/README.md`, even if the walk
