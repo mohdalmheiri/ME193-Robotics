@@ -22,6 +22,7 @@ comes from someone else.
 | [`HW7 - How Many Steps/`](./HW7%20-%20How%20Many%20Steps) | How many steps? (HW7) | Ankle-worn IMU on an Arduino UNO Q that counts steps and estimates distance with a PyTorch neural net (in progress: practice net on the HW6 data) |
 | [`MT2 - The Impenetrable Safe/`](./MT2%20-%20The%20Impenetrable%20Safe) | The Impenetrable Safe (MT2) | A box that unlocks when a PyTorch CNN counts the right 3-number finger code on a webcam, with an Arduino UNO Q swinging the latch through a Cytron Maker Drive |
 | [`HW8 - Silly Walks Simulated/`](./HW8%20-%20Silly%20Walks%20Simulated) | Silly Walks Simulated (HW8) | A wheel-less LEGO Double Motor robot with brick legs, exported from Onshape to a MuJoCo model and checked against the real robot (in progress: MJLab training next) |
+| [`HW9 - Behavior Cloning Navigation/`](./HW9%20-%20Behavior%20Cloning%20Navigation) | Behavior Cloning Navigation (HW9) | A wearable that guides someone to Nolop without GPS: a step counter and a waist gyro on an Arduino UNO Q feed a behavior-cloned lookup-table policy, and the board serves the phone page for recording, navigating and corrections (in progress: setup) |
 
 ## Setup
 
@@ -60,6 +61,12 @@ Silly Walks Simulated uses onshape-to-robot and MuJoCo (it also needs Onshape AP
 
 ```
 pip install -r "Mohammed's Projects/HW8 - Silly Walks Simulated/requirements.txt"
+```
+
+Behavior Cloning Navigation's training uses numpy and matplotlib:
+
+```
+pip install -r "Mohammed's Projects/HW9 - Behavior Cloning Navigation/training/requirements.txt"
 ```
 
 The `ArduinoApps` in Door-to-door Service, the `unoq_scoreboard` app in A Little

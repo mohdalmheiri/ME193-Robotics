@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<!--
+  Nolop Navigator — phone interface (prototype)
+  ==============================================
+  One page with two tabs (three jobs):
+    1. RECORD DEMO       – you walk the route and tap what you are doing (the "expert" demo).
+    2. NAVIGATE + CORRECT – the policy tells the walker what to do; with "Save my corrections"
+                            ticked, tapping the right answer when it is wrong is saved (DAgger).
+
+  Every row it saves is one (observation, action) pair for behavior cloning:
+    observation = steps, meters, steps since last turn, number of turns so far, heading, on stairs
+    action      = the label (Straight / Left / Right / Stairs / Arrived)
+
+  Two ways to get sensor data:
+    - MOCK mode (default): buttons fake the step counter, so you can test the page with no hardware.
+      Mock mode never talks to the board, so it can't catch board problems: test Live too.
+    - LIVE mode: the page talks to the UNO Q (the board app doesn't exist yet):
+        GET /api/state  -> the latest numbers, asked 4 times a second
+        GET /api/reset  -> start the counts over at 0; must answer {"ok": true}
+
+  Data is kept in the phone's memory only, for now. Press "Download CSV" before closing the page!
+  (Plan: the board saves one CSV per walk, and this download becomes the backup.)
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nolop Navigator</title>
+<style>
+  :root {
+    --bg: #f6f5f1; --card: #ffffff; --ink: #1d1d1b; --muted: #6b6a66; --line: #e2e0da;
+    --straight: #3a6ea5; --left: #c2662d; --right: #6a4c9c; --stairs: #2f7d5b; --arrived: #b03a48;
+    --rec: #c62828;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #161615; --card: #22221f; --ink: #f0efea; --muted: #a09f99; --line: #3a3934; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 16px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 480px; margin: 0 auto; padding: 12px 16px 40px; }
+  h1 { font-size: 20px; margin: 4px 0 10px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+          padding: 14px; margin-bottom: 12px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  label.small { font-size: 14px; color: var(--muted); }
+  input, select { font: inherit; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line);
+                  background: var(--bg); color: var(--ink); }
+
+  /* Mode tabs */
+  .tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 12px; }
+  .tab { padding: 12px; border-radius: 12px; border: 2px solid var(--line); background: var(--card);
+         color: var(--ink); font-weight: 600; font-size: 16px; }
+  .tab.active { border-color: var(--ink); }
+
+  /* Sensor readout */
+  .readout { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; text-align: center; }
+  .readout b { display: block; font-size: 22px; }
+  .readout span { font-size: 12px; color: var(--muted); }
+
+  /* Big action buttons (used for labeling AND for corrections) */
+  .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .act { padding: 22px 8px; border: none; border-radius: 14px; color: #fff; font-size: 20px;
+         font-weight: 700; touch-action: manipulation; }
+  .act:active { transform: scale(0.97); }
+  .act.Straight { background: var(--straight); grid-column: span 2; }
+  .act.Left { background: var(--left); }
+  .act.Right { background: var(--right); }
+  .act.Stairs { background: var(--stairs); }
+  .act.Arrived { background: var(--arrived); }
+
+  /* The instruction shown while navigating */
+  .instruction { text-align: center; padding: 26px 8px; border-radius: 14px; color: #fff;
+                 font-size: 40px; font-weight: 800; background: var(--straight); }
+  .instruction small { display: block; font-size: 14px; font-weight: 500; opacity: 0.9; }
+
+  .btn { padding: 12px 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--card);
+         color: var(--ink); font: inherit; font-weight: 600; }
+  .btn.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  .btn.rec { background: var(--rec); color: #fff; border-color: var(--rec); }
+  .status { font-size: 14px; color: var(--muted); margin-top: 8px; }
+  .hidden { display: none !important; }
+  .log { font: 12px/1.4 ui-monospace, monospace; max-height: 160px; overflow: auto;
+         white-space: pre; background: var(--bg); padding: 8px; border-radius: 8px; }
+  .walks { font-weight: 700; }
+  .walks.over { color: var(--rec); }
+
+  /* "Can't reach the board" warning. It sits above both tabs' content and sticks to the top
+     of the screen when you scroll, so the walker sees it in either tab. */
+  .warning { position: sticky; top: 0; z-index: 5; background: var(--rec); color: #fff;
+             font-weight: 600; padding: 10px 12px; border-radius: 12px; margin-bottom: 12px; }
+
+  /* While the board isn't answering, the instruction is greyed out: it is based on old numbers
+     and shouldn't be trusted. !important beats the colour showInstruction() sets on the element. */
+  .instruction.stale { background: #8a8a85 !important; opacity: 0.6; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Nolop Navigator</h1>
+
+  <!-- ── Setup: who is walking, and where the sensor data comes from ── -->
+  <div class="card">
+    <div class="row">
+      <label class="small">Walker
+        <select id="walker"><option>Mohammed</option><option>Raph</option></select></label>
+      <label class="small">Data
+        <select id="source"><option value="mock">Mock (no hardware)</option><option value="live">Live (UNO Q)</option></select></label>
+    </div>
+    <div class="status">Walks used: <span id="walk-count" class="walks">0 / 10</span>
+      (the assignment allows 10 total, DAgger walks included)</div>
+  </div>
+
+  <!-- ── Mode tabs ── -->
+  <div class="tabs">
+    <button class="tab active" data-mode="record">Record demo</button>
+    <button class="tab" data-mode="navigate">Navigate + correct</button>
+  </div>
+
+  <!-- ── Warning when the board stops answering (shown on both tabs; hidden while all is well) ── -->
+  <div class="warning hidden" id="board-warning"></div>
+
+  <!-- ── What the sensors say right now ── -->
+  <div class="card">
+    <div class="readout">
+      <div><b id="r-steps">0</b><span>steps</span></div>
+      <div><b id="r-since">0</b><span>since turn</span></div>
+      <div><b id="r-turns">0</b><span>turns</span></div>
+      <div><b id="r-stairs">no</b><span>stairs</span></div>
+    </div>
+    <!-- Mock controls: pretend to be the step counter + turn detector -->
+    <div id="mock-controls" class="row" style="margin-top:10px">
+      <button class="btn" id="m-step">+1 step</button>
+      <button class="btn" id="m-step5">+5 steps</button>
+      <button class="btn" id="m-left">Turned L</button>
+      <button class="btn" id="m-right">Turned R</button>
+      <button class="btn" id="m-stairs">Stairs on/off</button>
+    </div>
+  </div>
+
+  <!-- ── RECORD mode ── -->
+  <section id="mode-record">
+    <div class="card">
+      <div class="row">
+        <button class="btn rec" id="start-walk">Start walk</button>
+        <button class="btn" id="end-walk" disabled>End walk</button>
+        <button class="btn" id="undo">Undo last tap</button>
+      </div>
+      <div class="status" id="rec-status">Not recording.</div>
+    </div>
+    <div class="card">
+      <div class="status" style="margin:0 0 8px">Tap what you are doing <b>as you start doing it</b>.
+        "Straight" is assumed between taps.</div>
+      <div class="actions" id="label-buttons"></div>
+    </div>
+  </section>
+
+  <!-- ── NAVIGATE mode ── -->
+  <section id="mode-navigate" class="hidden">
+    <div class="card">
+      <div class="row">
+        <button class="btn primary" id="start-nav">Start navigating</button>
+        <button class="btn" id="end-nav" disabled>Stop</button>
+        <label class="small"><input type="checkbox" id="dagger" checked> Save my corrections (DAgger walk)</label>
+      </div>
+      <div class="status" id="nav-status">Not navigating.</div>
+    </div>
+    <div class="instruction" id="instruction">—<small>press Start</small></div>
+    <div class="card" style="margin-top:12px">
+      <div class="status" style="margin:0 0 8px">Wrong instruction? Tap the right one. It's saved as a new training row.</div>
+      <div class="actions" id="correct-buttons"></div>
+    </div>
+  </section>
+
+  <!-- ── Data ── -->
+  <div class="card">
+    <div class="row">
+      <button class="btn primary" id="download">Download CSV</button>
+      <span class="status" id="row-count">0 rows</span>
+    </div>
+    <div class="log" id="log" style="margin-top:8px"></div>
+  </div>
+</main>
+
+<script>
+// ───────────────────────── Settings ─────────────────────────
+const ACTIONS = ["Straight", "Left", "Right", "Stairs", "Arrived"];
+const MAX_WALKS = 10;          // assignment limit, demos + DAgger walks combined
+const POLL_MS = 250;           // how often the page asks the board for new numbers (4 times a second).
+                               // The HW7 step counter itself only updates every 0.5 s; asking twice as
+                               // often just means a new step shows up on the phone sooner.
+const BOARD_TIMEOUT_MS = 1500; // give up on one request to the board after this long. When the hotspot
+                               // drops, a request can hang for many seconds instead of failing, and
+                               // without a time limit the warning would never appear.
+const STALE_MS = 1500;         // no answer from the board for this long = "the board isn't answering".
+                               // One late answer (a single 0.25 s hiccup) doesn't set off the warning.
+const TURN_GIVE_UP_STEPS = 10; // safety net for fix 3: if you tapped Left/Right but the board still
+                               // hasn't counted a turn this many steps later (a missed turn, or a tap
+                               // made after the turn was already counted), go back to Straight anyway.
+const MOCK_STEP_M = 0.7;       // mock mode only: pretend each step is 0.7 m long
+
+// ───────────────────────── State ─────────────────────────
+// "sensors" is the current OBSERVATION. In mock mode the buttons change it;
+// in live mode it is replaced by whatever the UNO Q sends back.
+function freshSensors() {
+  return { steps: 0, distance_m: 0, turns_left: 0, turns_right: 0, steps_at_last_turn: 0,
+           heading_deg: 0, on_stairs: false };
+}
+let sensors = freshSensors();
+let rows = [];                 // every saved (observation, action) row
+let walkId = 0;                // counts walks (demo or DAgger) on THIS phone since the page opened.
+                               // The official count is the table in data/README.md.
+let mode = "record";           // "record" or "navigate"
+let recording = false;         // inside a demo walk?
+let navigating = false;        // inside a navigation walk?
+let starting = false;          // waiting for the board to confirm a reset before a walk starts?
+let currentLabel = "Straight"; // what the demonstrator is doing right now
+let lastSteps = 0;             // to notice when a new (whole) step happened
+let turnsAtTap = 0;            // the board's turn count when Left/Right was tapped (fix 3)
+let stepsAtTap = 0;            // the step count when Left/Right was tapped (for the safety net)
+
+// Talking to the board (live mode only)
+let polling = false;           // a request for /api/state is still on its way
+let resetting = false;         // a reset is on its way: don't ask for numbers meanwhile
+let resetCount = 0;            // goes up after every confirmed reset (see pollLive)
+let lastBoardAnswer = Date.now(); // when the board last answered
+let lastBoardError = "";       // why the last request failed, for the warning
+
+// ───────────────────────── Helpers ─────────────────────────
+const $ = (id) => document.getElementById(id);
+
+// Observation features the policy will learn from. Keep this list in sync with your training code.
+// The order of the keys here is the order of the columns in the CSV.
+function observation() {
+  // Fix 4: whole steps only. The HW7 counter keeps a running total with decimals (e.g. 29.6).
+  // Rounding down means a row is saved once per real step, not at every tiny change, and
+  // "steps since the last turn" is a whole number too.
+  const steps = Math.floor(sensors.steps);
+  return {
+    steps,
+    // Meters since the walk started (to 0.1 m), from the same counter. Saved next to steps so
+    // the first walks can show which works better for the policy: steps differ between
+    // walkers with different stride lengths, meters shouldn't.
+    distance_m: Math.round((Number(sensors.distance_m) || 0) * 10) / 10,
+    steps_since_turn: steps - Math.floor(sensors.steps_at_last_turn),
+    turns: sensors.turns_left + sensors.turns_right,
+    turns_left: sensors.turns_left,
+    turns_right: sensors.turns_right,
+    heading_deg: Math.round(sensors.heading_deg),
+    on_stairs: sensors.on_stairs ? 1 : 0,
+  };
+}
+
+// Save one training row. kind = "demo" (recorded walk) or "dagger" (a correction).
+function saveRow(label, kind, predicted = "") {
+  const row = { walk: walkId, walker: $("walker").value, kind, t_ms: Date.now(),
+                ...observation(), label, predicted };
+  rows.push(row);
+  $("row-count").textContent = rows.length + " rows";
+  log(`${kind} walk ${walkId}: steps=${row.steps} since=${row.steps_since_turn} turns=${row.turns} -> ${label}` +
+      (predicted ? ` (policy said ${predicted})` : ""));
+}
+
+function log(msg) { const el = $("log"); el.textContent = msg + "\n" + el.textContent; }
+
+function render() {
+  const o = observation();
+  $("r-steps").textContent = o.steps;
+  $("r-since").textContent = o.steps_since_turn;
+  $("r-turns").textContent = o.turns;
+  $("r-stairs").textContent = o.on_stairs ? "yes" : "no";
+  const wc = $("walk-count");
+  wc.textContent = `${walkId} / ${MAX_WALKS}`;
+  wc.classList.toggle("over", walkId > MAX_WALKS);
+}
+
+// ───────────────────────── Talking to the board ─────────────────────────
+// fetch() with a time limit: if the board doesn't answer within BOARD_TIMEOUT_MS, the request
+// is cancelled and counts as failed (see BOARD_TIMEOUT_MS for why this matters).
+async function fetchWithTimeout(url) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), BOARD_TIMEOUT_MS);
+  try { return await fetch(url, { cache: "no-store", signal: ctrl.signal }); }
+  finally { clearTimeout(timer); }
+}
+
+// Live mode: the UNO Q should answer GET /api/state with JSON like
+//   {"steps": 42.6, "distance_m": 29.8, "turns_left": 1, "turns_right": 0,
+//    "steps_at_last_turn": 30.2, "heading_deg": 85, "on_stairs": false}
+async function pollLive() {
+  const askedAt = resetCount;    // which walk's numbers this request is asking for
+  try {
+    const res = await fetchWithTimeout("/api/state");
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    // Fix 1 (part 2): an answer to a request sent BEFORE the board confirmed a reset carries
+    // the old walk's totals. Throw it away, or the new walk would start at the old numbers.
+    if (askedAt !== resetCount) return;
+    sensors = { ...sensors, ...data };
+    lastBoardAnswer = Date.now();
+    lastBoardError = "";
+  } catch (e) {
+    lastBoardError = e.name === "AbortError" ? "no answer" : e.message;
+  }
+}
+
+// Fix 1: before a walk starts, ask the board to start its counts over at 0, and wait for it to
+// say {"ok": true}. Without this, the page set ITS numbers to 0 but the board kept its totals,
+// so a quarter-second later walk 2 carried on from walk 1's steps and turns.
+// Returns true once the board has confirmed (or right away in mock mode, which has no board).
+async function resetBoard() {
+  if ($("source").value !== "live") return true;
+  resetting = true;              // stop asking for numbers while the reset is on its way
+  try {
+    const res = await fetchWithTimeout("/api/reset");
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    if (data.ok !== true) throw new Error(data.error || "the board didn't confirm");
+    resetCount++;                // any answer still on its way is from before the reset: ignore it
+    lastBoardAnswer = Date.now();
+    lastBoardError = "";
+    return true;
+  } catch (e) {
+    lastBoardError = e.name === "AbortError" ? "no answer" : e.message;
+    return false;
+  } finally {
+    resetting = false;
+  }
+}
+
+// Shared start for both kinds of walk. It only starts the walk once the board has confirmed the
+// reset; otherwise nothing changes, the message says why, and you can press Start again.
+async function startNewWalk(statusId) {
+  starting = true;
+  $(statusId).textContent = "Asking the board to start the counts at 0…";
+  const ok = await resetBoard();
+  starting = false;
+  if (!ok) {
+    $(statusId).textContent = `The board didn't confirm the reset (${lastBoardError}). Walk not started; try again.`;
+    return false;
+  }
+  walkId++;
+  sensors = freshSensors();      // the board is at 0 now too, so the two agree
+  lastSteps = 0;
+  currentLabel = "Straight";
+  if (walkId > MAX_WALKS) alert("Heads up: this phone has now started more than 10 walks. Check the walk table in data/README.md.");
+  return true;
+}
+
+// Fix 2: show or hide the "can't reach the board" warning (it sits above both tabs) and grey out
+// the instruction while the board isn't answering. Called on every tick, so the warning also
+// clears by itself as soon as the board answers again.
+function updateBoardStatus() {
+  const live = $("source").value === "live";
+  const boardOk = !live || Date.now() - lastBoardAnswer < STALE_MS;
+  const warning = $("board-warning");
+  warning.classList.toggle("hidden", boardOk);
+  if (!boardOk) {
+    const secs = Math.round((Date.now() - lastBoardAnswer) / 1000);
+    warning.textContent = `Can't reach the board (${lastBoardError || "no answer"}) for ${secs} s. ` +
+                          "The numbers and the instruction are out of date. Check the hotspot and the board's power.";
+  }
+  $("instruction").classList.toggle("stale", !boardOk);
+}
+
+// Fix 3: a Left/Right label ends when the BOARD counts the turn (its turn count goes up), not after
+// a fixed 1.5 s timer. The timer ignored when the turn really ended, which is why a turn label
+// could stay on for a step after the turn. If the board never counts the turn, the safety net
+// (TURN_GIVE_UP_STEPS) goes back to Straight so the label can't stay on for the rest of the walk.
+function endTurnLabelIfTurnCounted(o) {
+  if (!recording || (currentLabel !== "Left" && currentLabel !== "Right")) return;
+  if (o.turns > turnsAtTap) {
+    currentLabel = "Straight";
+    $("rec-status").textContent = `Recording walk ${walkId}: turn counted, back to Straight.`;
+  } else if (o.steps - stepsAtTap >= TURN_GIVE_UP_STEPS) {
+    log(`no turn counted ${TURN_GIVE_UP_STEPS} steps after tapping ${currentLabel}: back to Straight`);
+    currentLabel = "Straight";
+    $("rec-status").textContent = `Recording walk ${walkId}: no turn counted, back to Straight.`;
+  }
+}
+
+// Called every POLL_MS. When a new step shows up, record a row (demo) or update the instruction (navigate).
+async function tick() {
+  if (polling || resetting) return;   // the last request hasn't come back yet: don't pile requests up
+  polling = true;
+  try {
+    if ($("source").value === "live") await pollLive();
+    const o = observation();
+    // Before saving this step's row, end a turn label if the turn has been counted, so the
+    // first step after the turn is already saved as Straight.
+    endTurnLabelIfTurnCounted(o);
+    if (o.steps !== lastSteps) {      // a new whole step (fix 4)
+      lastSteps = o.steps;
+      if (recording) saveRow(currentLabel, "demo");
+      if (navigating) showInstruction();
+    }
+    updateBoardStatus();
+    render();
+  } finally {
+    polling = false;
+  }
+}
+setInterval(tick, POLL_MS);
+
+// Mock buttons pretend to be the step counter and turn detector.
+function mockTurn(side) {
+  if (side === "L") sensors.turns_left++; else sensors.turns_right++;
+  sensors.heading_deg += side === "L" ? -90 : 90;
+  sensors.steps_at_last_turn = sensors.steps;
+}
+function mockSteps(n) { sensors.steps += n; sensors.distance_m += n * MOCK_STEP_M; }
+$("m-step").onclick = () => mockSteps(1);
+$("m-step5").onclick = () => mockSteps(5);
+$("m-left").onclick = () => mockTurn("L");
+$("m-right").onclick = () => mockTurn("R");
+$("m-stairs").onclick = () => { sensors.on_stairs = !sensors.on_stairs; };
+$("source").onchange = () => {
+  $("mock-controls").classList.toggle("hidden", $("source").value !== "mock");
+  lastBoardAnswer = Date.now();  // give the board a moment to answer before warning
+  lastBoardError = "";
+};
+
+// ───────────────────────── RECORD mode ─────────────────────────
+function makeButtons(containerId, onTap) {
+  for (const a of ACTIONS) {
+    const b = document.createElement("button");
+    b.className = "act " + a;
+    b.textContent = a === "Left" ? "← Left" : a === "Right" ? "Right →" : a;
+    b.onclick = () => onTap(a);
+    $(containerId).appendChild(b);
+  }
+}
+
+makeButtons("label-buttons", (a) => {
+  if (!recording) { $("rec-status").textContent = "Press Start walk first."; return; }
+  currentLabel = a;
+  // Remember where the walk was at the tap: a Left/Right label ends when the turn count goes
+  // above turnsAtTap (fix 3, in endTurnLabelIfTurnCounted), not after a timer.
+  const o = observation();
+  turnsAtTap = o.turns;
+  stepsAtTap = o.steps;
+  saveRow(a, "demo");      // save the moment of the tap too, not only on steps
+  $("rec-status").textContent = `Recording walk ${walkId}: you are doing ${a}`;
+});
+
+$("start-walk").onclick = async () => {
+  if (starting) return;
+  $("start-walk").disabled = true;           // no double taps while the board resets
+  if (!(await startNewWalk("rec-status"))) { $("start-walk").disabled = false; return; }
+  recording = true;
+  $("end-walk").disabled = false;
+  $("rec-status").textContent = `Recording walk ${walkId}.`;
+};
+$("end-walk").onclick = () => {
+  recording = false; $("start-walk").disabled = false; $("end-walk").disabled = true;
+  $("rec-status").textContent = `Walk ${walkId} saved. Not recording.`;
+};
+$("undo").onclick = () => {
+  // Remove the most recent tapped label (labels are easy to fat-finger while walking).
+  for (let i = rows.length - 1; i >= 0; i--) {
+    if (rows[i].walk === walkId && rows[i].label !== "Straight") {
+      log(`undo: removed ${rows[i].label} at step ${rows[i].steps}`);
+      rows.splice(i, 1); currentLabel = "Straight"; break;
+    }
+  }
+  $("row-count").textContent = rows.length + " rows";
+};
+
+// ───────────────────────── NAVIGATE mode ─────────────────────────
+// PLACEHOLDER POLICY — replace with your trained one.
+// It finds the recorded demo row whose observation is closest to now and returns its label
+// (a "nearest neighbor" lookup). It's here only so you can test the page.
+// In live mode you'd probably ask the UNO Q instead, e.g. GET /api/predict.
+function predict() {
+  const demos = rows.filter((r) => r.kind === "demo" || r.kind === "dagger");
+  if (demos.length === 0) return "Straight";
+  const o = observation();
+  let best = null, bestDist = Infinity;
+  for (const r of demos) {
+    const d = Math.abs(r.turns - o.turns) * 100      // being on the wrong leg of the route matters most
+            + Math.abs(r.steps_since_turn - o.steps_since_turn)
+            + Math.abs(r.on_stairs - o.on_stairs) * 50;
+    if (d < bestDist) { bestDist = d; best = r; }
+  }
+  return best.label;
+}
+
+let lastPrediction = "Straight";
+function showInstruction() {
+  lastPrediction = predict();
+  const el = $("instruction");
+  const arrows = { Straight: "↑ Straight", Left: "← Left", Right: "Right →", Stairs: "Stairs", Arrived: "Arrived!" };
+  el.innerHTML = `${arrows[lastPrediction]}<small>${observation().steps_since_turn} steps since last turn</small>`;
+  el.style.background = `var(--${lastPrediction.toLowerCase()})`;
+}
+
+makeButtons("correct-buttons", (a) => {
+  if (!navigating) return;
+  if (!$("dagger").checked) { log(`(not saved) you said ${a}, policy said ${lastPrediction}`); return; }
+  saveRow(a, "dagger", lastPrediction);   // DAgger: the expert labels the state the learner reached
+  showInstruction();
+});
+
+// A navigation walk needs the same reset as a demo walk (fix 1): the policy's "which turn am I on"
+// would be wrong from the start if the board kept the last walk's turn count.
+$("start-nav").onclick = async () => {
+  if (starting) return;
+  $("start-nav").disabled = true;
+  if (!(await startNewWalk("nav-status"))) { $("start-nav").disabled = false; return; }
+  navigating = true;
+  $("end-nav").disabled = false;
+  $("nav-status").textContent = `Navigating (walk ${walkId}).`;
+  showInstruction();
+};
+$("end-nav").onclick = () => {
+  navigating = false; $("start-nav").disabled = false; $("end-nav").disabled = true;
+  $("nav-status").textContent = `Walk ${walkId} ended. Not navigating.`;
+};
+
+// ───────────────────────── Tabs ─────────────────────────
+document.querySelectorAll(".tab").forEach((t) => t.onclick = () => {
+  if (recording || navigating || starting) { alert("Finish the current walk first."); return; }
+  mode = t.dataset.mode;
+  document.querySelectorAll(".tab").forEach((x) => x.classList.toggle("active", x === t));
+  $("mode-record").classList.toggle("hidden", mode !== "record");
+  $("mode-navigate").classList.toggle("hidden", mode !== "navigate");
+});
+
+// ───────────────────────── Export ─────────────────────────
+$("download").onclick = () => {
+  if (rows.length === 0) { alert("No rows yet."); return; }
+  const cols = Object.keys(rows[0]);
+  const csv = [cols.join(","), ...rows.map((r) => cols.map((c) => r[c]).join(","))].join("\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+  a.download = `nav_data_${new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-")}.csv`;
+  a.click();
+};
+
+render();
+</script>
+</body>
+</html>

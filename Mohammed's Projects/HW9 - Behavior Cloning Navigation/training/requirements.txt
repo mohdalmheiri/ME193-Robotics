@@ -1,0 +1,2 @@
+numpy==2.5.3          # label cleanup and the policy table
+matplotlib==3.11.2    # plots of walks and labels
