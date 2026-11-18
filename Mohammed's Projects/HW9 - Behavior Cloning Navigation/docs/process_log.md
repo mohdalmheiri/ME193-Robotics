@@ -603,3 +603,36 @@ how Raph had it (Raph agreed). **USB test, second try (19:20):** still no link: 
 device and the laptop's USB list showed no board at all, with the cable that worked with App
 Lab this morning. The laptop had also left Tufts_Robot (address 10.243.41.251), so the board
 couldn't be reached over Wi-Fi either. To retry.
+
+**USB test passed (19:16)**, once the board was plugged in again (it restarted on plugging
+in): `adb devices` lists it, `adb shell` reaches the board named Raph as user `arduino`, and
+over USB that user may change network settings. So NolopNav can be switched over the cable.
+
+**Build step 4 runs on the board** (19:18): `main.py` feeds every reading (placeholders for
+lost ones too) to `LiveStrideCounter` and logs the steps each time they change, plus a
+summary every 10 s with how long the 5 nets took. First tested on the laptop with stand-ins
+for the board's libraries, replaying Raph's LoopLeft in batches (one cut short): 28 steps,
+the same as the checked port, and 10 lost readings filled in. On the board, standing still:
+1,015 readings in 10.2 s, 0 lost, **0 steps**; the nets ran 41 times in 10 s, **median
+49 ms, slowest 52 ms** (91 ms only for the first run), against a budget of one run every
+250 ms: about 20% of one core. (The speed test's 35 ms left out the input preparation and
+peak finding.)
+
+**Problem after the board restarted:** the sketch didn't answer Python at all
+(`get_batch` timed out every 10 s), and the router never saw the sketch register its
+functions; it logged bursts of "invalid packet, expected array" instead. Starting the app
+again and recreating its container didn't help; **restarting the app, which flashes the
+sketch again, did**. Cause unknown (possibly the microcontroller starts before Linux's
+router is ready after a power-up, so its first messages are lost). **To test before the
+first walk:** with Nolop Navigator as the default app, power-cycle the board (as a power-bank
+swap would) and check readings flow; if they don't, the app could restart itself when no
+readings arrive at all.
+
+Also after the unexpected power-off: the app container's log file had a stretch of null
+bytes (the log was being written when the power went), so `app logs` stopped there. Fixed
+by deleting Nolop Navigator's container (`docker rm nolop-navigator-main-1`; the CLI built a
+fresh one on the next start). Only the old log lines were affected.
+
+**Known limit of the live counter:** while a 4 s window holds a "not real" reading (a lost
+or bad one), the nets don't run, so a cut-short batch while walking loses the strides of
+about 1.6 s around it (2-4 steps). Cut-short batches came about 6 times an hour today.
