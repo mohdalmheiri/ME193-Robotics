@@ -265,3 +265,11 @@ Plot: [`media/ankle_turns_raph.png`](../media/ankle_turns_raph.png).
 - `ankle_turn_check.py` now also reads HW7 recordings (`time` column), so Step 0 needs no
   new code: HW7's Step Recorder records the walk. Comments added; the calculations are
   unchanged (same output on Raph's walk).
+
+**Added after the test: corner length.** A 90° corner taken while walking may take longer
+than 2 s, so part of it would fall outside the 2 s window and it could read under 60°.
+When checking the Step 0 loop plots, measure how long each corner's climb lasts. If
+corners take longer than 2 s, **widen the turn window to 3 s instead of lowering the 60°
+threshold**: a lower threshold moves toward the walking wobble, while a wider window
+keeps clear of it (on HW7's straight walks the wobble stayed under 27° within 3 s,
+against under 20° within 2 s).

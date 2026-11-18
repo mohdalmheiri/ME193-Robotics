@@ -112,6 +112,12 @@ the raw ankle readings at 100 per second. Use its **Test** activity.
   straight stretches and at the corners. On HW7's straight walks the wobble stayed under
   20° in 2 s, and Raph's turnarounds climbed 118-169° in 2 s. If corners climb well over
   60° in 2 s and straights stay well under it, ">60° within 2 s" is a safe rule.
+- **How long each corner takes:** a 90° corner taken while walking may take longer than
+  2 s. Measure how long each corner's climb lasts, from where the heading leaves the flat
+  part to where it is flat again. **If corners take longer than 2 s, widen the turn window
+  to 3 s; don't lower the 60° threshold.** A lower threshold lets the walking wobble look
+  like a turn, while a wider window still keeps it out: on HW7's straight walks the wobble
+  stayed under 27° within 3 s.
 - **Pass:** all of the above for both walkers. Then the waist sensor and the long wire are
   dropped from the plan.
 
