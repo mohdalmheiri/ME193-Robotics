@@ -21,10 +21,15 @@ internet is needed on the walk.
 ## How it works
 
 **Sensing (on the UNO Q)**
-- **Steps:** an MPU-6050 on the right lower leg, near the ankle. We're starting with
-  Mohammed's HW7 step counter ([HW7 - How Many Steps](../HW7%20-%20How%20Many%20Steps/README.md)),
-  which already runs on the board in plain numpy, to be confirmed with Raph. Raph's
-  stride-counting CNN is the alternative we're comparing it with (see Credits).
+- **Steps:** an MPU-6050 on the right lower leg, near the ankle, counted by Raph's CNN
+  step counter (see Credits), ported to plain numpy so it runs on the board
+  (`uno_q/python/stride_counter.py`). Five small 1-D convolutional nets look at the last
+  4 s and score how likely the strapped leg is at mid-swing; each peak of their average
+  is one stride = 2 steps. Our strap holds the sensor turned differently from Raph's, so
+  the x and y axes are swapped to his layout first. Steps go up 2 at a time, about
+  0.6-0.85 s after the stride. Distance is his fitted 0.41 m per step, the same for
+  everyone. On all of Step 0's walks it was within 2 steps for both walkers; the HW7
+  counter undercounted Mohammed by up to a third.
 - **Turns:** the gyroscope of the same ankle sensor. It has no compass, so a turn is found
   by adding up the gyro's turning rate over time. The rotation is measured around "up",
   found from the accelerometer averaged over 1 s (the leg's swing averages out), so it
@@ -115,7 +120,14 @@ HW9 - Behavior Cloning Navigation/
 |---|---|
 | [uno_q/README.md](uno_q/README.md) | What the board app does and how to deploy it |
 | [uno_q/app.yaml](uno_q/app.yaml) | App Lab settings: name, port 7000, web page brick |
-| [training/requirements.txt](training/requirements.txt) | Laptop packages for label cleanup and training |
+| [uno_q/python/stride_counter.py](uno_q/python/stride_counter.py) | Raph's step counter in plain numpy, with a live counter for the board app |
+| `uno_q/python/raph_step_model.npz` | Raph's 5 trained nets and counting settings, exported for the board |
+| [training/export_raph_cnn.py](training/export_raph_cnn.py) | Exports Raph's PyTorch model to that file (weights unchanged) |
+| [training/check_numpy_port.py](training/check_numpy_port.py) | Checks the numpy port gives the same scores, peaks and counts as his PyTorch version |
+| [training/compare_raph_cnn.py](training/compare_raph_cnn.py) | Runs Raph's counter on our recordings (with and without the axis swap) |
+| [training/ankle_turn_check.py](training/ankle_turn_check.py) | Heading from the ankle gyro, to check turns (Step 0) |
+| [training/requirements.txt](training/requirements.txt) | Laptop packages for label cleanup, training and the checks |
+| `data/step0/`, `data/sensor_swap/` | Raw ankle recordings from Step 0 and the sensor-swap experiment |
 | [data/README.md](data/README.md) | Walk file naming, CSV columns and the 10-walk log |
 | [data/RECORDING_CHECKLIST.md](data/RECORDING_CHECKLIST.md) | Step-by-step for testing the counter and recording each walk |
 | [docs/process_log.md](docs/process_log.md) | Dated record of decisions and results |
@@ -135,15 +147,21 @@ Not ready yet: the board code is next. The plan follows HW7:
   The table in `data/README.md` is the official count, not the page's counter.
   Short counted test walks of the step counter aren't full route walks, so they don't
   use up the budget. The log is in [data/README.md](data/README.md).
-- **Step counter on a second person:** the HW7 counter has only been trained on
-  Mohammed's walking and only tested on a straight 20 m course. Testing it on Raph's
-  walking, and on walks with turns, is the first item in the recording checklist.
-- **Turns from the ankle:** on Raph's recorded walk the 180° turnarounds read about 13%
-  low (about 157°), still far above the walking wobble. 90° corners, left vs right and
-  both walkers are checked in Step 0 (`uno_q/README.md`). Only if that fails does the
-  waist sensor come back, with its long wire (I2C is meant for short wires).
-- **Gyro bias:** about 7.5°/s on Raph's sensor; left in, the heading drifts about 450° in
-  a minute. It changes with temperature, so it is measured at the start of every walk.
+- **Step counter:** Raph's CNN counter, not the HW7 counter: on Step 0's loops it was
+  within 2 steps for both walkers and both sensors, while the HW7 counter undercounted
+  Mohammed by 21-34% on either sensor. It is judged further from the route demos (both
+  walkers on the same route). The numpy port matches his PyTorch version to within
+  0.000001 per score, with the same strides on every recording. A numpy test with the
+  same layer sizes ran 5 nets on one window in about 35 ms on the UNO Q (one window every
+  250 ms); the port itself is timed on the board in build step 4.
+- **Turns from the ankle:** Step 0 passed for both walkers: every 90° corner changed the
+  heading by more than 60° within 2 s (lowest 71°), straight walking stayed under 23°.
+  Walking corners read about 12% short (spot turns read the full angle); turns are only
+  compared with 60°, so this isn't corrected. The waist sensor and long wire are dropped.
+- **Gyro bias:** Raph's sensor reads about +34°/s on gx when still (Mohammed's: about 3°/s).
+  It is measured for each axis while standing still for 5 s at the start of every walk
+  and subtracted before taking the turn around "up"; measured as one number around "up",
+  it depends on the leg's tilt and the loops came out 74° apart.
 - **Board as its own Wi-Fi network:** possible, but while it is on, the laptop can't reach
   the board to deploy. The phone hotspot (already set up on the board) is the plan.
 - **Still to decide:** start point, the exact route, and whether it stays inside a
@@ -153,10 +171,12 @@ Not ready yet: the board code is next. The plan follows HW7:
 
 - **Raph's step counter**
   ([How many steps](https://github.com/RaphLemSol/ME193/tree/main/How%20many%20steps)):
-  an ensemble of 1-D CNNs that finds each stride in the ankle data. It is the alternative
-  to the HW7 counter that we're comparing; its board app streams the IMU over MQTT to a
-  laptop running PyTorch.
-- **Mohammed Almheiri:** the HW7 step counter and board app this builds on, and the
-  HW9 setup so far.
+  an ensemble of 1-D CNNs that finds each stride in the ankle data. **This is the step
+  counter HW9 uses:** his network design, his trained weights and his counting rule,
+  unchanged; here it is ported from PyTorch to plain numpy so it runs on the board
+  (`uno_q/python/stride_counter.py`), with the axes swapped for our strap. Raph reviews
+  the port.
+- **Mohammed Almheiri:** the HW7 Step Recorder app and board setup this builds on (Step 0
+  was recorded with it), the HW9 setup, Step 0 and the sensor-swap experiment.
 - **Both partners** walk and label the route; the policy is trained on both partners' walks.
 - The lookup-table policy follows the course's AnnaCode Table Cloner example (linked above).

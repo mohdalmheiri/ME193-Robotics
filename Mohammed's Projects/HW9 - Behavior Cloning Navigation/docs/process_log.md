@@ -494,3 +494,71 @@ counted steps on every recording, while the HW7 counter undercounted Mohammed by
 third. It is the stronger candidate for the route demos. To use it live it needs: its
 nets in plain numpy on the board (as HW7's counter is), and the axis renaming built in.
 To decide before the first route demo.
+
+## 2026-11-18: Decision: Raph's CNN counter for the route demos
+
+**Decided (Mohammed and Raph):** the route demos use Raph's CNN step counter, not the HW7
+counter.
+
+**Why:**
+- On every recording from today (both walkers, both sensors, loops with four corners and
+  spot turns) it was within 2 steps of the counted steps, once our axes are renamed to his
+  layout. The HW7 counter was off by up to 10 of 28 steps and depended on walker and
+  sensor (it undercounted Mohammed by 21-34% on either sensor).
+- It finds each swing of the strapped leg directly, which held up in corners; the HW7
+  counter estimates a rate from 2 s clips and was trained on straight walks only.
+- Steps since the last turn time the warnings, and both walkers' demos go into one
+  policy, so a counter that agrees across walkers matters more than one that suits one
+  person.
+
+**What it needs before the first route demo:** its five nets in plain numpy on the board
+(the board has no PyTorch; HW7's counter already runs this way), the axis renaming built
+in, and a check that the numpy version gives the same output as his PyTorch version.
+
+## 2026-11-18: Distance decision, and Raph's counter ported to numpy
+
+**Distance:** `distance_m` stays in `/api/state` as steps × 0.41 m (Raph's fitted 0.823 m per
+stride), so nothing on the page or in the protocol changes. **The steps-vs-meters
+comparison is dropped:** with this counter, meters are just steps times a constant, so they
+add no information; and a stranger following the guide wouldn't have a stride-length
+setting of their own anyway.
+
+**Steps arrive late and in twos:** a stride is counted about 0.6-0.85 s after it happens
+(once it is 0.6 s old, checked every 0.25 s), and the count goes up by 2. So "steps since
+the last turn" also jumps by 2, a little late. Fine for now; to remember when timing the
+warnings before a turn.
+
+**Speed on the UNO Q:** a numpy forward pass with StepNet's exact layer sizes (random
+weights), 5 nets on one 4 s window: **35 ms median** (36.6 ms slowest) inside the app's
+container on the board, while Step Recorder ran. One window every 250 ms = about 14% of one
+of the 4 cores. Fast enough.
+
+**Export** (`training/export_raph_cnn.py`): Raph's `models/step_net.pt` (his commit
+`713da130607d`, loaded with `weights_only=True`) -> `uno_q/python/raph_step_model.npz`,
+weights unchanged, plus his counting settings, the axis swap and the stride length.
+**16,201 trainable weights per net**, matching Raph's Notion page, plus 288 batch-norm
+running averages. 329 KB for all five.
+
+**Port** (`uno_q/python/stride_counter.py`, numpy only): the same layers (conv 8->24 with
+stride 2, batch norm, ReLU; five dilated blocks 1-16 with batch norm, ReLU and the input
+added back; 1x1 output; linear stretch to 400; sigmoid), his input preparation (including
+(|acc| - 1) / 2 and |gyro - median| / 300), his counting rule line for line (threshold 0.5,
+0.4 s apart, counted at 0.6 s old, 1 s of context, steps from the average's peaks, each
+net's own count for the ±), scipy's find_peaks rewritten in numpy (flat tops counted once,
+at the middle), and a live counter with the same controls as HW7's.
+
+**Check** (`training/check_numpy_port.py`, PyTorch vs numpy on the same windows, all nine
+recordings from today plus Raph's November walk): largest score difference anywhere
+**7.5 × 10⁻⁷** (tolerance 10⁻⁵); peaks identical to scipy's in every window; the same
+strides at the same samples, the same per-net counts and the same steps on every recording
+(26/28/0/28/28/2/0/28/28 and 52 on his walk); the live counter, fed one sample at a time,
+gives the same steps. Not yet run on the board itself (build step 4).
+
+**Port review:** Mohammed and Raph read `prep`, `find_peaks` and `StrideCount.update` in
+`stride_counter.py` against Raph's `step_net.py`: it looks right. Together with the
+side-by-side check above.
+
+**Raph's sensor back on** (swapped with the board on: "no_answer" at 18:43:04, "reading
+again" at 18:44:05). Still test on the table (`data/sensor_swap/RaphSensor_Still.csv`,
+board `Raph_Test_T04`): gyro offset **gx +35.1, gy -0.6, gz -2.5°/s**, noise 0.1°/s, no
+dropouts. gx of about +35°/s confirms it is Raph's sensor (Mohammed's: -3.0).
