@@ -16,6 +16,9 @@ Built in the order of uno_q/README.md:
   by more than 60° within 3 s. When a turn is counted, the step count and meters at that
   moment are kept (steps_at_last_turn, distance_at_last_turn) for "steps since the turn".
   Stairs stay false (no stairs classifier).
+- Navigate: GET /api/predict answers with the trained policy (policy.py, a lookup table in
+  policy.json) for the board's current state. policy.json is read again whenever it
+  changes, so a new policy can be copied over without restarting the app.
 The log shows the steps each time they change, and every 10 s a summary with how long the
 nets took on the board.
 
@@ -35,6 +38,7 @@ from sensor import Sensor
 from stride_counter import StrideNets, LiveStrideCounter
 from walks import WalkStore
 from turns import TurnCounter
+from policy import Policy
 
 logger = Logger("nolop-navigator")
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -46,6 +50,7 @@ walks = WalkStore(os.path.join(HERE, "walks"), logger)
 turns = TurnCounter()
 at_last_turn = {"steps": 0, "distance_m": 0.0}   # the counts when the last turn was counted
 STILL_MAX_G = 0.05      # accelerometer spread while the offset was measured; more = not still
+policy = Policy(os.path.join(HERE, "policy.json"), logger)
 lock = threading.Lock()
 
 SUMMARY_S = 10          # log a summary this often
@@ -146,7 +151,25 @@ def http_rows(body: dict):
         return {"ok": False, "error": str(e)}
 
 
+def http_predict():
+    """GET /api/predict: the policy's action for the board's current state (the same counts
+    the page shows): {"ok": true, "action": "Left", "how": "exact" or "nearest", ...}, or
+    {"ok": false, "error": ...} if there is no policy.json yet."""
+    with lock:
+        obs = {"turns_left": turns.left, "turns_right": turns.right, "on_stairs": 0,
+               "steps_since_turn": counter.steps - at_last_turn["steps"]}
+    try:
+        answer = policy.predict(obs)
+    except Exception as e:                      # a broken policy.json: say so, keep running
+        logger.error(f"Policy not usable: {e}")
+        return {"ok": False, "error": f"policy not usable: {e}"}
+    if not answer["action"]:
+        return {"ok": False, "error": "no policy on the board yet"}
+    return {"ok": True, **answer, "observation": obs}
+
+
 ui.expose_api("GET", "/api/state", http_state)
+ui.expose_api("GET", "/api/predict", http_predict)
 ui.expose_api("GET", "/api/reset", http_reset)
 ui.expose_api("POST", "/api/rows", http_rows)
 

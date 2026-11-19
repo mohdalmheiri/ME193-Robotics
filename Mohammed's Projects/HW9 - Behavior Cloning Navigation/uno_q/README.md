@@ -58,6 +58,14 @@ the same order. So the board must handle getting the same row twice. That's what
 - Every request must be answered within **1.5 s**, or the page counts it as failed and
   tries again.
 
+**4. `GET /api/predict`: "what should the walker do now?"** In Navigate mode (Live), the page
+asks 4 times a second. The board looks up its own current state (left turns, right turns,
+stairs, steps since the last turn) in the trained policy (`python/policy.py`, the table in
+`python/policy.json`) and answers `{"ok": true, "action": "Left", "how": "exact"}` ("nearest"
+if that situation was never seen and the nearest known one answered), or `{"ok": false,
+"error": "no policy on the board yet"}`. The board reads `policy.json` again whenever it
+changes, so a new policy needs no restart. A correction saves this answer as `predicted`.
+
 ## One walk, start to end
 
 Raph records a demo walk; it's the third walk on this board.

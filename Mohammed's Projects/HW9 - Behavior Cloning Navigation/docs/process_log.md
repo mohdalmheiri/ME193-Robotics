@@ -705,3 +705,55 @@ page's Left label went back to Straight by itself. Raph's sensor's gx offset mov
 
 **Back to Raph's setup at the end of the day:** How Many Steps (`Steps-UnoQ`) running and
 the default app again; Nolop Navigator stopped (its files and saved walks stay on the board).
+
+## 2026-11-19: Label cleanup, the policy, Navigate on the board's policy, one command
+
+Built before the walking session (3-6 pm), so nothing needs coding during it. Not yet on
+the board: it runs Raph's app today.
+
+**Label cleanup** (`training/clean_labels.py`, raw files never changed): the board's counted
+turns place the turn labels, the taps only check them. Each counted turn gets its label on
+the rows of the **6 steps before it** (`--lead`, about 3 s of walking: the instruction comes
+that far ahead; to tune on real walks); every other row is Straight except Stairs/Arrived
+taps. That also fixes a Left/Right left on after a turn. Taps are matched to counted turns
+(20 steps before to 4 after) and reported: on time (with how many steps early), late, no
+tap, the other way, and **taps with no counted turn** (CHECK: a missed turn or a mis-tap).
+Rows describing the same moment are merged. Corrections (DAgger walks) are kept as they are.
+
+**Policy** (`uno_q/python/policy.py`, used by both the board and training): a lookup table
+like the AnnaCode Table Cloner. Situation = (left turns, right turns, stairs, steps since
+the last turn in buckets of 4); answer = the most common cleaned action; correction rows
+count 3 times; an unseen situation borrows from the nearest one (a different turn count
+costs 100, stairs 50, each bucket 1, so the same stretch first). `training/train_policy.py`
+prints the table per stretch, tests it leaving one walk out, writes
+`training/policy_report.md` and `uno_q/python/policy.json`.
+
+**Tests** (`training/tests/test_pipeline.py`, 24 checks, all pass): fake walks made the way
+the page and the board make them (Mohammed: on-time tap, late tap left on, stairs, arrived;
+Raph: more steps per stretch, an untapped turn, a tap the other way, a mis-tap; a correction
+walk; an empty walk; an excluded test walk), with every cleaned label and report count
+checked, and the table's answers (Left/Right at the end of each stretch, Stairs, Arrived,
+nearest-situation fallback, a correction outvoting demos). On the fake walks the
+leave-one-walk-out test agrees with 91% of rows. The real Live-test walks clean without
+errors (the swung-board walk's Left tap is flagged CHECK: no turn was counted). Bugs found
+by the tests and fixed: the cleaner changed labels in place before reading the taps (so it
+saw its own labels), and the report file was overwritten by test runs.
+
+**`/api/predict` and Navigate:** the board answers with the policy for its own current state;
+`policy.json` is read again whenever it changes, so a new policy needs no restart (no
+reflash, no power-off). The page's Navigate mode (Live) asks every 0.25 s (a turn can be
+counted between steps), shows "board policy" or "nearest known situation", shows "No
+policy" when there is none, and saves the board's answer as `predicted` on corrections.
+Mock mode keeps the placeholder. Checked: the board app with stand-in libraries (no policy
+-> "no policy on the board yet"; policy copied in -> loaded and answered without a
+restart); the page with a fake board (8 new checks, and the 33 earlier ones still pass,
+one updated: a correction now saves the board policy's answer).
+
+**One command** (`training/update_policy.py --via usb | nolop | ip`): checks the board is
+Raph, pulls the walks (skipping `data/walks_excluded.txt`: the three Live-test walks
+W01-W03 still on the board, so route walks start at W04), cleans, trains, copies only
+policy.json (temporary name, then renamed), and checks the policy answers and sensor readings
+arrive; if they don't, it prints the power-off steps. Tested with a folder standing in for
+the board (pull, skip, clean, train, deploy, run twice). **Not yet tested against the real
+board:** it was off the cable and not on Tufts_Robot this morning; run `--check-only` with
+the board plugged in before the session.

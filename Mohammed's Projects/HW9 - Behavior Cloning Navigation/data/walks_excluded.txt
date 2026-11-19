@@ -1,0 +1,5 @@
+# Walk files on the board that are NOT route walks: never pulled into walks/, never trained on.
+# One file name per line; text after # is a comment.
+Mohammed_demo_W01.csv  # 2026-11-18 Live test: started, no rows (copy in live_test/)
+Mohammed_demo_W02.csv  # 2026-11-18 Live test: board swung by hand (copy in live_test/)
+Mohammed_demo_W03.csv  # 2026-11-18 turn test: board rotated on the table (copy in live_test/)

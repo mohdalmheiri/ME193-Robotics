@@ -132,6 +132,11 @@ HW9 - Behavior Cloning Navigation/
 | [training/compare_raph_cnn.py](training/compare_raph_cnn.py) | Runs Raph's counter on our recordings (with and without the axis swap) |
 | [training/ankle_turn_check.py](training/ankle_turn_check.py) | Heading from the ankle gyro, to check turns (Step 0) |
 | [training/check_turns.py](training/check_turns.py) | Runs the board's turn counter on the 8 Step 0 recordings with known turns |
+| [training/update_policy.py](training/update_policy.py) | One command between walks: pull the walks, clean, train, put the policy on the board, check it |
+| [training/clean_labels.py](training/clean_labels.py) | Places the turn labels from the board's counted turns (6 steps ahead), checks the taps, never edits raw files |
+| [training/train_policy.py](training/train_policy.py) | Builds the lookup-table policy, prints it, tests it leaving one walk out |
+| [training/tests/](training/tests/) | Fake walks with known answers (`fake_walks.py`) and the test (`test_pipeline.py`) |
+| [uno_q/python/policy.py](uno_q/python/policy.py) | The lookup-table policy, shared by the board (`/api/predict`) and training |
 | [training/requirements.txt](training/requirements.txt) | Laptop packages for label cleanup, training and the checks |
 | `data/step0/`, `data/sensor_swap/` | Raw ankle recordings from Step 0 and the sensor-swap experiment |
 | `data/live_test/` | Test walks saved by the board during the Live-mode test, and the page's download of walk 2 |
@@ -141,12 +146,26 @@ HW9 - Behavior Cloning Navigation/
 
 ## Setup and run
 
-Not ready yet: the board code is next. The plan follows HW7:
-
-1. Training on the laptop uses the repo's `.venv`:
+1. Laptop packages, in the repo's `.venv`:
    `pip install -r "Mohammed's Projects/HW9 - Behavior Cloning Navigation/training/requirements.txt"`
-2. The board app is deployed from the ArduinoApps kit through a symlink to `uno_q/`.
-3. On the walk, the phone opens the address that scrolls on the LED matrix.
+2. The board app is deployed from the terminal (`uno_q/README.md`, "How to deploy"). On walking
+   days the board makes its own Wi-Fi network, NolopNav, and the phone opens
+   http://10.42.0.1:7000 ("Walking days").
+3. Walk and label with the page (`data/RECORDING_CHECKLIST.md`).
+4. **Between walks, one command** pulls the walks from the board, cleans the labels, trains
+   the policy and puts it on the board (no restart needed):
+
+   ```
+   .venv/bin/python "Mohammed's Projects/HW9 - Behavior Cloning Navigation/training/update_policy.py" --via usb
+   ```
+
+   (`--via nolop` with the laptop on NolopNav; `--no-deploy` to look at the table first;
+   `--check-only` to check the board; `--with-code` after changing the app's code.) It prints
+   the cleanup report, the table and a leave-one-walk-out test, and writes the table to
+   `training/policy_report.md`. If the sensor readings have stopped, it prints the power-off
+   steps.
+5. Tests without the board: `python training/tests/test_pipeline.py` (fake walks with known
+   answers, and the Live-test walks).
 
 ## Tuning and notes
 

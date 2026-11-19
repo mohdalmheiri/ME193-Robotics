@@ -47,6 +47,18 @@ One file per walk: `walks/Person_kind_Wnn.csv`, numbered across both partners in
 order walked (the number in the table above), for example `walks/Raph_demo_W01.csv`,
 `walks/Mohammed_demo_W02.csv`, `walks/Mohammed_dagger_W07.csv`.
 
+On the board the walk numbers carry on from its own files. W01-W03 there are the
+2026-11-18 Live tests (copies in `live_test/`), so the first route walk is **W04**. The
+table above is still the official count.
+
+**`walks_excluded.txt`** lists board files that are not route walks (the three tests): they
+are never pulled into `walks/` and never trained on. Add a walk there (with a comment why)
+to leave it out of training without deleting anything.
+
+**`cleaned/`** holds the cleaned copies made by `training/clean_labels.py` (same columns plus
+`raw_label` and `note`). They are made again from `walks/` every time; the files in
+`walks/` are never changed.
+
 The phone's backup download is different: one file, `nav_data_<date>-<time>.csv`, with
 every walk since the page was opened, and walk numbers that start at 1 on each phone.
 Use it only when the board's copy is missing, and split it by the `walk` column.

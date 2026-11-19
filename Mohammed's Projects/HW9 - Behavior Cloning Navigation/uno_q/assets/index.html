@@ -14,12 +14,14 @@
   Two ways to get sensor data:
     - MOCK mode (default): buttons fake the step counter, so you can test the page with no hardware.
       Mock mode never talks to the board, so it can't catch board problems: test Live too.
-    - LIVE mode: the page talks to the UNO Q (the board app doesn't exist yet):
+    - LIVE mode: the page talks to the UNO Q (uno_q/python/main.py):
         GET  /api/state  -> the latest numbers, asked 4 times a second
         GET  /api/reset?walker=..&kind=..  -> start the counts over at 0 and start a new walk;
                             must answer {"ok": true, "walk": <the board's walk number>}
         POST /api/rows   -> the saved rows (and undos), so the board can write one CSV per walk;
                             must answer {"ok": true}. See "Sending rows to the board" below.
+        GET  /api/predict -> Navigate: the board's trained policy for its current state;
+                            {"ok": true, "action": "Left", "how": "exact"|"nearest", ...}
 
   The board keeps the real copy of every walk. The page also keeps every row in the phone's
   memory for "Download CSV", which is the backup.
@@ -514,7 +516,11 @@ async function tick() {
     if (o.steps !== lastSteps) {      // a new whole step (fix 4)
       lastSteps = o.steps;
       if (recording) saveRow(currentLabel, "demo");
-      if (navigating) showInstruction();
+      if (navigating) await showInstruction();
+    } else if (navigating && $("source").value === "live") {
+      // Live: ask the board's policy every tick, not only on a new step, since a turn can be
+      // counted between steps (and the answer for "after 1 left turn" is different)
+      await showInstruction();
     }
     // Send waiting rows, including the one just saved. Not awaited, so a slow send never holds
     // up the numbers on the screen.
@@ -615,10 +621,12 @@ function unsendRow(row) {
 }
 
 // ───────────────────────── NAVIGATE mode ─────────────────────────
-// PLACEHOLDER POLICY — replace with your trained one.
-// It finds the recorded demo row whose observation is closest to now and returns its label
-// (a "nearest neighbor" lookup). It's here only so you can test the page.
-// In live mode you'd probably ask the UNO Q instead, e.g. GET /api/predict.
+// LIVE: the instruction is the board's trained policy (GET /api/predict, see askBoardPolicy):
+// a lookup table (uno_q/python/policy.py) trained on the cleaned walks, for the board's own
+// counts (left/right turns, steps since the last turn, stairs).
+// MOCK (no board): the PLACEHOLDER below, only so the page can be tried without hardware. It
+// finds the row recorded on this page whose observation is closest to now and returns its
+// label (a "nearest neighbor" lookup).
 function predict() {
   const demos = rows.filter((r) => r.kind === "demo" || r.kind === "dagger");
   if (demos.length === 0) return "Straight";
@@ -633,12 +641,47 @@ function predict() {
   return best.label;
 }
 
-let lastPrediction = "Straight";
-function showInstruction() {
-  lastPrediction = predict();
+let lastPrediction = "Straight";   // what the walker was last told; saved as "predicted" on corrections
+let policyNote = "";               // where the instruction came from, shown under it
+
+// Live: ask the board's policy. Returns true if it answered (the instruction is then up to
+// date), false if not: no policy on the board yet (lastPrediction becomes "", so nothing is
+// shown as an instruction), or no answer (the last instruction stays; the board warning and
+// the greyed-out instruction say it is out of date).
+async function askBoardPolicy() {
+  try {
+    const res = await fetchWithTimeout("/api/predict");
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    if (data.ok !== true || !data.action) {
+      lastPrediction = "";
+      policyNote = data.error || "no policy on the board yet";
+      return false;
+    }
+    lastPrediction = data.action;
+    policyNote = data.how === "exact" ? "board policy" : "board policy (nearest known situation)";
+    return true;
+  } catch (e) {
+    lastBoardError = e.name === "AbortError" ? "no answer" : e.message;
+    return false;
+  }
+}
+
+async function showInstruction() {
+  if ($("source").value === "live") {
+    await askBoardPolicy();
+  } else {
+    lastPrediction = predict();
+    policyNote = "mock: placeholder policy";
+  }
   const el = $("instruction");
   const arrows = { Straight: "↑ Straight", Left: "← Left", Right: "Right →", Stairs: "Stairs", Arrived: "Arrived!" };
-  el.innerHTML = `${arrows[lastPrediction]}<small>${observation().steps_since_turn} steps since last turn</small>`;
+  if (!lastPrediction) {
+    el.innerHTML = `No policy<small>${policyNote}</small>`;
+    el.style.background = "var(--muted)";
+    return;
+  }
+  el.innerHTML = `${arrows[lastPrediction]}<small>${observation().steps_since_turn} steps since last turn · ${policyNote}</small>`;
   el.style.background = `var(--${lastPrediction.toLowerCase()})`;
 }
 

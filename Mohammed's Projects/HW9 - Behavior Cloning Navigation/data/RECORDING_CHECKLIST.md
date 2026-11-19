@@ -64,3 +64,16 @@ on the board and saves each test walk's live count next to the real one.
    count says **all sent to the board**.
 5. Fill in this walk's row in the budget table in `data/README.md`, even if the walk
    went wrong.
+
+## 4. Between walks
+
+1. Board on the USB cable (or the laptop on NolopNav). Run the one command:
+   `.venv/bin/python "Mohammed's Projects/HW9 - Behavior Cloning Navigation/training/update_policy.py" --via usb`
+2. Read the cleanup report: a **CHECK** line (a turn tapped where the board counted none)
+   means that walk needs a look before it trains anything; add it to
+   `data/walks_excluded.txt` if it's bad. "tap the other way" and "no tap for turn" are
+   fixed from the board's count.
+3. Read the table: does each stretch end with the right turn, and the last one with
+   Arrived?
+4. The command ends with a check (the policy answers, sensor readings arrive). If it prints
+   the power-off steps, do them before the next walk.
