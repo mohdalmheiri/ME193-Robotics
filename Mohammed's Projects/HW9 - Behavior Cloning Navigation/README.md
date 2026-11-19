@@ -160,7 +160,9 @@ HW9 - Behavior Cloning Navigation/
    ```
 
    (`--via nolop` with the laptop on NolopNav; `--no-deploy` to look at the table first;
-   `--check-only` to check the board; `--with-code` after changing the app's code.) It prints
+   `--check-only` to check the board; `--with-code` after changing the app's code;
+   `--code-only` to put the app on the board before the first walk, when there is nothing
+   to train yet.) It prints
    the cleanup report, the table and a leave-one-walk-out test, and writes the table to
    `training/policy_report.md`. If the sensor readings have stopped, it prints the power-off
    steps.

@@ -9,6 +9,8 @@ Usage (from the repo, laptop next to the board):
     --no-deploy    stop after training (look at the table first)
     --check-only   only check the board (app running, sensor readings, policy answers)
     --with-code    also copy the app's code (uno_q/) and restart it (only when code changed)
+    --code-only    only copy the app's code and restart it (e.g. before the first walk, when
+                   there are no walks to train on yet), then the check
     --lead 6       steps of warning before a turn, for the label cleanup
 
 Steps:
@@ -211,6 +213,7 @@ def main():
     p.add_argument("--no-deploy", action="store_true")
     p.add_argument("--check-only", action="store_true")
     p.add_argument("--with-code", action="store_true")
+    p.add_argument("--code-only", action="store_true")
     a = p.parse_args()
     host = {"nolop": "10.42.0.1", "ip": a.host}.get(a.via)
     if a.via == "ip" and not host:
@@ -222,10 +225,22 @@ def main():
     if a.check_only:
         print("Check:")
         sys.exit(0 if check(board, a.via, expect_policy=False) else 1)
+    if a.code_only:
+        print("Deploying the app's code:")
+        deploy_code(board)
+        print("Check:")
+        sys.exit(0 if check(board, a.via, expect_policy=False) else 1)
     pull(board, data)
     print("3. Cleaning the labels:")
     clean_labels.clean_all(str(data / "walks"), str(data / "cleaned"), a.lead)
     print("4. Training:")
+    if not any(n.endswith(".csv") for n in os.listdir(data / "cleaned")) if (data / "cleaned").exists() else True:
+        print("   No walks to train on yet: nothing trained, no policy deployed.")
+        if a.with_code:
+            print("5a. Deploying the app's code:")
+            deploy_code(board)
+        print("6. Check:")
+        sys.exit(0 if check(board, a.via, expect_policy=False) else 1)
     train_policy.train(str(data / "cleaned"), a.policy, report=a.report)
     if a.no_deploy:
         print("Not deployed (--no-deploy).")

@@ -163,6 +163,9 @@ def excluded(walks_dir):
 def clean_all(walks_dir, out_dir, lead, quiet=False):
     """Clean every walk in walks_dir into out_dir. Returns {file name: counts}."""
     os.makedirs(out_dir, exist_ok=True)
+    for old in os.listdir(out_dir):       # start empty: a walk excluded since the last run must
+        if old.endswith(".csv"):          # not keep training the policy from an old cleaned copy
+            os.remove(os.path.join(out_dir, old))
     skip = excluded(walks_dir)
     results = {}
     for name in sorted(os.listdir(walks_dir)):

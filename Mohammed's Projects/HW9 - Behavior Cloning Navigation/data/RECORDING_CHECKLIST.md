@@ -65,6 +65,11 @@ on the board and saves each test walk's live count next to the real one.
 5. Fill in this walk's row in the budget table in `data/README.md`, even if the walk
    went wrong.
 
+**Before the first walk of the day** (board on the USB cable): put the current app on the
+board and check it, then set up NolopNav ("Walking days" in `uno_q/README.md`):
+`.venv/bin/python "Mohammed's Projects/HW9 - Behavior Cloning Navigation/training/update_policy.py" --via usb --code-only`
+If it prints the power-off steps, do them, then run it with `--check-only` instead.
+
 ## 4. Between walks
 
 1. Board on the USB cable (or the laptop on NolopNav). Run the one command:

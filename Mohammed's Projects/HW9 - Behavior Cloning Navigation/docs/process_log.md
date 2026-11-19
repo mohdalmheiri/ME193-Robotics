@@ -757,3 +757,8 @@ arrive; if they don't, it prints the power-off steps. Tested with a folder stand
 the board (pull, skip, clean, train, deploy, run twice). **Not yet tested against the real
 board:** it was off the cable and not on Tufts_Robot this morning; run `--check-only` with
 the board plugged in before the session.
+- Added after the first commit: `--code-only` (put the app on the board before the first walk,
+  when there is nothing to train yet: the board still runs the previous version, without
+  `/api/predict`), the command no longer stops when there are no walks yet, and the cleaner
+  empties `data/cleaned/` first, so a walk excluded later can't keep training the policy
+  from an old cleaned copy (test added).

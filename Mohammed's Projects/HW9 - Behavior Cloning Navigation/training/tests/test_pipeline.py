@@ -76,6 +76,17 @@ with tempfile.TemporaryDirectory() as tmp:
     check("W05 report: 1 untapped, 1 the other way, 1 with no turn",
           (c["untapped"], c["other_way"], c["no_turn"]) == (1, 1, 1), str(c))
 
+    # --- excluding a walk later removes its old cleaned copy ---
+    with open(os.path.join(os.path.dirname(walks), "walks_excluded.txt"), "a") as f:
+        f.write("Raph_demo_W05.csv  # excluded after a first run\n")
+    res2 = clean_labels.clean_all(walks, cleaned, lead=6, quiet=True)
+    check("a walk excluded after a first run: its old cleaned copy is gone",
+          "Raph_demo_W05.csv" not in os.listdir(cleaned) and "Raph_demo_W05.csv" not in res2)
+    res = clean_labels.clean_all(walks, cleaned, lead=6, quiet=True)   # (W05 stays excluded below)
+    with open(os.path.join(os.path.dirname(walks), "walks_excluded.txt"), "w") as f:
+        f.write("Mohammed_demo_W01.csv\n")
+    res = clean_labels.clean_all(walks, cleaned, lead=6, quiet=True)   # back to the full set
+
     # --- DAgger W06: kept as they are ---
     check("W06: corrections kept", res["Mohammed_dagger_W06.csv"]["corrections"] == 2)
 
