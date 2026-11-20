@@ -119,6 +119,7 @@ def http_state():
             "distance_at_last_turn": round(at_last_turn["distance_m"], 2),
             "heading_deg": round(turns.heading, 1),  # drifts; the page saves it, the policy doesn't use it
             "on_stairs": False,                     # no stairs classifier yet
+            "walks_used": walks.route_walk_count(), # route walk files on the board ("Walks used")
         }
 
 

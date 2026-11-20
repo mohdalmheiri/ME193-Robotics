@@ -119,5 +119,43 @@ with tempfile.TemporaryDirectory() as tmp:
     check("W03 (table rotation: L then R counted at 0 steps): 2 turns found",
           res["Mohammed_demo_W03.csv"]["turns"] == 2, str(res["Mohammed_demo_W03.csv"]))
 
+# --- The 2026-11-19 warning rule (Route B): Stairs tapped right up to a corner, and a row saved
+# at the turn step just before the count arrived. Both must say Left (lead 6, turn counted at 30).
+def row(steps, turns_left, label, since=None):
+    since = steps if since is None else since
+    return {"walk": "9", "walker": "Raph", "kind": "demo", "t_ms": str(steps), "steps": str(steps),
+            "distance_m": "0", "steps_since_turn": str(since), "distance_since_turn": "0",
+            "turns": str(turns_left), "turns_left": str(turns_left), "turns_right": "0",
+            "heading_deg": "0", "on_stairs": "0", "label": label, "predicted": ""}
+
+raw_rule = ([row(s, 0, "Straight") for s in (2, 4)] + [row(s, 0, "Stairs") for s in range(6, 30, 2)]
+            + [row(30, 0, "Stairs"), row(32, 1, "Straight", since=2), row(34, 1, "Arrived", since=4)])
+got = {int(r["steps"]): r["label"] for r in clean_labels.clean_demo(raw_rule, 6)[0]}
+check("rule: Stairs kept before the warning (6-22)", all(got[s] == "Stairs" for s in range(6, 24, 2)), str(got))
+check("rule: the Left warning wins over Stairs taps (24-28)", [got[s] for s in (24, 26, 28)] == ["Left"] * 3, str(got))
+check("rule: the row at the turn step before the count says Left (30)", got[30] == "Left", str(got))
+check("rule: after the counted turn Straight, Arrived kept", got[32] == "Straight" and got[34] == "Arrived", str(got))
+
+# --- walks_trim.txt (2026-11-19): use only the first part of a walk. Labels come from the whole
+# walk (the Left warning before the cut still knows about the turn at 30), then rows are cut.
+with tempfile.TemporaryDirectory() as tmp:
+    walks, cleaned = os.path.join(tmp, "data", "walks"), os.path.join(tmp, "data", "cleaned")
+    os.makedirs(walks)
+    dagger = [dict(row(s, 0, "Left"), kind="dagger", predicted="Straight") for s in (26, 44)]
+    for name, rows_ in (("Raph_demo_W09.csv", raw_rule), ("Raph_dagger_W10.csv", dagger)):
+        with open(os.path.join(walks, name), "w", newline="") as f:
+            w = csv.DictWriter(f, fieldnames=list(raw_rule[0]), lineterminator="\n")
+            w.writeheader()
+            w.writerows(rows_)
+    with open(os.path.join(tmp, "data", "walks_trim.txt"), "w") as f:
+        f.write("Raph_demo_W09.csv  <=28  # test\nRaph_dagger_W10.csv  <40  # test\n")
+    clean_labels.clean_all(walks, cleaned, lead=6, quiet=True)
+    t9 = by_step(cleaned, "Raph_demo_W09.csv")
+    t10 = by_step(cleaned, "Raph_dagger_W10.csv")
+    check("trim: demo kept up to step 28 only", max(t9) == 28 and min(t9) == 2, str(sorted(t9)))
+    check("trim: labels from the whole walk (24-28 still Left)", [t9[s] for s in (24, 26, 28)] == ["Left"] * 3, str(t9))
+    check("trim: DAgger correction after the cut dropped (<40)", sorted(t10) == [26], str(t10))
+    check("trim: raw walk files unchanged", len(open(os.path.join(walks, "Raph_demo_W09.csv")).read().splitlines()) == len(raw_rule) + 1)
+
 print("ALL PASSED" if not fails else f"{fails} FAILED")
 sys.exit(1 if fails else 0)

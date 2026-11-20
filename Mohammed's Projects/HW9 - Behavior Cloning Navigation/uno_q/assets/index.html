@@ -12,9 +12,9 @@
     action      = the label (Straight / Left / Right / Stairs / Arrived)
 
   Two ways to get sensor data:
-    - MOCK mode (default): buttons fake the step counter, so you can test the page with no hardware.
+    - MOCK mode: buttons fake the step counter, so you can test the page with no hardware.
       Mock mode never talks to the board, so it can't catch board problems: test Live too.
-    - LIVE mode: the page talks to the UNO Q (uno_q/python/main.py):
+    - LIVE mode (default, 2026-11-19): the page talks to the UNO Q (uno_q/python/main.py):
         GET  /api/state  -> the latest numbers, asked 4 times a second
         GET  /api/reset?walker=..&kind=..  -> start the counts over at 0 and start a new walk;
                             must answer {"ok": true, "walk": <the board's walk number>}
@@ -110,10 +110,11 @@
       <label class="small">Walker
         <select id="walker"><option>Mohammed</option><option>Raph</option></select></label>
       <label class="small">Data
-        <select id="source"><option value="mock">Mock (no hardware)</option><option value="live">Live (UNO Q)</option></select></label>
+        <select id="source"><option value="live" selected>Live (UNO Q)</option><option value="mock">Mock (no hardware)</option></select></label>
     </div>
     <div class="status">Walks used: <span id="walk-count" class="walks">0 / 10</span>
-      (the assignment allows 10 total, DAgger walks included)</div>
+      (the assignment allows 10 total, DAgger walks included; counted from the walk files on the board,
+      test walks moved to walks/tests/ don't count)</div>
   </div>
 
   <!-- ── Mode tabs ── -->
@@ -134,7 +135,7 @@
       <div><b id="r-stairs">no</b><span>stairs</span></div>
     </div>
     <!-- Mock controls: pretend to be the step counter + turn detector -->
-    <div id="mock-controls" class="row" style="margin-top:10px">
+    <div id="mock-controls" class="row hidden" style="margin-top:10px">
       <button class="btn" id="m-step">+1 step</button>
       <button class="btn" id="m-step5">+5 steps</button>
       <button class="btn" id="m-left">Turned L</button>
@@ -244,6 +245,9 @@ let outbox = [];               // messages not yet confirmed by the board, oldes
 let sending = false;           // a POST /api/rows is on its way
 let inFlight = new Set();      // tickets ("session:seq") in that POST, for Undo
 let boardWalk = null;          // the board's walk number for the current walk (from /api/reset)
+let boardWalksUsed = null;     // route walks saved on the board (/api/state walks_used): the
+                               // "Walks used" count. From the board's files, not this browser,
+                               // so every phone/laptop shows the same number (2026-11-19).
 
 // ───────────────────────── Helpers ─────────────────────────
 const $ = (id) => document.getElementById(id);
@@ -384,9 +388,16 @@ function render() {
   $("r-since").textContent = o.steps_since_turn;
   $("r-turns").textContent = o.turns;
   $("r-stairs").textContent = o.on_stairs ? "yes" : "no";
+  // Walks used = the board's count of route walk files (not this browser's counter, which
+  // started over on every reload and differed between phones). Mock walks are never saved.
   const wc = $("walk-count");
-  wc.textContent = `${walkId} / ${MAX_WALKS}`;
-  wc.classList.toggle("over", walkId > MAX_WALKS);
+  if ($("source").value !== "live") {
+    wc.textContent = "Mock: not saved, not counted";
+    wc.classList.remove("over");
+  } else {
+    wc.textContent = boardWalksUsed === null ? `? / ${MAX_WALKS} (asking the board)` : `${boardWalksUsed} / ${MAX_WALKS}`;
+    wc.classList.toggle("over", boardWalksUsed !== null && boardWalksUsed > MAX_WALKS);
+  }
 }
 
 // ───────────────────────── Talking to the board ─────────────────────────
@@ -412,6 +423,7 @@ async function pollLive() {
     // the old walk's totals. Throw it away, or the new walk would start at the old numbers.
     if (askedAt !== resetCount) return;
     sensors = { ...sensors, ...data };
+    if (Number.isInteger(data.walks_used)) boardWalksUsed = data.walks_used;
     lastBoardAnswer = Date.now();
     lastBoardError = "";
   } catch (e) {
@@ -467,7 +479,9 @@ async function startNewWalk(statusId, kind) {
   sensors = freshSensors();      // the board is at 0 now too, so the two agree
   lastSteps = 0;
   currentLabel = "Straight";
-  if (walkId > MAX_WALKS) alert("Heads up: this is walk " + walkId + ", more than the 10 allowed. Check the walk table in data/README.md.");
+  // boardWalksUsed is still the count from before this walk (polling pauses during a reset).
+  if ($("source").value === "live" && boardWalksUsed !== null && boardWalksUsed + 1 > MAX_WALKS)
+    alert("Heads up: this is route walk " + (boardWalksUsed + 1) + ", more than the 10 allowed. Check the walk table in data/README.md.");
   return true;
 }
 
@@ -728,6 +742,18 @@ $("download").onclick = () => {
   a.download = `nav_data_${new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-")}.csv`;
   a.click();
 };
+
+// Remember who is walking on this device (2026-11-19): the walker used to go back to the
+// first name on every reload. Saved in this browser only; if the browser blocks storage,
+// the page still works, it just doesn't remember.
+const WALKER_KEY = "nolop_walker";
+try {
+  const savedWalker = localStorage.getItem(WALKER_KEY);
+  if (savedWalker && [...$("walker").options].some((o) => o.value === savedWalker)) $("walker").value = savedWalker;
+} catch (e) { /* not remembered */ }
+$("walker").addEventListener("change", () => {
+  try { localStorage.setItem(WALKER_KEY, $("walker").value); } catch (e) { /* not remembered */ }
+});
 
 loadOutbox();       // rows left waiting from before a reload go first (sent once in Live mode)
 updateRowCount();

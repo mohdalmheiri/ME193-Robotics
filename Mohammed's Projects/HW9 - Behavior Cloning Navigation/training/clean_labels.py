@@ -17,8 +17,8 @@ Demo walks (kind = demo):
    at the same step count): the last one's label wins (the walker's latest decision).
 2. Find each counted turn: the row where turns_left or turns_right goes up. It was counted
    at step S = steps - steps_since_turn of that row, in that direction.
-3. Label: Left/Right on the rows of the LEAD steps before S (steps S-LEAD .. S-1, still
-   before the turn was counted): the instruction comes LEAD steps ahead. Every other row is
+3. Label: Left/Right on the rows from LEAD steps before S up to S (steps S-LEAD .. S, still
+   before the turn was counted; this also wins over a Stairs tap): the instruction comes LEAD steps ahead. Every other row is
    Straight, except rows tapped Stairs or Arrived, which keep their tap. This also fixes a
    Left/Right left on after the turn: after S it is Straight.
 4. Check the taps: every Left/Right tap (where a Left/Right run of rows starts) is matched to
@@ -90,20 +90,29 @@ def clean_demo(raw_rows, lead):
     rows = merge_moments(raw_rows)
     turns = counted_turns(rows)
     # Step 3: labels
+    # Rule chosen 2026-11-19 (Route B, see docs/process_log.md): the turn warning runs from LEAD
+    # steps before each counted turn up to AND INCLUDING the step at which it was counted, as
+    # long as the row doesn't show the turn yet (n-1 turns done), and it wins over a Stairs tap.
+    # Before, the window stopped one step short (steps < S), so the row saved at the turn step
+    # just before the count arrived said Straight; those rows made Straight win or tie at the end
+    # of a stretch. And Stairs taps that ran up to a corner (bottom of the stairs, then Left) hid
+    # the Left warning completely. Arrived taps are always kept.
     for row in rows:
         row["raw_label"] = row["label"]
         row["note"] = ""
-        if row["label"] in ("Stairs", "Arrived"):
-            continue                                    # keep the tap
-        new = "Straight"
         steps = num(row, "steps")
         done = num(row, "turns_left") + num(row, "turns_right")
+        warning = None
         for _, s, direction, n in turns:
-            # the LEAD steps before turn n, while it hadn't been counted yet (n-1 turns done)
-            if done == n - 1 and s - lead <= steps < s:
-                new = direction
+            # turn n's warning: LEAD steps before it up to its step S, while n-1 turns are done
+            if done == n - 1 and s - lead <= steps <= s:
+                warning = direction
+        if row["label"] == "Arrived" or (row["label"] == "Stairs" and warning is None):
+            continue                                    # keep the tap
+        new = warning or "Straight"
         if new != row["label"]:
-            row["note"] = (f"turn label {lead} steps ahead of the counted turn" if new in TURNS
+            row["note"] = (("turn warning wins over the Stairs tap" if row["label"] == "Stairs"
+                            else f"turn label {lead} steps ahead of the counted turn") if new in TURNS
                            else "after the counted turn" if row["label"] in TURNS else "not a turn")
             row["label"] = new
     # Step 4: check the taps against the counted turns
@@ -160,6 +169,36 @@ def excluded(walks_dir):
     return {line.split("#")[0].strip() for line in path.read_text().splitlines() if line.split("#")[0].strip()}
 
 
+def trims(walks_dir):
+    """Walks used only in part, from data/walks_trim.txt (next to walks_excluded.txt): one walk
+    per line, the file name, then which rows to keep by step count ("<40" = steps below 40,
+    "<=36" = up to 36), then # and why. Labels are worked out on the WHOLE walk first (so a
+    turn warning before the cut still knows about the turn after it); only then are the later
+    rows dropped. Raw files are never changed. Returns {file name: (operator, step)}."""
+    path = Path(walks_dir).parent / "walks_trim.txt"
+    if Path(walks_dir).name != "walks" or not path.exists():
+        return {}
+    out = {}
+    for line in path.read_text().splitlines():
+        parts = line.split("#")[0].split()
+        if not parts:
+            continue
+        if len(parts) != 2 or not parts[1].startswith(("<=", "<")):
+            raise ValueError(f"walks_trim.txt: can't read {line!r} (expected: name.csv <40)")
+        op = "<=" if parts[1].startswith("<=") else "<"
+        out[parts[0]] = (op, float(parts[1][len(op):]))
+    return out
+
+
+def keep_row(row, trim):
+    """Whether a cleaned row stays, given the walk's trim (None = keep everything)."""
+    if trim is None:
+        return True
+    op, limit = trim
+    steps = num(row, "steps")
+    return steps <= limit if op == "<=" else steps < limit
+
+
 def clean_all(walks_dir, out_dir, lead, quiet=False):
     """Clean every walk in walks_dir into out_dir. Returns {file name: counts}."""
     os.makedirs(out_dir, exist_ok=True)
@@ -167,6 +206,7 @@ def clean_all(walks_dir, out_dir, lead, quiet=False):
         if old.endswith(".csv"):          # not keep training the policy from an old cleaned copy
             os.remove(os.path.join(out_dir, old))
     skip = excluded(walks_dir)
+    cuts = trims(walks_dir)
     results = {}
     for name in sorted(os.listdir(walks_dir)):
         if not name.endswith(".csv"):
@@ -184,6 +224,12 @@ def clean_all(walks_dir, out_dir, lead, quiet=False):
             continue
         kind = raw[0]["kind"]
         rows, report, counts = clean_demo([dict(r) for r in raw], lead) if kind == "demo" else clean_dagger([dict(r) for r in raw])
+        if name in cuts:                      # partly used: labels from the whole walk, then cut
+            before = len(rows)
+            rows = [r for r in rows if keep_row(r, cuts[name])]
+            op, limit = cuts[name]
+            report.append(f"  trimmed (walks_trim.txt): kept rows with steps {op} {limit:g}, "
+                          f"dropped {before - len(rows)} of {before}")
         with open(os.path.join(out_dir, name), "w", newline="") as f:
             w = csv.DictWriter(f, fieldnames=list(columns) + ["raw_label", "note"], lineterminator="\n")
             w.writeheader()
@@ -202,6 +248,8 @@ def clean_all(walks_dir, out_dir, lead, quiet=False):
                     print(line)
             else:
                 print(f"{name}: {counts['corrections']} corrections kept ({counts['changed']} differ from the policy)")
+                for line in report:
+                    print(line)
     return results
 
 

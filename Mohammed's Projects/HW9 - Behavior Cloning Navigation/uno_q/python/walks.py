@@ -54,6 +54,13 @@ class WalkStore:
                 out[int(m["walk"])] = name
         return out
 
+    def route_walk_count(self):
+        """How many route walks are saved: the walk files directly in walks/ (demo and dagger,
+        including the one running now; its file is written at Start). Test walks moved to
+        walks/tests/ are not counted. The page shows this as "Walks used" (2026-11-19: it used
+        to show the walk number, which counted test files and differed per browser)."""
+        return len(self.saved_numbers())
+
     def path(self, number):
         w = self.walks[number]
         return os.path.join(self.folder, f"{w['walker']}_{w['kind']}_W{number:02d}.csv")

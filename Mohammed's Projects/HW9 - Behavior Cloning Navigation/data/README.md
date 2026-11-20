@@ -25,16 +25,17 @@ the process log instead.
 
 | # | File | Walker | Date | Kind | Used for training? | Notes |
 |---|---|---|---|---|---|---|
-| 1 | | | | | | |
-| 2 | | | | | | |
-| 3 | | | | | | |
-| 4 | | | | | | |
-| 5 | | | | | | |
-| 6 | | | | | | |
-| 7 | | | | | | |
-| 8 | | | | | | |
-| 9 | | | | | | |
-| 10 | | | | | | |
+| 1 | Mohammed_demo_W01.csv | Mohammed | 2026-11-19 | demo | yes | 3 turns counted |
+| 2 | Mohammed_demo_W02.csv | Mohammed | 2026-11-19 | demo | no (excluded) | 3rd left not counted, turns stayed 2 |
+| 3 | Raph_demo_W03.csv | Raph | 2026-11-19 | demo | yes | 3 turns counted |
+| 4 | Raph_demo_W04.csv | Raph | 2026-11-19 | demo | yes | 3 turns counted |
+| 5 | Mohammed_dagger_W05.csv | Mohammed | 2026-11-19 | dagger | in part (steps < 40) | 3rd left not counted; 2 Right turns counted at step 60 |
+| 6 | Mohammed_dagger_W06.csv | Mohammed | 2026-11-19 | dagger | yes |  |
+| 7 | Raph_dagger_W07.csv | Raph | 2026-11-19 | dagger | in part (steps <= 36) | the two lefts after the stairs counted as one turn (slow first corner) |
+| 8 | Raph_dagger_W08.csv | Raph | 2026-11-19 | dagger | yes | ends at step 56: the board lost power and rebooted |
+| 9 | Mohammed_dagger_W09.csv | Mohammed | 2026-11-19 | dagger | no | aborted: started, then stopped before any correction was tapped (reason not recorded); no data saved |
+| 10 | Mohammed_dagger_W10.csv | Mohammed | 2026-11-19 | dagger | no | aborted: started, then stopped before any correction was tapped (reason not recorded); no data saved |
+| 11 | Mohammed_dagger_W11.csv | Mohammed (page setting) | 2026-11-19 | dagger | no | final filmed test; over the limit of 10 by one; see process_log.md |
 
 **Kind** is `demo` (a recorded walk: the walker labels what they do) or `dagger` (a
 correction walk: the policy guides, and the walker presses the right action whenever it
@@ -47,13 +48,21 @@ One file per walk: `walks/Person_kind_Wnn.csv`, numbered across both partners in
 order walked (the number in the table above), for example `walks/Raph_demo_W01.csv`,
 `walks/Mohammed_demo_W02.csv`, `walks/Mohammed_dagger_W07.csv`.
 
-On the board the walk numbers carry on from its own files. W01-W03 there are the
-2026-11-18 Live tests (copies in `live_test/`), so the first route walk is **W04**. The
-table above is still the official count.
+On the board the walk numbers carry on from its own files. Test and practice walks were
+moved to `python/walks/tests/` on the board (2026-11-19), and the numbering started again
+at W01 for the route walks; W09 and W10 (aborted, no data) are in `python/walks/excluded/`.
+The table above is the official count: **11 walks total, over the limit of 10 by one: 7 used
+to train the navigator (W05 and W07 in part), W02 recorded but excluded (missed turn), W11
+the final filmed test, W09 and W10 aborted with no data saved.**
 
 **`walks_excluded.txt`** lists board files that are not route walks (the three tests): they
 are never pulled into `walks/` and never trained on. Add a walk there (with a comment why)
 to leave it out of training without deleting anything.
+
+**`excluded/`** keeps, as a record, route walks that were recorded but not trained on and
+are never pulled into `walks/`: `Mohammed_demo_W02.csv` (3rd left not counted). The final
+test W11 is in `walks/` and listed in `walks_excluded.txt`. W09 and W10 (aborted, no rows)
+stay on the board only.
 
 **`cleaned/`** holds the cleaned copies made by `training/clean_labels.py` (same columns plus
 `raw_label` and `note`). They are made again from `walks/` every time; the files in

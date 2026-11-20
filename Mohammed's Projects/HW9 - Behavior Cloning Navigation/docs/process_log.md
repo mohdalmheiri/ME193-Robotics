@@ -762,3 +762,315 @@ the board plugged in before the session.
   `/api/predict`), the command no longer stops when there are no walks yet, and the cleaner
   empties `data/cleaned/` first, so a walk excluded later can't keep training the policy
   from an old cleaned copy (test added).
+
+## 2026-11-19: Why /api/predict "didn't answer" (it was the laptop side, not the board)
+
+Session 3-6 pm, run from Raph's Windows laptop (Claude Code took over from Mohammed's).
+
+**Symptom:** `update_policy.py --via usb --check-only` (on Mohammed's Mac) said `/api/predict`
+closed the connection without a response.
+
+**What we checked:**
+- Asked the board directly over Tufts_Robot from Raph's laptop: `curl
+  http://10.247.137.63:7000/api/predict` answered `{"ok": false, "error": "no policy on the
+  board yet"}` (the right answer with no policy), and `/api/state` answered too. **The board
+  app was fine; nothing on the board was changed or redeployed.**
+- `/api/predict` is the only part of the check that uses HTTP (the app/readings checks read
+  the log), which is why only it failed.
+
+**Cause (most likely, not reproduced on the Mac):** over USB the script forwarded the
+laptop's port **7000** to the board. On a Mac, AirPlay Receiver already listens on 7000, so
+`adb forward` failed (its error was hidden) and the request went to AirPlay, which closes
+the connection with no answer. `tools/deploy.py` avoids this by using 7007.
+
+**Fixed in `training/update_policy.py`:**
+- USB: laptop port 7007 -> board port 7000, and a failed `adb forward` now stops with adb's
+  own message.
+- adb is also looked for in App Lab's Windows folder (it only knew the Mac one).
+- Wi-Fi (`--via ip` / `--via nolop`): ssh/scp now remember the board as `nolop-raph`
+  (`HostKeyAlias`, `StrictHostKeyChecking=accept-new`). On Raph's laptop the first try
+  failed with "Host key verification failed": the laptop knew the board only under
+  deploy.py's name `unoq`, so the name check read nothing and the script stopped.
+
+**Result:** `update_policy.py --via ip --host 10.247.137.63 --check-only`: connected to Raph,
+app running, 1003 readings in 10 s, `/api/predict` = "no policy on the board yet".
+`training/tests/test_pipeline.py`: all passed. **Not tested yet:** the USB path (no board on
+Raph's laptop's cable at the time) and `--code-only` from Windows (scp of a Windows path).
+
+## 2026-11-19: First walk test: page showed 0, "Walks used 4/10", false left turns
+
+Times are local (the board's log is in UTC, 5 h ahead).
+
+**What happened:** the walk test (~3:43-3:46 pm) was walked with the page in **Mock** mode by
+mistake, so the board was never reset and nothing was saved. The board still counted, from
+the moment it was strapped on: 42 steps and **16 left / 2 right turns**. Most "turns" came
+while standing or at 0-8 steps: false turns. Before that, from 3:41 the heading climbed a
+steady ~17 deg/s with no steps, so the gyro offset measured at power-on (on the table) no
+longer fit once the board was on the ankle.
+
+Then the page was set to Raph + Live and Start was pressed at 3:46:58 on the **Navigate**
+tab, so the board made `Raph_dagger_W04.csv` (a correction walk, not a demo). The offset was
+measured while moving: log says "accelerometer spread 0.356 g - NOT STILL, turns may be
+off" (still is under 0.05 g). Afterwards the heading drifted ~2 deg/s while standing.
+The page showed 0 steps / 0 rows correctly: no steps were walked after that Start, and
+rows are only saved per step or tap.
+
+**"Walks used 4/10"** is not a count of real walks: the page shows the board's walk number,
+and the board numbers a walk one more than the highest W-number among the files in
+`python/walks/`. The three 2026-11-18 test files (W01-W03) plus the new W04 made it 4.
+
+**Done (nothing deleted, nothing deployed):** moved all 4 files on the board to
+`python/walks/tests/` (never pulled, never numbered); `data/walks_excluded.txt` lines for
+W01-W03 turned into comments so a real walk can reuse those names. The app still has W04 in
+memory, so the next walk is W05 until the app restarts; after a restart it is W01.
+The official count stays the table in `data/README.md` (0 route walks so far).
+
+**Open problem:** turn counting depends on standing completely still for the 5 s after Start.
+
+## 2026-11-19: Walk test W07, all test walks moved, walk count from the board, deployed
+
+**W07 (Raph, Live, demo; walked 28 steps, 4 corners).** Board: 28 steps (exact), 5 turns.
+Started 3:58:55 pm; gyro offset measured still (0.006 g). Turns (local time, steps since the
+previous turn; angles from the walk file's heading for 1-3, from the 10 s log summaries for
+4-5, which are rough):
+
+| # | Time | Dir | At step | Since previous | Angle |
+|---|---|---|---|---|---|
+| 1 | 3:59:08.3 | L | 4 | 4 | about +80° |
+| 2 | 3:59:15.0 | R | 12 | 8 | about -92° |
+| 3 | 3:59:18.9 | R | 14 | 2 | about -86° |
+| 4 | 3:59:41.3 | R | 22 | 8 | over 60° (rule); summaries -96° -> -147° |
+| 5 | 3:59:51.8 | L | 28 | 6 | over 60° (rule); net only about +29° in the summaries |
+
+Turn 5 came 3.6 s after the last step, with no steps after it: Raph turning to the laptop at
+the end, not a mid-stretch turn. So the 4 walked corners were all counted, plus one turn at
+the end while standing. Not checked: whether turns 2 and 3 (2 steps apart) were two real
+corners.
+
+**Problem found:** W07's file has only 8 rows, up to step 16 (3:59:22). The board got no
+rows after that, although it counted to 28. Rows 18-28 never reached the board (page ended,
+reloaded, or stopped sending: not known yet). A demo must keep sending rows to the end.
+
+W05 (0 rows) and W06 (offset measured NOT STILL, 0.210 g) were also tests.
+
+**Done:** moved W05-W07 to `python/walks/tests/` (now W01-W07 there, nothing deleted).
+Page: Live is the default, the walker is remembered per device (browser storage), and
+"Walks used" is the board's count of walk files in `python/walks/` (`walks_used` in
+`/api/state`; tests/ not counted) instead of the browser's own counter. Tested on the laptop
+(fake board in headless Edge, WalkStore with a temp folder), then deployed with
+`update_policy.py --via ip --code-only` from Windows (first time): code copied, app
+restarted, sketch started, 1010 readings in 10 s, `/api/state` walks_used = 0, no policy yet.
+
+## 2026-11-19: Rows stopped at 3:59:22 (page side), USB works, board on NolopNav
+
+**W07's missing rows (after step 16, 3:59:22 pm):** the board did NOT lose Tufts_Robot:
+NetworkManager logged nothing from 20:40 until the deploy restart at 21:04 (UTC), and the
+board kept counting to 28 steps. So the page stopped sending rows (recording stopped, a
+reload, or the device stopped polling/sending, e.g. screen lock). Can't tell which: the
+board doesn't log page requests, and the deploy restart cleared the app's log from then.
+Next test: watch the row count rise every 2 steps.
+
+**USB route tested (first time):** `adb devices` lists the board over the USB-C data cable
+on Raph's Windows laptop (adb is in `%LOCALAPPDATA%\Arduino15\packages\arduino\tools\adb\32.0.0\`),
+`adb shell` opens bash as `arduino` on Raph.
+
+**NolopNav created** by Mohammed in `adb shell` (password typed with `read -rs`, never shown
+or written down). Checked: AP mode, 10.42.0.1/24, wpa-psk.
+
+**Morning steps run over USB:** autoconnect on with priority 10, Nolop Navigator default,
+`nmcli connection up NolopNav` -> activated. Checked over USB: wlan0 on NolopNav at
+10.42.0.1, app running, ~1010 readings in 10 s, `http://10.42.0.1:7000/api/state` answers
+(walks_used 0) and the page loads (HTTP 200). The laptop can't reach the board over Wi-Fi now;
+use USB or join NolopNav.
+
+## 2026-11-19: Two practice walks on NolopNav (W01, W02), not route demos
+
+Both are practice, not route demos; they go to `python/walks/tests/` (not deleted; the
+move is confirmed in the next entry).
+- **W01** (Raph): phone test on NolopNav, about 20 steps, 3 corners tapped; the board
+  counted 4 turns because of a walking mistake. No Arrived tapped.
+- **W02** (Mohammed): 20 steps, Left tapped at step 4, Right at step 16, Arrived tapped.
+  Phone copy: `nav_data_2026-11-19-21-51.csv` (13 rows, same as the board's file).
+
+**What worked:** rows reached the board every 2 steps to the end (W02's phone CSV: a row at
+every even step 2-20 plus the 3 tap rows). With Auto-Lock off, walk 7's problem (rows
+stopping mid-walk) didn't come back, so screen sleep was the likely cause.
+
+**Taps vs the board's turns (W02):** the board counted each turn at the same step as the tap
+(Left tapped at 4, counted at 4; Right tapped at 16, counted at 16). The turn only shows up
+in the next row, 2 steps later, because the step count goes up 2 at a time. So in the
+cleanup's terms these taps are on time (0 steps early).
+
+**Watch:** after the Left turn, the heading drifted about 30° on a straight stretch
+(56° at step 8 to 24° at step 16). The Left corner itself read only about +55° between
+rows (2° -> 55°); it still passed the 60°-within-3-s rule, but not by much. On long demos,
+check that every corner is counted (missed corners would put the policy on the wrong
+stretch).
+
+**Move confirmed (over USB):** both files are in `python/walks/tests/practice_2026-11-19/`
+(a subfolder: `tests/` already had the 2026-11-18 `Mohammed_demo_W02.csv`, so the same name
+couldn't go there). `python/walks/` is empty; `/api/state` walks_used = 0.
+
+**The board rebooted by itself** at about 4:57 pm, right after the USB-C cable was plugged
+in (probably a short power dip when the power source changed). It came back on its own:
+NolopNav active at 10.42.0.1, Nolop Navigator running, sensor reading (~1000 readings in
+10 s, no power-off needed). The reboot also cleared the app's memory of W01/W02, so the
+next walk is W01. Lesson: plugging or unplugging power mid-walk restarts the board and ends
+the walk; don't do it during a demo.
+
+## 2026-11-19: Route B demos (W01-W04), first policy trained and on the board
+
+Route B: stairs down, left, straight, left, (stairs), Nolop. Demos: W01, W02 (Mohammed), W03,
+W04 (Raph). Turns counted at steps: W01 34/38/54, W03 30/34/54, W04 32/38/54. **W02 excluded**
+(`data/walks_excluded.txt`, file kept): its 3rd left (about step 54) wasn't counted, turns
+stayed 2, so its Stairs/Arrived end would be learned under "2 turns", right where the other
+walks say Left. W02 still counts toward the 10 walks (4 used).
+
+`update_policy.py --via usb` (first full run over USB): pulled 3 walks (W02 skipped),
+cleaned (all 3 turns counted in each; Left taps 0-2 steps before the counted turn), trained
+22 situations, copied policy.json, check OK (1019 readings in 10 s, /api/predict answers).
+Leave one walk out: 79% of rows agree; turn rows 8/16.
+
+**Table vs what we expected:**
+- 0 turns: Straight 0-7, Stairs 8-31, Straight 32-35. **Left never wins before the 1st
+  turn** (28-31: St3 L2 S1; 32-35: S2 L1). The Stairs taps run right up to the corner, and
+  the cleanup keeps Stairs taps, so they eat most of the 6-step Left warning. The first
+  "Left" only appears once the board has counted the turn: too late for a new walker.
+- 1 turn: Left 0-3 (as expected), Straight 4-7 (W04 turned at 6 steps).
+- 2 turns: Left only at 12-15; 16-19 is a tie (S2 L2) that goes to Straight, so a walker who
+  needs 18-20 steps for that stretch (W03) hears Straight just before the corner.
+- 3 turns: Stairs 0-3, Straight 4-15 (12-15: S3 A2), Arrived from 16 (expected 12-16).
+
+## 2026-11-19: A label-cleaning rule we chose: the turn warning wins, up to the turn
+
+**Our choice (not something the data forced), in `training/clean_labels.py`:** in the 6 steps
+before every counted turn, up to and including the step at which the board counted it
+(while the row doesn't show the turn yet), the label is the turn (Left/Right), even over a
+Stairs tap. Arrived taps are always kept.
+
+**Why:**
+- On Route B the stairs end right at the first left. We tapped Stairs until the bottom, and
+  the cleanup used to keep Stairs taps, so the 6-step Left warning was mostly hidden: before
+  the 1st turn, Left never won, and a new walker would get "Left" only after turning.
+- The old window stopped one step short (steps S-6 .. S-2). The row saved at the turn step,
+  just before the board's count arrived, said Straight. Those rows made Straight win or tie at
+  the end of a stretch (2 turns, 16-19: S2 L2 -> Straight), so a walker with a longer stretch
+  heard Straight right before the corner. With the warning running to S, every row after the
+  warning starts says the turn, so the end of each stretch (and anything past it, which uses
+  the stretch's last bucket) says Left.
+- What we give up: Stairs now shows for fewer steps before a corner (it gives way to Left).
+
+Tests added (`training/tests/test_pipeline.py`, "rule:" checks); all tests pass.
+
+**Retrained on W01, W03, W04 (W02 still excluded), copied over USB:** board's policy.json
+matches the laptop's, "Policy loaded: 22 situations, trained 17:40", 996 readings in 10 s.
+Leave one walk out: 85% of rows agree (was 79%), turn rows 27/31 (was 8/16).
+New table: 0 turns: Straight 0-7, Stairs 8-23, **Left 24-35** (24-27 is a St3 L3 tie, which
+goes to Left by the action order); 1 turn: **Left 0-7**; 2 turns: Straight 0-11, **Left 12-23**;
+3 turns: Stairs 0-3, Straight 4-15, Arrived 16+ (unchanged).
+
+**Still open:** the board's tie rule (`policy.py`, best()) puts Straight first, so a future
+Straight-vs-turn tie would go to Straight. No such tie in this table; changing it needs a
+code deploy.
+
+## 2026-11-19: DAgger walks W05-W08, final training set, final policy
+
+**DAgger walks:** W05, W06 (Mohammed), W07, W08 (Raph). 8 of 10 walks used; no more DAgger.
+No retraining between them: the board's policy.json was trained 17:40 and copied at 17:40,
+before W05 (about 17:44); all four ran on that policy. In all four, the walker corrected the
+policy's early "Left" on the stairs (steps 24-30, 0 turns) to Stairs.
+
+**W07: the two lefts after the stairs counted as ONE turn.** Not the quarter-turn rule (that
+only applies after a turn has been counted, and none had been). From the log and the walk
+file: the first left was slow. The heading went -72° (step 30) -> +7° (34) -> +16° (36) over
+about 9 s, with a ~6 s pause between steps 34 and 36, so no 3 s window reached 60° and it
+wasn't counted. The second left was then counted at step 38 (probably with the tail of the
+first). After that every turn was one behind (the 3rd left counted as turn 2, at step 56).
+Also: the gyro offset at Start was measured "NOT STILL" (0.051 g, just over 0.05).
+
+**Final training set:** W01, W03, W04 (demos) and W06, W08 (DAgger) in full; W05 only rows
+before step 40 and W07 only rows up to step 36 (`data/walks_trim.txt`, new: labels are worked
+out on the whole walk, then later rows dropped; raw files unchanged; tests added); W02
+excluded (3rd left not counted).
+- W05 cut at 40: in the file, at step 58 it still had 2 turns (20 steps after the 2nd: the
+  3rd left wasn't counted), and at step 60 the board had counted 2 Right turns. Rows after
+  40 are on a wrong turn count.
+- W07 cut at 36: rows after that are one turn behind (above).
+- W08's last row is at step 56 with no Arrived: the board lost power and rebooted at about
+  5:59 pm (uptime 0 at 22:59 UTC), which most likely ended the walk.
+
+**Final policy** (`update_policy.py --via usb`, 7 walks, 127 rows, 23 situations), copied over
+USB; board's policy.json is byte-identical to the laptop's (trained 18:14). Sensor: heading
+changes live (-76° -> -84° in 6 s). Table: 0 turns: Straight 0-7, Stairs 8-31, Left 32-39;
+1 turn: Left 0-7; 2 turns: Straight 0-11, Left 12-23 (12-15: L5 S4); 3 turns: Stairs 0-3,
+Straight 4-11, Arrived 12-19 (12-15: A5 S3).
+Leave one walk out (demos only): 78% of rows, turn rows 16/31 (was 85%, 27/31). The drop is
+expected: the DAgger corrections (x3) moved the first Left from step 24 to 32, while the
+demos' cleaned labels (the turn-warning rule) still say Left from 24, and the test compares
+against those labels.
+
+**The board's log is damaged since the reboot:** reading it fails with "invalid character
+'\x00'" (zeros written into the log file when the power went). So `app logs` and the
+log-based checks in update_policy.py may show old lines from before the reboot, or nothing.
+Checked the board's state through /api/state instead.
+
+**Turn detector at 45° (replay only, nothing changed on the board):** `check_turns.py` on the
+8 Step 0 recordings with the threshold set to 45°: 6 of 8 got extra turns (a 4-corner loop
+counted as 5-7; spot turns as 3), 2 of 8 matched. At 60° all 8 match. Not changed: it would
+double-count corners, a slow corner like W07's could still be missed, and every training row
+holds turn counts from the 60° counter (no raw gyro saved to recompute them).
+
+## 2026-11-19: Final test (W11), aborted W09/W10, walk count
+
+**W09, W10:** final-test attempts, aborted: started, then stopped before any correction was
+tapped (reason not recorded). Both files have 0 rows. Not used for training (the final
+policy was trained before them). Moved on the board to `python/walks/excluded/`.
+
+**W11, the final filmed test** (Navigate + correct, on the final policy trained 18:14). Taps:
+Straight at step 32, Left 34, Straight 38, Left 50, Arrived 54. The board counted only 2
+turns: the two lefts after the stairs merged into one turn (as in W07), so it stayed one turn
+behind for the rest of the walk. It said Left at the right moments for the corners, but it
+needed 3 corrections: Straight at the bottom of the stairs (it said Left at step 32),
+Straight after the first left (it said Left at 38), and Arrived at Nolop (it said Straight
+at 54). So it was not a clean success. Kept as a record, not trained on
+(`data/walks_excluded.txt`).
+
+**Walk count:** 11 walks total, over the limit of 10 by one: 7 used to train the navigator
+(W05 and W07 in part), W02 recorded but excluded (missed turn), W11 the final filmed test,
+W09 and W10 aborted with no data saved.
+
+Note: the board's clock runs about 15 min slow on NolopNav (no internet to set it; "System
+clock synchronized: no"), so walk file times from after the reboots are about 15 min early.
+
+## 2026-11-19: Evening switch-back
+
+Over USB: NolopNav autoconnect off and down (the board rejoined Tufts_Robot, 10.247.137.63),
+How Many Steps (`Steps-UnoQ`) set as the default app and started, Nolop Navigator stopped.
+First check: 0 IMU samples over MQTT. The board was power-cycled; after How Many Steps had
+started, 1038 samples arrived in about 10 s on `ME193_Raphael_steps/imu`. (Earlier zeros were
+counted while the app was still starting; its log is unreadable, same zero-byte damage.)
+W02's raw file was added to `data/excluded/` as a record (same file as on the board).
+
+## Tomorrow: final test with a new walker (checklist)
+
+Walk 14 would be 4 over the limit of 10, so ask first.
+
+1. **Email Chris** for an OK on walk 14 (a final test with a walker who doesn't know the way).
+   No OK, no walk.
+2. **Morning steps, over USB** (`uno_q/README.md`, "Walking days"): board plugged into the
+   laptop, `adb devices` lists it; NolopNav autoconnect on (priority 10) and up; Nolop
+   Navigator the default app and running.
+3. **Sensor check:** the router log shows the sketch's start-up burst (about 37 "invalid
+   packet" lines), and on the page the heading changes a little while the board stands
+   still. Heading stuck at exactly 0.0 or no burst: unplug the power 5 s, plug in, wait 1 min.
+   (The app log can't be read since the power losses; use the page or /api/state.)
+4. **Phone:** joins NolopNav, Auto-Lock off, opens http://10.42.0.1:7000 and reloads it;
+   Data = Live, the right walker, Navigate tab.
+5. **Tester briefing:** after Start, stand completely still for 5 s; "Left" means turn at
+   the next corner; make one clear, unhurried turn per corner (no stopping mid-turn); keep
+   walking at a normal pace on the straights; don't touch the board or its power.
+6. **Film:** the whole walk from the start to Nolop, and screen-record the phone so the
+   instructions show at each turn.
+7. **Afterward:** evening steps over USB (NolopNav off, Tufts_Robot, How Many Steps the
+   default and running, MQTT samples flowing); pull the walk file; record it in the walk
+   table and this log (what the board said vs what the tester did); commit and push.

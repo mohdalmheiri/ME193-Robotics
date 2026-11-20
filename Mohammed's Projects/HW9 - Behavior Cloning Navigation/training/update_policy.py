@@ -45,7 +45,35 @@ import clean_labels  # noqa: E402
 import train_policy  # noqa: E402
 
 APP = "/home/arduino/ArduinoApps/nolop-navigator"
-ADB = shutil.which("adb") or os.path.expanduser("~/Library/Arduino15/packages/arduino/tools/adb/32.0.0/adb")
+
+
+
+def find_adb():
+    """adb comes with App Lab but isn't on the PATH: look in App Lab's folder on a Mac
+    (Mohammed's laptop) and on Windows (Raph's laptop)."""
+    for path in (shutil.which("adb"),
+                 os.path.expanduser("~/Library/Arduino15/packages/arduino/tools/adb/32.0.0/adb"),
+                 os.path.join(os.environ.get("LOCALAPPDATA", ""),
+                              "Arduino15/packages/arduino/tools/adb/32.0.0/adb.exe")):
+        if path and os.path.isfile(path):
+            return path
+    return "adb"            # not found: running it fails with a clear "not found" error
+
+
+ADB = find_adb()
+# Over USB the page's port is reached through an adb port forward. The laptop end must NOT
+# be 7000: on a Mac, AirPlay Receiver already listens on 7000, so the forward failed
+# silently and AirPlay answered instead, closing the connection with no response (that
+# was the "/api/predict didn't answer" bug, 2026-11-19). tools/deploy.py uses 7007 too.
+USB_LOCAL_PORT = 7007
+# ssh/scp over Wi-Fi. HostKeyAlias: remember Raph's board under one name, whatever its
+# address (Tufts_Robot or NolopNav), and accept-new: remember it the first time instead of
+# failing. Without these, a laptop that only knew the board from tools/deploy.py (which
+# saves it as "unoq") got "Host key verification failed" in BatchMode, the name check read
+# nothing, and the script stopped (2026-11-19). The name check below still makes sure the
+# board answering is Raph's.
+SSH_OPTS = ["-o", "BatchMode=yes", "-o", "ConnectTimeout=8",
+            "-o", "HostKeyAlias=nolop-raph", "-o", "StrictHostKeyChecking=accept-new"]
 POWER_OFF_STEPS = """
 The sketch isn't running (no sensor readings): power the board off and on.
   1. Unplug the board's cable or power bank, wait 5 s, plug it back in.
@@ -65,7 +93,7 @@ class Board:
         """Run a shell command on the board, return its output."""
         if self.via == "local":
             return "Raph" if cmd == "hostname" else ""
-        args = [ADB, "shell", cmd] if self.via == "usb" else ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=8", f"arduino@{self.host}", cmd]
+        args = [ADB, "shell", cmd] if self.via == "usb" else ["ssh", *SSH_OPTS, f"arduino@{self.host}", cmd]
         return subprocess.run(args, capture_output=True, text=True, timeout=120).stdout.strip()
 
     def path(self, remote):
@@ -77,7 +105,7 @@ class Board:
         elif self.via == "usb":
             subprocess.run([ADB, "pull", remote, local], check=True, capture_output=True)
         else:
-            subprocess.run(["scp", "-q", f"arduino@{self.host}:{remote}", local], check=True)
+            subprocess.run(["scp", "-q", *SSH_OPTS, f"arduino@{self.host}:{remote}", local], check=True)
 
     def push(self, local, remote):
         """Copy to a temporary name, then rename on the board (the app never sees half a file)."""
@@ -88,7 +116,7 @@ class Board:
         if self.via == "usb":
             subprocess.run([ADB, "push", local, remote + ".tmp"], check=True, capture_output=True)
         else:
-            subprocess.run(["scp", "-q", local, f"arduino@{self.host}:{remote}.tmp"], check=True)
+            subprocess.run(["scp", "-q", *SSH_OPTS, local, f"arduino@{self.host}:{remote}.tmp"], check=True)
         self.run(f"mv {remote}.tmp {remote}")
 
     def list_walks(self):
@@ -103,8 +131,13 @@ class Board:
         if self.via == "local":
             return None
         if self.via == "usb":
-            subprocess.run([ADB, "forward", "tcp:7000", "tcp:7000"], capture_output=True)
-            url = f"http://localhost:7000{api}"
+            # laptop port 7007 -> board port 7000 (see USB_LOCAL_PORT). Stop with adb's own
+            # message if the forward fails, instead of asking whatever else is on that port.
+            fwd = subprocess.run([ADB, "forward", f"tcp:{USB_LOCAL_PORT}", "tcp:7000"],
+                                 capture_output=True, text=True)
+            if fwd.returncode != 0:
+                raise RuntimeError(f"adb forward failed: {(fwd.stderr or fwd.stdout).strip()}")
+            url = f"http://localhost:{USB_LOCAL_PORT}{api}"
         else:
             url = f"http://{self.host}:7000{api}"
         with urllib.request.urlopen(url, timeout=5) as r:
